@@ -1,0 +1,5 @@
+$ ptah migrations validate --dir migrations
+--- exit: 0
+--- stdout ---
+OK: migrations directory matches ptah.sum
+--- stderr ---

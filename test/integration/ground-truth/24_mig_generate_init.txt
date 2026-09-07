@@ -1,0 +1,7 @@
+$ ptah migrations generate --schema-file schema.sql --db-url sqlite://app.db --migrations-dir migrations --name init
+--- exit: 0
+--- stdout ---
+Generated migration files for sqlite://app.db:
+UP:   /private/var/folders/6s/s6tvscqx5j72rcd2jbxdfvrm0000gn/T/tmp.XfveWKncaP/d/migrations/1788807997_init.up.sql
+DOWN: /private/var/folders/6s/s6tvscqx5j72rcd2jbxdfvrm0000gn/T/tmp.XfveWKncaP/d/migrations/1788807997_init.down.sql
+--- stderr ---

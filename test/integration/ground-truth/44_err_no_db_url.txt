@@ -1,0 +1,5 @@
+$ ptah schema apply --schema-file schema_v2.sql
+--- exit: 2
+--- stdout ---
+--- stderr ---
+error: database URL is required

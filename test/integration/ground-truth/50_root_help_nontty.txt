@@ -1,0 +1,46 @@
+$ ptah --help
+--- exit: 0
+--- stdout ---
+Ptah manages database change across schemas and
+persistent inference state.
+
+For schemas, it compares a desired schema with a live database and either writes
+versioned migrations or applies an approved plan directly. Use either route, or
+both, across supported databases.
+
+For inference state, it builds a candidate embedding generation beside the
+active one, calls an external embedding endpoint, verifies the result, and
+switches consumers with a rollback path.
+
+Run "ptah db capabilities --db-url <url>" to see what Ptah resolves for a
+specific server. Scripts written for the Atlas CLI can use the separate
+ptah-compat binary, which presents an Atlas-compatible command surface.
+
+Usage:
+  ptah [flags]
+  ptah [command]
+
+Available Commands:
+  assist      Work with Ptah through a model you supply
+  completion  Generate the autocompletion script for the specified shell
+  db          Work with live database schemas
+  help        Help about any command
+  inference   Plan, run and cut over embedding-generation migrations
+  introspect  Generate annotated Go models from a live database
+  license     Print license and attribution information
+  mcp         Serve Ptah's operations over the Model Context Protocol
+  migrations  Manage migration plans, files, and revision state
+  oci         Inspect Ptah artifacts in OCI registries
+  project     Read a project file and report what Ptah makes of it
+  schema      Work with desired schema definitions
+  seed        Apply environment-scoped SQL seed files
+  sql         Work with standalone SQL files
+  version     Print Ptah version information
+  viz         Render desired schema diagrams
+
+Flags:
+  -h, --help      help for ptah
+  -v, --version   version for ptah
+
+Use "ptah [command] --help" for more information about a command.
+--- stderr ---

@@ -1,0 +1,17 @@
+$ ptah migrations status --migrations-dir migrations --db-url sqlite://app.db
+--- exit: 0
+--- stdout ---
+=== MIGRATION STATUS ===
+Database: ***
+Dialect: sqlite
+Schema: main
+
+Current Version: 0
+Total Migrations: 1
+Applied Migrations: 0
+Pending Migrations: 1
+Out-of-order Migrations: 0
+Status: ⚠️  Pending migrations available
+
+Run 'ptah migrations up' to apply pending migrations.
+--- stderr ---

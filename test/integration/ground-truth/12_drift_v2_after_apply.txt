@@ -1,0 +1,5 @@
+$ ptah schema drift --schema-file schema_v2.sql --db-url sqlite://app.db
+--- exit: 0
+--- stdout ---
+No schema drift detected.
+--- stderr ---

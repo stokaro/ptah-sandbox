@@ -1,0 +1,17 @@
+$ ptah migrations status --migrations-dir migrations --db-url sqlite://app.db --json
+--- exit: 0
+--- stdout ---
+{
+  "current_version": 0,
+  "applied_migrations": [],
+  "pending_migrations": [
+    1788807997
+  ],
+  "pending_migration_keys": [
+    "1788807997"
+  ],
+  "out_of_order_migrations": [],
+  "total_migrations": 1,
+  "has_pending_changes": true
+}
+--- stderr ---

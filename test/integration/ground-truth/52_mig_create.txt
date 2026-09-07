@@ -1,0 +1,7 @@
+$ ptah migrations create --migrations-dir migrations --name manual_tweak
+--- exit: 0
+--- stdout ---
+Generated empty migration files:
+UP:   /private/tmp/claude-501/-Users-buster-Work-denis-ptah-sandbox/f677be35-e993-4376-ab9f-7daa2c20e096/scratchpad/s8/migrations/1788808125_manual_tweak.up.sql
+DOWN: /private/tmp/claude-501/-Users-buster-Work-denis-ptah-sandbox/f677be35-e993-4376-ab9f-7daa2c20e096/scratchpad/s8/migrations/1788808125_manual_tweak.down.sql
+--- stderr ---

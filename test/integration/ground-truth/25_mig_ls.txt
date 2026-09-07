@@ -1,0 +1,6 @@
+$ ptah migrations ls --migrations-dir migrations
+--- exit: 0
+--- stdout ---
+1788807997_init.down.sql
+1788807997_init.up.sql
+--- stderr ---

@@ -1,0 +1,29 @@
+$ ptah migrations up --migrations-dir migrations --db-url sqlite://app.db --dry-run
+--- exit: 0
+--- stdout ---
+=== DRY RUN MODE ===
+No actual changes will be made to the database
+
+=== MIGRATE UP ===
+Database: sqlite://app.db
+Dialect: sqlite
+Migrations directory: /var/folders/6s/s6tvscqx5j72rcd2jbxdfvrm0000gn/T/tmp.XfveWKncaP/d/migrations
+Migration directory format: auto
+Transaction mode: file
+
+Current version: 0
+Total migrations: 1
+Pending migrations: 1
+
+
+✅ Dry run completed successfully!
+Would have applied 1 migrations
+--- stderr ---
+time=2026-09-07T21:06:38.747+02:00 level=INFO msg="Migrating up" correlation_id=e1dfb6a7f02c1924 command=migrations.up currentVersion=0 totalMigrations=1
+time=2026-09-07T21:06:38.748+02:00 level=INFO msg="Applying migration" correlation_id=e1dfb6a7f02c1924 command=migrations.up version=1788807997 description=Init
+time=2026-09-07T21:06:38.749+02:00 level=INFO msg="[DRY RUN] Would begin transaction" correlation_id=e1dfb6a7f02c1924 command=migrations.up
+time=2026-09-07T21:06:38.750+02:00 level=INFO msg="[DRY RUN] Would execute SQL" correlation_id=e1dfb6a7f02c1924 command=migrations.up sql="CREATE TABLE \"users\" (\n  \"id\" INTEGER PRIMARY KEY AUTOINCREMENT,\n  \"email\" TEXT NOT NULL UNIQUE,\n  \"name\" TEXT NOT NULL\n)" args=[]
+time=2026-09-07T21:06:38.750+02:00 level=INFO msg="[DRY RUN] Would execute SQL" correlation_id=e1dfb6a7f02c1924 command=migrations.up sql="CREATE TABLE \"tasks\" (\n  \"id\" INTEGER PRIMARY KEY AUTOINCREMENT,\n  \"user_id\" INTEGER NOT NULL CONSTRAINT \"fk_tasks_user_id\" REFERENCES \"users\" (\"id\"),\n  \"title\" TEXT NOT NULL,\n  \"done\" INTEGER NOT NULL DEFAULT 0\n)" args=[]
+time=2026-09-07T21:06:38.750+02:00 level=INFO msg="[DRY RUN] Would commit transaction" correlation_id=e1dfb6a7f02c1924 command=migrations.up
+time=2026-09-07T21:06:38.750+02:00 level=INFO msg="Applied migration" correlation_id=e1dfb6a7f02c1924 command=migrations.up version=1788807997 description=Init
+time=2026-09-07T21:06:38.750+02:00 level=INFO msg="All migrations applied successfully" correlation_id=e1dfb6a7f02c1924 command=migrations.up

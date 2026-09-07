@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# go test -exec wrapper for this package.
+#
+# Same job as $GOROOT/lib/wasm/go_js_wasm_exec, with the SQLite bridge
+# installed before the Go program starts:
+#
+#   GOOS=js GOARCH=wasm go test \
+#     -exec=./testdata/go_js_wasm_exec_sqlite ./...
+set -euo pipefail
+
+DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export GOROOT="${GOROOT:-$(go env GOROOT)}"
+
+# The default stack is 984K, which is not enough for the Go runtime's tests.
+exec node --stack-size=8192 "$DIR/wasm_exec_bridge.cjs" "$@"

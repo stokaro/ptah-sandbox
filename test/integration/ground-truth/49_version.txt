@@ -1,0 +1,9 @@
+$ ptah version
+--- exit: 0
+--- stdout ---
+Version: v0.4.1-0.20260906150712-112a72244a81
+Commit: 112a72244a81db149899df0ce43afc704a152bc4
+Date: 2026-09-06T15:07:12Z
+Go: go1.27.1
+Platform: darwin/arm64
+--- stderr ---

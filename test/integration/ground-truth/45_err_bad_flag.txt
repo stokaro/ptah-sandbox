@@ -1,0 +1,5 @@
+$ ptah schema apply --schema-file schema_v2.sql --db-url sqlite://app.db --nope
+--- exit: 2
+--- stdout ---
+--- stderr ---
+error: unknown flag: --nope

@@ -1,0 +1,22 @@
+$ ptah migrations up --migrations-dir migrations --db-url sqlite://app.db
+--- exit: 0
+--- stdout ---
+=== MIGRATE UP ===
+Database: sqlite://app.db
+Dialect: sqlite
+Migrations directory: /var/folders/6s/s6tvscqx5j72rcd2jbxdfvrm0000gn/T/tmp.XfveWKncaP/d/migrations
+Migration directory format: auto
+Transaction mode: file
+
+Current version: 0
+Total migrations: 1
+Pending migrations: 1
+
+
+✅ Migrations completed successfully!
+Database is now at version: 1788807997
+--- stderr ---
+time=2026-09-07T21:06:38.841+02:00 level=INFO msg="Migrating up" correlation_id=76184e024dc30fd2 command=migrations.up currentVersion=0 totalMigrations=1
+time=2026-09-07T21:06:38.841+02:00 level=INFO msg="Applying migration" correlation_id=76184e024dc30fd2 command=migrations.up version=1788807997 description=Init
+time=2026-09-07T21:06:38.845+02:00 level=INFO msg="Applied migration" correlation_id=76184e024dc30fd2 command=migrations.up version=1788807997 description=Init
+time=2026-09-07T21:06:38.845+02:00 level=INFO msg="All migrations applied successfully" correlation_id=76184e024dc30fd2 command=migrations.up

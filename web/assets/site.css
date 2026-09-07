@@ -1,0 +1,1338 @@
+/* ptah.run — site stylesheet
+ *
+ * Tokens and measurements come from the Ptah website design (the 2a
+ * consolidated homepage, the 1d install page, 1f mobile and 1g dark).
+ * Fonts are self-hosted subsets of Instrument Sans (prose and interface
+ * chrome) and IBM Plex Mono (anything that can be pasted into a terminal); the
+ * ASCII wordmark uses the system monospace stack, as a terminal would. See
+ * assets/fonts/LICENSES.md.
+ */
+
+/* ---------- Fonts ---------- */
+
+@font-face {
+  font-family: "Instrument Sans";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("fonts/instrument-sans-var-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Instrument Sans";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("fonts/instrument-sans-var-symbols.woff2") format("woff2");
+  unicode-range: U+2192, U+2197;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/ibm-plex-mono-400-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("fonts/ibm-plex-mono-500-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("fonts/ibm-plex-mono-600-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+/* Box-drawing and arrow glyphs for the ASCII diagrams. Kept in the same
+ * face so the columns stay aligned instead of falling back to a system font.
+ * (Plex Mono has no ▼, so the diagrams use ↓, which the face does carry.) */
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/ibm-plex-mono-400-symbols.woff2") format("woff2");
+  unicode-range: U+2190-2193, U+2500-257F;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("fonts/ibm-plex-mono-500-symbols.woff2") format("woff2");
+  unicode-range: U+2190-2193, U+2500-257F;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("fonts/ibm-plex-mono-600-symbols.woff2") format("woff2");
+  unicode-range: U+2190-2193, U+2500-257F;
+}
+
+/* ---------- Tokens ---------- */
+
+:root {
+  --sans: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  --ascii: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+
+  --bg: #fbfbfa;
+  --fg: #111417;
+  --fg2: #474d54;
+  --mute: #666d76;
+  --line: #d9dcdf;
+  --line2: #ebedef;
+  --code: #f3f4f4;
+  --acc: oklch(0.47 0.16 238);
+  --accbg: oklch(0.955 0.025 238);
+  --term: #14181d;
+  --termfg: #e2e6ea;
+  --termmute: #7b858f;
+  --termacc: oklch(0.8 0.11 230);
+  --termline: rgba(255, 255, 255, 0.08);
+  --amber: oklch(0.55 0.15 62);
+  --termamber: oklch(0.8 0.15 70);
+  --logo-ring: transparent;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161311;
+    --fg: #ede7de;
+    --fg2: #b6ada0;
+    --mute: #8d8377;
+    --line: #2e2823;
+    --line2: #201c18;
+    --code: #1d1916;
+    --acc: oklch(0.78 0.11 225);
+    --accbg: oklch(0.27 0.05 235);
+    --term: #0b0a09;
+    --termfg: #ece5da;
+    --termmute: #8d8377;
+    --termacc: oklch(0.82 0.11 225);
+    --termline: #2e2823;
+    --amber: oklch(0.8 0.15 70);
+    --termamber: oklch(0.8 0.15 70);
+    --logo-ring: var(--line);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #161311;
+  --fg: #ede7de;
+  --fg2: #b6ada0;
+  --mute: #8d8377;
+  --line: #2e2823;
+  --line2: #201c18;
+  --code: #1d1916;
+  --acc: oklch(0.78 0.11 225);
+  --accbg: oklch(0.27 0.05 235);
+  --term: #0b0a09;
+  --termfg: #ece5da;
+  --termmute: #8d8377;
+  --termacc: oklch(0.82 0.11 225);
+  --termline: #2e2823;
+  --amber: oklch(0.8 0.15 70);
+  --termamber: oklch(0.8 0.15 70);
+  --logo-ring: var(--line);
+  color-scheme: dark;
+}
+
+/* ---------- Base ---------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.5 var(--sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: inherit;
+}
+a:hover {
+  color: var(--acc);
+}
+
+h1,
+h2,
+h3,
+p,
+dl,
+dd,
+ul {
+  margin: 0;
+}
+
+pre {
+  margin: 0;
+  font-family: var(--mono);
+  overflow-x: auto;
+  tab-size: 4;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.93em;
+}
+
+/* Inline code in prose: neutral chip, never colored. */
+p code,
+li code,
+dd code,
+dt code,
+.tip code {
+  background: var(--code);
+  border: 1px solid var(--line2);
+  padding: 0 4px;
+  border-radius: 2px;
+}
+
+img,
+svg {
+  display: block;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip {
+  position: absolute;
+  left: -9999px;
+  top: 8px;
+  z-index: 100;
+  padding: 8px 12px;
+  background: var(--fg);
+  color: var(--bg);
+  font: 500 14px var(--sans);
+  border-radius: 2px;
+  text-decoration: none;
+}
+.skip:focus {
+  left: 8px;
+}
+
+.wrap {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding-inline: 48px;
+}
+
+.label {
+  font: 500 12px var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+
+.v {
+  font-family: var(--mono);
+  color: var(--amber);
+}
+
+/* ---------- Header ---------- */
+
+.site-header {
+  position: relative;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+.site-header .wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: 600 15px var(--sans);
+  text-decoration: none;
+}
+.brand img {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  outline: 1px solid var(--logo-ring);
+}
+.brand:hover {
+  color: inherit;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 0;
+  list-style: none;
+  font: 500 14px var(--sans);
+}
+.nav-links a {
+  text-decoration: none;
+  white-space: nowrap;
+}
+.nav-links a[aria-current="page"] {
+  color: var(--acc);
+}
+
+.icon-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  display: grid;
+  place-items: center;
+  color: var(--fg2);
+}
+.icon-btn:hover {
+  color: var(--fg);
+  border-color: var(--fg2);
+}
+.icon-btn svg {
+  width: 14px;
+  height: 14px;
+}
+:root[data-theme="dark"] .theme-btn svg {
+  transform: scaleX(-1);
+}
+.menu-btn {
+  display: none;
+}
+.menu-btn .icon-close {
+  display: none;
+}
+.site-header.is-open .menu-btn .icon-menu {
+  display: none;
+}
+.site-header.is-open .menu-btn .icon-close {
+  display: block;
+}
+
+/* ---------- Buttons ---------- */
+
+.actions {
+  display: flex;
+  gap: 10px;
+}
+.btn {
+  display: inline-block;
+  padding: 10px 18px;
+  font: 500 14px var(--sans);
+  line-height: 1.2;
+  border-radius: 2px;
+  text-decoration: none;
+  white-space: nowrap;
+  border: 1px solid var(--fg);
+  background: var(--fg);
+  color: var(--bg);
+}
+.btn:hover {
+  background: var(--fg2);
+  border-color: var(--fg2);
+  color: var(--bg);
+}
+.btn-ghost {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--fg);
+}
+.btn-ghost:hover {
+  background: transparent;
+  border-color: var(--fg2);
+  color: var(--fg);
+}
+
+/* ---------- Terminals and code ---------- */
+
+.term {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--term);
+  color: var(--termfg);
+  overflow: hidden;
+}
+.term-bar {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--termline);
+  font: 12px var(--mono);
+  color: var(--termmute);
+}
+.term pre {
+  padding: 20px 22px;
+  font: 13.5px/1.7 var(--mono);
+}
+.term .p {
+  color: var(--termamber);
+}
+.code .p {
+  color: var(--amber);
+}
+.term .m {
+  color: var(--termmute);
+}
+.term .a {
+  color: var(--termacc);
+}
+
+/* ---------- Hero demo ----------
+ *
+ * The scripted session in the hero. Without the script the transcript below is
+ * the page: every command and every line of output is in the markup, which is
+ * also what a screen reader and a search crawler read. The player hides that
+ * copy from sight only, then replays it into .demo-screen.
+ */
+.demo .term-bar {
+  align-items: center;
+  gap: 12px;
+}
+.demo-where {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.demo-sync {
+  margin-inline-start: auto;
+  padding: 1px 7px;
+  border: 1px solid var(--termline);
+  border-radius: 2px;
+  font-size: 11.5px;
+  color: var(--termmute);
+  white-space: nowrap;
+}
+/* Amber, not red: a pending change is the normal state of a migration tool,
+ * not a fault. It is the same amber the prompt uses. */
+.demo-sync[data-state="pending"] {
+  color: var(--termamber);
+  border-color: color-mix(in oklab, var(--termamber) 40%, transparent);
+}
+.demo-controls {
+  display: flex;
+  gap: 6px;
+}
+.demo-btn {
+  border: 1px solid var(--termline);
+  border-radius: 2px;
+  background: none;
+  color: var(--termfg);
+  font: 500 12px var(--sans);
+  padding: 3px 9px;
+  min-height: 24px;
+  cursor: pointer;
+}
+.demo-btn:hover {
+  border-color: var(--termmute);
+}
+.demo-btn:focus-visible {
+  outline: 2px solid var(--termacc);
+  outline-offset: 1px;
+}
+.demo-screen {
+  /* At rest the session is a transcript: its own height, readable top to
+   * bottom, selectable and pasteable. While it plays it becomes a shell --
+   * fixed height, scrolled to the end -- so the page does not reflow line by
+   * line and the newest output stays where the eye already is.
+   *
+   * The height is the only thing that changes. Laying the lines out with flex
+   * to pin them to the bottom looked equivalent and was not: a flex container
+   * makes every child a row, so the `$` span left its command and stood on a
+   * line of its own. */
+  margin: 0;
+  /* Ptah's diagnostics name the consequence and the safer order, so they are
+   * long. Without wrapping they left the frame and the reader got half a
+   * sentence: the reason is the finding, not decoration on it. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* One height whether or not it is playing, so the block does not jump when the
+ * session starts. Scrollable rather than clipped: a reader who looks up from
+ * the page mid-session should be able to go back and read what they missed
+ * instead of waiting for the loop. */
+@media (min-width: 721px) {
+  .demo-screen {
+    height: 372px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--termline) transparent;
+  }
+}
+.demo-cursor {
+  color: var(--termamber);
+}
+.demo-cursor[data-on="0"] {
+  opacity: 0;
+}
+/* The line the database gained. It arrives with the apply, and the tint is the
+ * only thing on this page that marks a moment rather than a kind of text. */
+.demo-screen .n {
+  color: var(--termacc);
+  background: color-mix(in oklab, var(--termacc) 14%, transparent);
+}
+/* The demo's own narration, in the shell's syntax so nobody mistakes it for
+ * something Ptah printed. Dimmer than Ptah's muted output for the same reason:
+ * one of these is the program talking and the other is not. */
+.term .c {
+  color: color-mix(in oklab, var(--termmute) 72%, transparent);
+}
+/* The finding that stops the build. Amber rather than the accent: blue is the
+ * SQL Ptah writes, and this is the line that says it will not write any. */
+.demo-screen .e {
+  color: var(--termamber);
+}
+/* How far through the session, as the last two pixels of the frame. It is the
+ * one moving thing on the page that is not text, so it stays a rule rather
+ * than becoming a bar with a track, a radius and a label. */
+.demo-progress {
+  height: 2px;
+  background: var(--termline);
+}
+.demo-progress > span {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--termacc);
+}
+
+/* The scenario chooser reads as a caption with a choice in it, not as a tab
+ * strip: this page spends its chrome on the terminal, and two words in the
+ * page's own type are enough to say which session is playing. */
+.demo-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin-top: 2px;
+}
+.demo-pick-btn {
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: none;
+  padding: 0 0 2px;
+  font: 500 13px var(--sans);
+  color: var(--mute);
+  cursor: pointer;
+}
+.demo-pick-btn:hover {
+  color: var(--fg2);
+}
+.demo-pick-btn[aria-pressed="true"] {
+  color: var(--fg);
+  border-bottom-color: var(--fg);
+}
+.demo-pick-btn:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 3px;
+}
+
+.demo.is-live .demo-transcript {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.code {
+  padding: 18px 22px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--code);
+  font: 15px/1.6 var(--mono);
+  color: var(--fg);
+}
+.code .m,
+.cmd .m {
+  color: var(--mute);
+}
+.code.plain {
+  background: transparent;
+  color: var(--fg2);
+  font-size: 14px;
+}
+
+/* One-line command with a copy control. */
+.cmd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--code);
+  min-width: 0;
+}
+.cmd pre {
+  font: 13px/1.5 var(--mono);
+  color: var(--fg);
+  min-width: 0;
+  flex: 1 1 auto;
+  /* A command you copy should never hide its tail behind a scrollbar. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: visible;
+}
+.cmd .p {
+  color: var(--amber);
+}
+.copy {
+  flex-shrink: 0;
+  font: 500 12px var(--sans);
+  color: var(--mute);
+  padding: 6px 8px;
+  margin: -6px -8px;
+  border-radius: 2px;
+}
+.copy:hover {
+  color: var(--fg);
+}
+.copy[data-state="done"] {
+  color: var(--acc);
+}
+
+/* ---------- Hero ---------- */
+
+.hero {
+  border-bottom: 1px solid var(--line);
+}
+.hero .wrap {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 64px;
+  align-items: start;
+  padding-top: 64px;
+  padding-bottom: 56px;
+}
+.hero-copy {
+  display: grid;
+  gap: 26px;
+}
+.banner {
+  font: 600 26px/1.2 var(--ascii);
+  color: var(--fg);
+  white-space: pre;
+  overflow: visible;
+}
+.hero h1 {
+  font: 500 38px/1.15 var(--sans);
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.lede {
+  font: 17px/1.55 var(--sans);
+  color: var(--fg2);
+  text-wrap: pretty;
+  max-width: 540px;
+}
+.install {
+  display: grid;
+  gap: 8px;
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  font: 13px var(--sans);
+  color: var(--mute);
+}
+.meta > span {
+  overflow-wrap: anywhere;
+}
+.meta .v {
+  font-size: 12.5px;
+}
+.meta code {
+  font: 12.5px var(--mono);
+  background: none;
+  border: 0;
+  padding: 0;
+}
+.hero-demo {
+  display: grid;
+  gap: 12px;
+  padding-top: 6px;
+  min-width: 0;
+}
+.caption {
+  font: 14.5px/1.5 var(--sans);
+  color: var(--fg2);
+  text-wrap: pretty;
+}
+
+/* ---------- Sections ---------- */
+
+.section {
+  border-bottom: 1px solid var(--line);
+}
+.section .wrap {
+  padding-top: 64px;
+  padding-bottom: 64px;
+}
+h2 {
+  font: 500 28px/1.25 var(--sans);
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+.week .wrap {
+  display: grid;
+  gap: 40px;
+}
+.section-head {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 64px;
+  align-items: end;
+}
+.section-head p {
+  font: 15px/1.55 var(--sans);
+  color: var(--fg2);
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+.card {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  min-width: 0;
+}
+.card-head {
+  display: grid;
+  gap: 6px;
+}
+.card h3 {
+  font: 500 19px/1.3 var(--sans);
+}
+.card .term pre {
+  padding: 16px 18px;
+  font: 12.5px/1.7 var(--mono);
+}
+.card p {
+  font: 14px/1.55 var(--sans);
+  color: var(--fg2);
+}
+
+.sources .wrap {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 64px;
+  align-items: start;
+}
+.sources-copy {
+  display: grid;
+  gap: 18px;
+}
+.sources-copy p {
+  font: 16px/1.55 var(--sans);
+  color: var(--fg2);
+  text-wrap: pretty;
+  max-width: 520px;
+}
+.flags {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 24px;
+  font: 14.5px/1.5 var(--sans);
+  color: var(--fg2);
+  max-width: 520px;
+}
+.flags dt {
+  font: 13.5px var(--mono);
+  color: var(--fg);
+}
+.diagram {
+  padding: 24px 28px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--code);
+  font: 14px/1.9 var(--mono);
+  color: var(--fg);
+}
+.diagram b {
+  font-weight: 600;
+}
+
+.facts {
+  border-bottom: 0;
+}
+.facts .wrap {
+  padding-top: 48px;
+  padding-bottom: 48px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 48px;
+  font: 14.5px/1.55 var(--sans);
+  color: var(--fg2);
+}
+.fact {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+.fact a {
+  color: var(--acc);
+}
+.fact code.product {
+  color: var(--fg);
+}
+
+/* ---------- Footer ---------- */
+
+.site-footer {
+  border-top: 1px solid var(--line);
+}
+.site-footer .wrap {
+  padding-top: 28px;
+  padding-bottom: 28px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  font: 13px var(--sans);
+  color: var(--mute);
+}
+.foot-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.foot-brand img {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  outline: 1px solid var(--logo-ring);
+}
+.foot-brand .v {
+  font-size: 12.5px;
+}
+.foot-links {
+  display: flex;
+  gap: 24px;
+  padding: 0;
+  list-style: none;
+}
+.foot-links a {
+  text-decoration: none;
+}
+
+/* ---------- Install page ---------- */
+
+.page .wrap {
+  max-width: 976px; /* 880px of content plus the 48px gutters */
+  padding-top: 64px;
+  padding-bottom: 80px;
+  display: grid;
+  gap: 36px;
+}
+.page-head {
+  display: grid;
+  gap: 12px;
+}
+.page h1 {
+  font: 500 38px/1.15 var(--sans);
+  letter-spacing: -0.02em;
+}
+.page-head .lede {
+  max-width: none;
+  font: 17px/1.5 var(--sans);
+}
+.page-head .lede code {
+  font-size: 15px;
+}
+.page-head .meta {
+  font: 13px var(--sans);
+}
+
+.tabs {
+  display: grid;
+}
+.tabs-head {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--line);
+}
+.tablist {
+  display: flex;
+  gap: 2px;
+}
+.tab {
+  font: 500 13.5px var(--sans);
+  padding: 10px 16px;
+  min-height: 44px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  color: var(--mute);
+  white-space: nowrap;
+}
+.tab:hover {
+  color: var(--fg);
+}
+.tab[aria-selected="true"] {
+  color: var(--fg);
+  border-bottom-color: var(--acc);
+}
+.detected {
+  margin-left: auto;
+  align-self: center;
+  padding-left: 16px;
+  font: 12px var(--sans);
+  color: var(--mute);
+  white-space: nowrap;
+}
+.detected:empty {
+  display: none;
+}
+.panel {
+  padding: 28px 0 0;
+  display: grid;
+  gap: 20px;
+}
+.panel-title {
+  display: none;
+}
+html.js .panel:not(.is-active) {
+  display: none;
+}
+html:not(.js) .tabs-head {
+  display: none;
+}
+/* The theme toggle only works with JavaScript; the system preference still applies. */
+html:not(.js) .theme-btn {
+  display: none;
+}
+html:not(.js) .panel-title {
+  display: block;
+  font: 500 13px var(--sans);
+  color: var(--fg);
+}
+.panel p,
+.block p {
+  font: 15px/1.55 var(--sans);
+  color: var(--fg2);
+}
+.panel .cmd {
+  padding: 18px 22px;
+}
+.panel .cmd pre {
+  font: 15px/1.6 var(--mono);
+}
+
+.block {
+  display: grid;
+  gap: 14px;
+  padding-top: 28px;
+  border-top: 1px solid var(--line);
+}
+
+.tips {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 28px;
+  padding-top: 28px;
+  border-top: 1px solid var(--line);
+  font: 14px/1.5 var(--sans);
+  color: var(--fg2);
+}
+.tip {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  min-width: 0;
+}
+.tip strong {
+  font: 500 13px var(--sans);
+  color: var(--fg);
+}
+.tip code {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.page .actions {
+  padding-top: 12px;
+}
+
+/* ---------- 404 ---------- */
+
+.notfound .wrap {
+  max-width: 976px;
+  padding-top: 96px;
+  padding-bottom: 120px;
+  display: grid;
+  gap: 22px;
+}
+.notfound h1 {
+  font: 500 38px/1.15 var(--sans);
+  letter-spacing: -0.02em;
+}
+.notfound p {
+  font: 17px/1.5 var(--sans);
+  color: var(--fg2);
+  max-width: 560px;
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 1100px) {
+  .hero .wrap,
+  .sources .wrap,
+  .section-head {
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+  .hero-demo {
+    padding-top: 0;
+  }
+  .section-head {
+    gap: 12px;
+  }
+}
+
+@media (max-width: 900px) {
+  .cards {
+    grid-template-columns: 1fr;
+  }
+  .facts .wrap {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+  .tips {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .wrap {
+    padding-inline: 20px;
+  }
+
+  .site-header .wrap {
+    height: 52px;
+  }
+  .brand {
+    font-size: 14px;
+  }
+  .brand img {
+    width: 20px;
+    height: 20px;
+  }
+  .nav {
+    gap: 0;
+    margin-right: -12px;
+  }
+  .icon-btn {
+    width: 44px;
+    height: 44px;
+    border: 0;
+  }
+  .icon-btn:hover {
+    border: 0;
+  }
+  html.js .menu-btn {
+    display: grid;
+  }
+  .menu-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+  /* Without JavaScript there is no menu button, so the links stay inline. */
+  html:not(.js) .nav-links {
+    gap: 14px;
+    font-size: 13px;
+  }
+  html.js .nav-links {
+    display: none;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    z-index: 20;
+    padding: 8px 20px 16px;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg);
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    font-size: 16px;
+  }
+  .site-header.is-open .nav-links {
+    display: flex;
+  }
+  .nav-links a {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .hero .wrap {
+    padding-top: 40px;
+    padding-bottom: 32px;
+    gap: 28px;
+  }
+  .hero-copy {
+    gap: 20px;
+  }
+  .banner {
+    font-size: 17px;
+  }
+  .hero h1 {
+    font-size: 30px;
+  }
+  .lede {
+    font-size: 16px;
+  }
+  .cmd {
+    padding: 12px 14px;
+  }
+  .cmd pre {
+    font-size: 13px;
+  }
+  .actions {
+    display: grid;
+    gap: 8px;
+  }
+  .btn {
+    text-align: center;
+    padding: 13px 18px;
+  }
+  .term pre,
+  .card .term pre {
+    padding: 14px 16px;
+    font-size: 12.5px;
+    line-height: 1.65;
+  }
+
+  .section .wrap {
+    padding-top: 32px;
+    padding-bottom: 32px;
+  }
+  .week .wrap {
+    gap: 28px;
+  }
+  h2 {
+    font-size: 22px;
+  }
+  .card h3 {
+    font-size: 17px;
+  }
+  .diagram {
+    padding: 16px 18px;
+    font-size: 12.5px;
+    line-height: 1.8;
+  }
+  .flags {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .flags dd {
+    margin-bottom: 8px;
+  }
+
+  .site-footer .wrap {
+    display: grid;
+    gap: 14px;
+    padding-top: 24px;
+    padding-bottom: 24px;
+    font: 12.5px var(--sans);
+  }
+  .foot-links {
+    flex-wrap: wrap;
+    gap: 12px 20px;
+    order: -1;
+  }
+
+  .page .wrap {
+    padding-top: 40px;
+    padding-bottom: 48px;
+    gap: 28px;
+  }
+  .page h1,
+  .notfound h1 {
+    font-size: 30px;
+  }
+  .page-head .lede {
+    font-size: 16px;
+  }
+  .tabs-head {
+    display: grid;
+    gap: 8px;
+    border-bottom: 0;
+  }
+  .tablist {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+  }
+  .tab {
+    padding: 10px 8px;
+    margin-bottom: 0;
+    border-bottom: 1px solid var(--line);
+    text-align: center;
+  }
+  .tab[aria-selected="true"] {
+    border-bottom-color: var(--line);
+    box-shadow: inset 0 -2px 0 var(--acc);
+  }
+  .detected {
+    margin-left: 0;
+    padding-left: 0;
+    white-space: normal;
+  }
+  .panel .cmd {
+    padding: 14px 16px;
+  }
+  .panel .cmd pre,
+  .code {
+    font-size: 13.5px;
+  }
+  .code {
+    padding: 14px 16px;
+  }
+  .notfound .wrap {
+    padding-top: 56px;
+    padding-bottom: 72px;
+  }
+}
+
+@media (max-width: 720px) {
+  /* At rest on a phone the session is a block of text in the page flow. It
+   * only becomes a window when the reader presses Play. */
+  .demo.is-playing .demo-screen {
+    height: 320px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .demo .term-bar {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* ---------- Hero demo, expanded ----------
+ *
+ * The hero column is half a page wide, and Ptah's diagnostics are sentences.
+ * Expanding moves the same terminal -- the same node, still playing -- into a
+ * dialog where the lines have room to be read rather than wrapped four times.
+ *
+ * <dialog> rather than a div: focus containment, Escape and inertness behind
+ * it are the browser's job, and each one hand-rolled is a way to trap a
+ * keyboard user in a page they cannot leave.
+ */
+.demo-modal {
+  width: min(1100px, calc(100vw - 48px));
+  max-width: none;
+  /* Anchored near the top rather than centred, because the session grows as it
+   * plays: centring would move the whole frame under the reader's eye on every
+   * line. */
+  margin: 7vh auto auto;
+  max-height: 86vh;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  overflow: visible;
+}
+.demo-modal::backdrop {
+  /* The page's own ground, not a black wash: the demo is part of this page and
+   * should not look like a lightbox borrowed from another one. */
+  background: color-mix(in oklab, var(--bg) 94%, transparent);
+}
+.demo-modal .term {
+  border-color: var(--line);
+}
+/* Expanded, the frame is its final size from the first line. Sizing it to the
+ * session instead made it grow a row at a time under a reader who was trying
+ * to read it, and a frame that moves while you read it is worse than a frame
+ * with room to spare at the bottom. */
+.demo.is-open .demo-screen {
+  height: min(72vh, 640px);
+  overflow-y: auto;
+}
+@media (max-width: 720px) {
+  .demo-modal {
+    width: calc(100vw - 24px);
+  }
+  .demo.is-open .demo-screen {
+    height: min(66vh, 480px);
+  }
+}

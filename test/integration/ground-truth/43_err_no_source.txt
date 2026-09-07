@@ -1,0 +1,5 @@
+$ ptah schema apply --db-url sqlite://app.db
+--- exit: 2
+--- stdout ---
+--- stderr ---
+error: a desired schema source is required: pass --root-dir and/or --schema-file, or --to

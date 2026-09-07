@@ -1,0 +1,5 @@
+$ ptah migrations lint --dir migrations --dialect sqlite
+--- exit: 0
+--- stdout ---
+No lint findings.
+--- stderr ---

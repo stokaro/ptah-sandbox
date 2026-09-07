@@ -1,0 +1,6 @@
+$ ptah migrations hash --dir migrations
+--- exit: 0
+--- stdout ---
+Wrote migrations/ptah.sum
+2 migration file(s) hashed
+--- stderr ---

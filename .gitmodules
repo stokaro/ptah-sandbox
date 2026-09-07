@@ -1,0 +1,4 @@
+[submodule "third_party/ptah"]
+	path = third_party/ptah
+	url = https://github.com/stokaro/ptah.git
+	shallow = false

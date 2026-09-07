@@ -1,0 +1,5 @@
+$ ptah schema drift --schema-file nope.sql --db-url sqlite://app.db
+--- exit: 2
+--- stdout ---
+--- stderr ---
+Error: error parsing schema file: schema file does not exist: /private/var/folders/6s/s6tvscqx5j72rcd2jbxdfvrm0000gn/T/tmp.XfveWKncaP/e/nope.sql

@@ -1,0 +1,17 @@
+# The materialized ptah tree and the workspace that points an editor at it.
+build/
+go.work
+go.work.sum
+
+# The wasm binary is ~80 MB; it is a build product, not a source.
+web/vendor/ptah/*.wasm
+
+node_modules/
+dist/
+
+# Working notes and captured ground truth, kept out of the published history.
+.refs/
+
+/bin/
+/tmp/
+.DS_Store

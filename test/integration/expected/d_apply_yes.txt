@@ -1,0 +1,8 @@
+--- exit: 0
+--- stdout ---
+Planned schema changes:
+ALTER TABLE "users" ADD COLUMN "active" INTEGER NOT NULL DEFAULT 1;
+CREATE INDEX IF NOT EXISTS "idx_users_email" ON "users" ("email");
+Apply these schema changes? Type 'YES' to confirm: 
+Schema apply completed successfully.
+--- stderr ---

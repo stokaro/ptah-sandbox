@@ -1,0 +1,10 @@
+$ ptah schema drift --schema-file schema_v3.sql --db-url sqlite://app.db
+--- exit: 1
+--- stdout ---
+Schema drift detected (highest severity: destructive).
+Failure threshold: all. Failing: true.
+Database: sqlite://app.db
+
+Findings:
+- columns_removed: 1 (destructive)
+--- stderr ---

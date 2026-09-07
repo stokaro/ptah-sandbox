@@ -1,0 +1,22 @@
+{
+  "name": "@stokaro/ptah-sandbox-web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Browser playground for the Ptah CLI compiled to Go js/wasm.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "test": "npm run test:unit && npm run test:integration && npm run test:migrations",
+    "test:unit": "node --test 'src/**/*.test.mjs'",
+    "test:memfs": "node src/runtime/memfs.test.mjs",
+    "test:integration": "node ../test/integration/run.mjs",
+    "typecheck": "tsc --noEmit",
+    "test:migrations": "node ../test/integration/migrations.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}

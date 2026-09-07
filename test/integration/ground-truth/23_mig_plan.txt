@@ -1,0 +1,32 @@
+$ ptah migrations plan --schema-file schema.sql --db-url sqlite://app.db
+--- exit: 0
+--- stdout ---
+Generating migration from schema.sql to database sqlite://app.db
+=== GENERATE MIGRATION SQL ===
+
+Safety classification:
+  #  severity      subject                  reason
+  1  safe         *ast.CreateTableNode     does not remove data or tighten constraints
+  2  safe         *ast.CreateTableNode     does not remove data or tighten constraints
+=== MIGRATION SQL ===
+
+-- Migration generated from schema differences
+-- Generated on: now
+-- Source: schema.sql
+-- Target: sqlite://app.db
+
+CREATE TABLE "users" (
+  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "email" TEXT NOT NULL UNIQUE,
+  "name" TEXT NOT NULL
+);
+CREATE TABLE "tasks" (
+  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "user_id" INTEGER NOT NULL CONSTRAINT "fk_tasks_user_id" REFERENCES "users" ("id"),
+  "title" TEXT NOT NULL,
+  "done" INTEGER NOT NULL DEFAULT 0
+);
+
+Generated 2 migration statements.
+⚠️  Review the SQL carefully before executing!
+--- stderr ---

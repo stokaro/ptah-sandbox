@@ -1,0 +1,20 @@
+--- exit: 2
+--- stdout ---
+Planned schema changes:
+-- Disable foreign-key enforcement for the table rebuild below
+PRAGMA foreign_keys = off;
+-- SQLite table rebuild for changes ALTER TABLE cannot express on users
+CREATE TABLE "__ptah_rebuild_users" (
+  "id" INTEGER PRIMARY KEY,
+  "name" TEXT NOT NULL,
+  "email" TEXT NOT NULL,
+  "active" INTEGER NOT NULL DEFAULT 1
+);
+INSERT INTO "__ptah_rebuild_users" ("id", "name", "email", "active") SELECT "id", "name", "email", IFNULL("active", 1) AS "active" FROM "users";
+DROP TABLE "users";
+ALTER TABLE "__ptah_rebuild_users" RENAME TO "users";
+CREATE INDEX IF NOT EXISTS "idx_users_email" ON "users" ("email");
+-- Restore foreign-key enforcement after the table rebuild
+PRAGMA foreign_keys = on;
+Apply these schema changes? Type 'YES' to confirm: --- stderr ---
+error: read schema apply confirmation: EOF
