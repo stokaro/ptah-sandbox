@@ -10,7 +10,7 @@ import (
 	"sync"
 	"syscall/js"
 
-	"ptah.run/cmd/root"
+	"ptah.run/internal/cli/root"
 )
 
 // runner owns Contract B's Go half: globalThis.__ptah.

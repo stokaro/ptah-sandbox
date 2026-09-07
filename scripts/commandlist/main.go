@@ -7,7 +7,7 @@
 // list is the command tree itself. Reading it out of the source with a grep
 // would go stale the first time a verb moved.
 //
-// It walks ptah.run/cmd/internal/browsercmd, not ptah.run/cmd/root: the manifest
+// It walks ptah.run/internal/cli/browsercmd, not ptah.run/cmd/root: the manifest
 // describes what the wasm binary can run, and the browser tree deliberately
 // omits the verbs that need a network, a container runtime or a model
 // provider. A manifest built from the full root tree advertises 42 commands
@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"os"
 
-	"ptah.run/cmd/internal/browsercmd"
+	"ptah.run/internal/cli/browsercmd"
 )
 
 func main() {

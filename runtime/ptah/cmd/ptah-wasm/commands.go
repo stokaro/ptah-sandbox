@@ -5,10 +5,10 @@ package main
 import (
 	"github.com/spf13/cobra"
 
-	"ptah.run/cmd/internal/browsercmd"
+	"ptah.run/internal/cli/browsercmd"
 )
 
-// The command tree lives in ptah.run/cmd/internal/browsercmd so that the build
+// The command tree lives in ptah.run/internal/cli/browsercmd so that the build
 // script's manifest helper can walk the same tree this binary executes.
 // Deriving the two separately is how a manifest ends up advertising verbs the
 // binary does not carry.

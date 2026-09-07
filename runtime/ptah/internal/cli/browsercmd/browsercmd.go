@@ -18,16 +18,16 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"ptah.run/cmd/db"
-	"ptah.run/cmd/internal/banner"
-	"ptah.run/cmd/internal/cmdflags"
-	"ptah.run/cmd/internal/cmdutil"
-	"ptah.run/cmd/introspect"
-	"ptah.run/cmd/migrations"
-	"ptah.run/cmd/schema"
-	sqlcmd "ptah.run/cmd/sql"
-	"ptah.run/cmd/version"
-	"ptah.run/cmd/viz"
+	"ptah.run/internal/cli/db"
+	"ptah.run/internal/cli/banner"
+	"ptah.run/internal/cli/internal/cmdflags"
+	"ptah.run/internal/cli/internal/cmdutil"
+	"ptah.run/internal/cli/introspect"
+	"ptah.run/internal/cli/migrations"
+	"ptah.run/internal/cli/schema"
+	sqlcmd "ptah.run/internal/cli/sql"
+	"ptah.run/internal/cli/version"
+	"ptah.run/internal/cli/viz"
 	"ptah.run/internal/buildinfo"
 )
 

@@ -14,25 +14,29 @@ Three directories make that work:
 | Path                  | What it holds                                       | Tracked |
 | --------------------- | --------------------------------------------------- | ------- |
 | `third_party/ptah`    | Pristine upstream, a submodule pinned to one commit | yes     |
-| `upstream-patch/`     | Changes to files that already exist upstream        | yes     |
+| `upstream-patch/`     | Changes to files that exist upstream; empty today   | yes     |
 | `runtime/ptah/`       | Files that do not exist upstream and never will     | yes     |
 | `build/ptah-src/`     | The three of them, assembled                        | no      |
 
 `scripts/build-wasm.sh` assembles them in that order: `git archive` the pinned
-commit into `build/ptah-src`, `git apply` each patch, then copy this directory
+commit into `build/ptah-src`, `git apply` any patches, then copy this directory
 over the result. The path of a file here is its path inside the Ptah module —
 `runtime/ptah/internal/browsersqlite/browsersqlite.go` becomes
 `build/ptah-src/internal/browsersqlite/browsersqlite.go`, importable as
 `ptah.run/internal/browsersqlite`.
 
 The split matters because the files in `upstream-patch/` are literally the
-pull request Ptah will receive: `0001-browser-profile.patch` is the js/wasm
-build profile and the shared runner, and `0002-js-conditional-rename.patch`
-gives `internal/fsdurable` a conditional rename on a platform that has no
-`renameat(2)`, without which every artifact publication -- `ptah migrations
-generate` above all -- fails closed. Anything that would embarrass
-that PR — a browser bridge, a wasm entry point, a host protocol — lives here
-instead, where it never has to be justified to upstream.
+pull request Ptah will receive. Both patches that once lived there have merged
+as [stokaro/ptah#3046](https://github.com/stokaro/ptah/pull/3046) -- the
+js/wasm build profile with its shared runner, and the conditional rename
+`internal/fsdurable` needs on a platform with no `renameat(2)`, without which
+every artifact publication, `ptah migrations generate` above all, failed
+closed. The directory is empty now, the submodule pins a commit that carries
+them, and the build applies no patches at all.
+
+Anything that would embarrass such a PR -- a browser bridge, a wasm entry
+point, a host protocol -- lives here instead, where it never has to be
+justified to upstream.
 
 `build/ptah-src` is disposable. It is deleted and rebuilt on every run of the
 build script, so editing it is editing something that is about to be
@@ -65,13 +69,19 @@ mechanism.
 
 ## What lives here now
 
-- `internal/browsersqlite/` — the seam `internal/dbschema/sqlite` and
-  `internal/sqlitemodule` blank-import on js builds, in place of
-  `modernc.org/sqlite`. It registers the `sqlite` driver name against the
-  host's `globalThis.__sqlite` bridge and supplies the `SQLITE_LIMIT_ATTACHED`
-  restriction. **Currently a placeholder** that registers nothing and reports
-  `browsersqlite: no SQLite engine installed`.
+- `internal/browsersqlite/` — what stands in for `modernc.org/sqlite`, which
+  does not build for js. Upstream links no SQLite driver at all on this
+  platform and `RestrictSession` refuses until a limiter is installed, so this
+  package supplies both halves and `cmd/ptah-wasm` installs them: the `sqlite`
+  driver name over the host's `globalThis.__sqlite` bridge, and the
+  `SQLITE_LIMIT_ATTACHED` restriction through
+  `sqlite.SetAttachedDatabaseLimiter`. A full `database/sql/driver` —
+  prepared statements, transactions, blobs, the whole int64 range.
 - `cmd/ptah-wasm/` — the js/wasm entry point. It installs the bridge, publishes
-  `globalThis.__ptah` and runs commands through `root.RunContext`, which the
-  patch adds for exactly this caller. **Currently a placeholder** that prints
-  the build stamp and exits.
+  `globalThis.__ptah`, and runs commands through `root.RunContext`, which
+  #3046 added for exactly this caller.
+- `internal/cli/browsercmd/` — the command tree the browser build registers,
+  assembled rather than taken from `root.NewRootCommand()` so that `assist`,
+  `inference`, `mcp` and `oci` stay out of the link graph. Two consumers read
+  it: the binary, and the tool that writes the manifest's command list, so the
+  manifest cannot claim a verb the build does not carry.

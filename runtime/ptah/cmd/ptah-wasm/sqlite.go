@@ -2,26 +2,29 @@
 
 package main
 
-import "ptah.run/internal/browsersqlite"
+import (
+	"ptah.run/internal/browsersqlite"
+	"ptah.run/internal/dbschema/sqlite"
+)
 
-// installSQLite puts the browser SQLite driver in the database/sql registry
-// under the name every SQLite path in Ptah resolves.
+// installSQLite gives this build the two things a js/wasm Ptah has no engine
+// for until a host supplies one.
 //
-// On every other platform modernc.org/sqlite registers itself from an init
-// function that internal/dbschema/sqlite and internal/sqlitemodule import for
-// exactly that side effect. It does not build for js/wasm -- it is a
-// transpiled C library full of syscalls this platform does not have -- so on a
-// js build those packages import the browser driver instead and this call is
-// what makes it available.
+// Everywhere else modernc.org/sqlite answers both. It registers itself under
+// the name every SQLite path resolves, from an init function that
+// internal/dbschema/sqlite and internal/sqlitemodule import for exactly that
+// side effect; and it exposes the limit that
+// internal/dbschema/sqlite/restrict.go sets on every pinned session. It does
+// not build for js/wasm, so a js build links no driver at all and
+// RestrictSession refuses until a limiter is installed -- deliberately, because
+// that restriction is what stops SQL on an untrusted session from reaching
+// another database file, and a build that cannot establish it must say so
+// rather than run unrestricted.
 //
-// RestrictSession, the js equivalent of the
-// sqlitedriver.Limit(conn, SQLITE_LIMIT_ATTACHED, 0) that
-// internal/dbschema/sqlite/restrict.go applies to every pinned session, lives
-// in the same package and is reached from there directly on js builds. If the
-// upstream patch instead keeps a seam package with a setter, the installation
-// belongs on the next line and nowhere else:
-//
-//	browserdb.SetSessionRestrictor(browsersqlite.RestrictSession)
+// Both halves are supplied here rather than by a blank import, because which
+// engine is present is a property of this host and not of the platform. Call
+// it before anything opens a connection.
 func installSQLite() {
 	browsersqlite.RegisterDriver()
+	sqlite.SetAttachedDatabaseLimiter(browsersqlite.RestrictSession)
 }

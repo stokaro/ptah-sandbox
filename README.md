@@ -31,21 +31,21 @@ query tool, so the pane is the playground's own and is labeled as such.
 ## Layout
 
     third_party/ptah      pinned upstream, a submodule, never edited
-    upstream-patch/       modifications to existing Ptah files: the future PR
+    upstream-patch/       empty, and meant to stay that way -- see below
     runtime/ptah/         new Go packages copied into Ptah's module at build time
     web/                  the playground itself, and its vendored runtime
     fixtures/             the demo workspaces
     test/integration/     the runtime driven outside a browser, under node
     docs/                 how it fits together, and what it deliberately is not
 
-There is no `go.mod` here. The build materializes a patched copy of Ptah and
+There is no `go.mod` here. The build materializes a copy of pinned Ptah and
 builds inside Ptah's own module, so the browser entry point and the browser
 SQLite driver are ordinary internal packages and Ptah grows no public API for
 the sake of a website.
 
 ## Build
 
-    make wasm     # materialize, patch, build ptah.wasm, write the manifest
+    make wasm     # materialize, build ptah.wasm, write the manifest
     make test     # drive the whole runtime under node, no browser needed
     make serve    # serve web/ on localhost
 
@@ -54,11 +54,16 @@ copied from that same toolchain, because the pair has to match.
 
 ## Upstream
 
-The Go changes that make Ptah build for `js/wasm` belong in Ptah, not here.
-They live in `upstream-patch/` in the exact shape they are proposed in, and
-they track [stokaro/ptah#3045](https://github.com/stokaro/ptah/issues/3045).
-When they land, the patch directory shrinks to nothing and the submodule pin
-moves forward.
+The Go changes that make Ptah build for `js/wasm` belong in Ptah, not here, so
+`upstream-patch/` is empty: they landed in
+[stokaro/ptah#3046](https://github.com/stokaro/ptah/pull/3046), closing
+[#3045](https://github.com/stokaro/ptah/issues/3045), and the submodule now
+pins a commit that carries them. The build applies no patches at all.
+
+If something the browser needs cannot be done from outside Ptah again, a patch
+goes back in that directory in the shape it will be proposed as, and leaves
+again when it merges. An empty directory there is the goal state, not an
+oversight, and `scripts/build-wasm.sh` treats it as one.
 
 ## License
 

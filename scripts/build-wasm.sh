@@ -105,8 +105,10 @@ mkdir -p "$srcdir"
 git -C "$submodule" archive --format=tar "$pinned" | tar -x -C "$srcdir"
 echo "build-wasm: materialized $submodule@$(echo "$pinned" | cut -c1-12) -> $srcdir"
 
+# An empty upstream-patch/ is the goal state, not an error: every change the
+# browser build needs is meant to end up in Ptah itself. See its README.
 for patch in upstream-patch/*.patch; do
-	[ -e "$patch" ] || die "no patches found in upstream-patch/"
+	[ -e "$patch" ] || break
 	# --directory rather than a cd, so the patch paths stay repo-relative and a
 	# hunk that tried to escape the overlay would land outside it and fail.
 	git apply --directory="$srcdir" --whitespace=error -p1 "$repo/$patch" ||
