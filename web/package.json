@@ -14,9 +14,11 @@
     "test:memfs": "node src/runtime/memfs.test.mjs",
     "test:integration": "node ../test/integration/run.mjs",
     "typecheck": "tsc --noEmit",
-    "test:migrations": "node ../test/integration/migrations.mjs"
+    "test:migrations": "node ../test/integration/migrations.mjs",
+    "build": "node build.mjs"
   },
   "devDependencies": {
+    "esbuild": "^0.25.12",
     "typescript": "^5.9.2"
   }
 }

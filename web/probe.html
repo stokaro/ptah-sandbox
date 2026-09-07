@@ -1,0 +1,17 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>PROBE RUNNING</title>
+<link rel="stylesheet" href="assets/site.css">
+<link rel="stylesheet" href="loader.css">
+<style>
+  body { padding: 32px 40px; }
+  h1 { font: 500 20px var(--sans); margin-bottom: 4px; }
+  .sub { font: 14px var(--sans); color: var(--fg2); margin-bottom: 24px; }
+  #boot { margin-bottom: 28px; }
+  pre { font: 13px/1.7 var(--mono); white-space: pre-wrap; }
+</style>
+<h1>Runtime probe</h1>
+<p class="sub">Scenario A, driven through the real Worker in this browser.</p>
+<div id="boot"></div>
+<pre id="out"></pre>
+<script type="module" src="dist/probe.js"></script>
