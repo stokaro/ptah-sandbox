@@ -1,0 +1,297 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  # A pull request runs the check job and stops there. Everything the check
+  # asserts -- that the CNAME is right, that every reference resolves, that the
+  # committed manifest still describes the pinned Ptah -- is worth knowing
+  # before a merge, and a pull request must never publish.
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # No submodules here. The gitlink for third_party/ptah is in the index
+      # either way, and the pin is all this job compares against; cloning the
+      # whole of Ptah to read a hash would cost a minute for nothing.
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: npm ci
+        working-directory: web
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+        working-directory: web
+
+      - name: Unit tests
+        run: npm run test:unit
+        working-directory: web
+
+      # The bundle has to exist before the link check, because the pages load
+      # dist/*.js and a missing bundle is exactly the kind of break this gate
+      # is for.
+      - name: Bundle
+        run: npm run build
+        working-directory: web
+
+      # CNAME, index.html and 404.html present, every href/src and every CSS
+      # url() resolving to a real file, no github.io address, and the committed
+      # manifest naming the commit third_party/ptah is pinned at. --no-wasm
+      # because this job does not link the 124 MB binary; the deploy job runs
+      # the same script without it, so the binary is never unchecked.
+      - name: The site is publishable
+        run: node web/scripts/check-site.mjs --root web --no-wasm
+
+  deploy:
+    name: Deploy to GitHub Pages
+    if: github.event_name != 'pull_request'
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # fetch-depth: 0 so the submodule is cloned with its tags. `git describe
+      # --tags` inside it is where ptahVersion comes from, and a shallow
+      # submodule would silently stamp a bare commit hash as the version the
+      # footer shows.
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Read the Ptah pin
+        id: pin
+        run: |
+          set -euo pipefail
+          sha="$(git ls-files -s -- third_party/ptah | awk '$1 == "160000" { print $2 }')"
+          if [ -z "$sha" ]; then
+            echo "::error::third_party/ptah is not recorded as a submodule gitlink"
+            exit 1
+          fi
+          actual="$(git -C third_party/ptah rev-parse HEAD)"
+          if [ "$sha" != "$actual" ]; then
+            echo "::error::third_party/ptah is checked out at $actual but pinned at $sha"
+            exit 1
+          fi
+          # Not all of checkout's submodule paths bring tags. Ask for them
+          # explicitly rather than depend on that; failing here is fine,
+          # the assertion below is what actually decides.
+          git -C third_party/ptah fetch --tags --force origin >/dev/null 2>&1 || true
+          version="$(git -C third_party/ptah describe --tags --always)"
+          case "$version" in
+            v*) ;;
+            *)
+              echo "::error::git describe in third_party/ptah returned '$version', not a tag."
+              echo "::error::The build would stamp that as the version the footer shows."
+              exit 1
+              ;;
+          esac
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Ptah $version ($sha)"
+
+      # The wasm itself, keyed on everything that decides its bytes: the pin,
+      # the Go sources overlaid onto it, any upstream patch, and the build
+      # script. No restore-keys -- a near-miss here would restore a binary
+      # built from different sources, which is worse than a slow build.
+      - name: Restore the built wasm
+        id: wasm-cache
+        uses: actions/cache@v6
+        with:
+          path: web/vendor/ptah
+          key: wasm-${{ runner.os }}-${{ steps.pin.outputs.sha }}-${{ hashFiles('runtime/**', 'upstream-patch/**', 'scripts/build-wasm.sh', 'scripts/commandlist/**') }}
+
+      - uses: actions/setup-go@v7
+        if: steps.wasm-cache.outputs.cache-hit != 'true'
+        with:
+          go-version-file: third_party/ptah/go.mod
+          # Cached below instead, keyed on the pin rather than on go.sum, so a
+          # runtime/ change reuses the compiled standard library and the whole
+          # of Ptah's dependency tree.
+          cache: false
+
+      - name: Restore the Go build cache
+        if: steps.wasm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ steps.pin.outputs.sha }}-${{ hashFiles('runtime/**') }}
+          restore-keys: |
+            go-${{ runner.os }}-${{ steps.pin.outputs.sha }}-
+            go-${{ runner.os }}-
+
+      - name: Build ptah.wasm
+        if: steps.wasm-cache.outputs.cache-hit != 'true'
+        run: make wasm
+
+      - name: Reuse the cached wasm
+        if: steps.wasm-cache.outputs.cache-hit == 'true'
+        run: |
+          set -euo pipefail
+          echo "The pin has not moved and no Go source changed; reusing the cached build."
+          ls -l web/vendor/ptah
+
+      # A cached or freshly linked binary is checked the same way: the manifest
+      # in the artifact must describe the binary in the artifact, and both must
+      # name the commit this repository pins. A stale cache entry, a truncated
+      # restore or a hand-edited manifest all land here.
+      - name: The build agrees with what is committed
+        run: |
+          set -euo pipefail
+          git show HEAD:web/vendor/ptah/manifest.json > /tmp/committed-manifest.json
+          git show HEAD:web/vendor/ptah/wasm_exec.js > /tmp/committed-wasm_exec.js
+
+          identity='{ptahVersion,ptahCommit,ptahCommitDate,goVersion,wasmExec,commands}'
+          if ! diff -u \
+            <(jq -S "$identity" /tmp/committed-manifest.json) \
+            <(jq -S "$identity" web/vendor/ptah/manifest.json); then
+            echo "::error file=web/vendor/ptah/manifest.json::The build does not match the committed manifest."
+            echo "::error file=web/vendor/ptah/manifest.json::Run \`make wasm\` locally and commit web/vendor/ptah/{manifest.json,wasm_exec.js}."
+            exit 1
+          fi
+
+          # wasm_exec.js is copied verbatim out of GOROOT and has to match the
+          # toolchain that linked the binary. Byte-identical or the pair is
+          # mismatched, which fails at runtime with no useful message.
+          if ! cmp -s /tmp/committed-wasm_exec.js web/vendor/ptah/wasm_exec.js; then
+            echo "::error file=web/vendor/ptah/wasm_exec.js::differs from the one this toolchain produced"
+            exit 1
+          fi
+
+          # Byte-for-byte reproducibility of a js/wasm link across host
+          # operating systems is not something this project has measured, so a
+          # difference here is reported, not fatal. The identity check above is
+          # what actually gates the deploy.
+          want="$(jq -r .wasm.sha256 /tmp/committed-manifest.json)"
+          got="$(jq -r .wasm.sha256 web/vendor/ptah/manifest.json)"
+          if [ "$want" != "$got" ]; then
+            echo "::warning::ptah.wasm built here hashes to $got; the committed manifest recorded $want. Same sources, different bytes -- the js/wasm link is not reproducible across hosts."
+          else
+            echo "ptah.wasm is byte-identical to the locally built one ($got)."
+          fi
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: npm ci
+        working-directory: web
+
+      - name: Bundle
+        run: npm run build
+        working-directory: web
+
+      # Stage exactly what ships. web/ also holds the build inputs -- sources,
+      # node_modules, the bundler config, the CI checks -- and none of them
+      # belong in a public artifact. A denylist rather than an allowlist, so a
+      # page added to web/ ships without anyone remembering to edit this. Note
+      # that web/scripts/ is dropped: it is for tooling, not for anything the
+      # browser loads. A page that referenced something in there would pass the
+      # check job and fail the staged check below, which is the intent.
+      - name: Stage the site
+        run: |
+          set -euo pipefail
+          rm -rf _site
+          cp -R web _site
+          rm -rf \
+            _site/node_modules \
+            _site/src \
+            _site/scripts \
+            _site/build.mjs \
+            _site/tsconfig.json \
+            _site/package.json \
+            _site/package-lock.json
+          test ! -e _site/node_modules
+          du -sh _site
+          find _site -maxdepth 1 -mindepth 1 | sort
+
+      # The same checker the check job ran, this time against the directory
+      # that is about to be uploaded and with nothing exempt: the 124 MB binary
+      # is present, so its sha256 and byte count are compared to the manifest.
+      - name: The staged site is publishable
+        run: node web/scripts/check-site.mjs --root _site
+
+      - name: The artifact fits GitHub Pages
+        run: |
+          set -euo pipefail
+          bytes="$(du -sb _site | cut -f1)"
+          mib="$(awk -v b="$bytes" 'BEGIN { printf "%.0f", b / 1048576 }')"
+          echo "_site is $mib MiB"
+          {
+            echo "### Artifact"
+            echo
+            echo "\`_site\` is **$mib MiB**, against a 1 GB GitHub Pages site limit."
+          } >> "$GITHUB_STEP_SUMMARY"
+          # 1 GB is the documented Pages limit; stop well short of it rather
+          # than discover it during an upload.
+          if [ "$bytes" -gt 900000000 ]; then
+            echo "::error::_site is $mib MiB, over the 900 MiB ceiling this workflow enforces"
+            exit 1
+          fi
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5
+
+  smoke:
+    name: Smoke test the deployment
+    if: github.event_name != 'pull_request'
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # Only the checked-in scripts and the pin are needed; the submodule
+      # contents are not.
+      - uses: actions/checkout@v7
+
+      # Fetches the live site and asserts it is the build this run produced:
+      # 200 on the root, the 404 page on an unknown address, application/wasm
+      # on the binary, and the sha256 of the bytes the CDN actually returned
+      # against the manifest the same origin serves.
+      #
+      # It also measures what nobody has measured: whether GitHub Pages
+      # compresses a 124 MB asset. Uncompressed, a cold visit costs 118 MiB
+      # instead of 22 MiB and the 100 GB/month bandwidth allowance covers about
+      # 865 visits instead of 4600. That comes out as a warning with the
+      # measured numbers, not a silent pass.
+      - name: Fetch play.ptah.run and measure it
+        run: |
+          set -euo pipefail
+          pin="$(git ls-files -s -- third_party/ptah | awk '$1 == "160000" { print $2 }')"
+          sh web/scripts/smoke.sh https://play.ptah.run/ "$pin"

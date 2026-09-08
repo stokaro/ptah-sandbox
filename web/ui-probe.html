@@ -1,0 +1,20 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>UI PROBE RUNNING</title>
+<link rel="stylesheet" href="assets/site.css">
+<style>
+  body { padding: 24px 32px; }
+  h1 { font: 500 20px var(--sans); margin-bottom: 4px; }
+  .sub { font: 14px var(--sans); color: var(--fg2); margin-bottom: 20px; max-width: 62ch; }
+  #page { width: 1440px; height: 1100px; border: 1px solid var(--line); background: var(--bg); }
+  #out { font: 12.5px/1.6 var(--mono); white-space: pre-wrap; margin-bottom: 24px; }
+  #out .ok { color: var(--fg2); }
+  #out .bad { color: var(--amber); font-weight: 600; }
+</style>
+<h1>Playground UI probe</h1>
+<p class="sub">Drives the real page below through its own controls — typing into the terminal,
+typing into the editor, clicking the panes — and asserts by reading the DOM it produced.
+Nothing is stubbed and no internal object is reached for.</p>
+<div id="out"></div>
+<iframe id="page" title="The playground under test"></iframe>
+<script type="module" src="dist/ui-probe.js"></script>

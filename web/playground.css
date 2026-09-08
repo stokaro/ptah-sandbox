@@ -1,0 +1,942 @@
+/* The playground page.
+ *
+ * Everything site.css already gives us is used as-is: .wrap, .site-header,
+ * .btn / .btn-ghost, .term and its .p/.m/.a/.c spans, .cmd + .copy, .label,
+ * .code, .meta with .v, .flags, .caption, .site-footer. What is here is the
+ * layout those components sit in and the few pieces the site has no component
+ * for -- the file rail, the guided steps, the status pill and the editor.
+ *
+ * No new colours. Every value below is a site.css token, so the dark theme is
+ * the site's own token swap and needs no rules of its own.
+ *
+ * Colour discipline, from the design: blue (--acc) is links, the active tab
+ * underline and SQL keywords, and nothing else. Amber (--amber) is the only
+ * attention colour, for waiting, drift, recovery and warnings. The primary
+ * button is black. There is no green and no red.
+ */
+
+/* The UA's `[hidden] { display: none }` sits at user-agent origin, so any
+ * author `display` below would silently win over it and show a hidden node. */
+[hidden] {
+  display: none !important;
+}
+
+/* ---------- Title block ---------- */
+
+.pg-head {
+  padding-top: 40px;
+  padding-bottom: 28px;
+  display: grid;
+  gap: 12px;
+}
+
+.pg-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 32px;
+}
+
+.pg-title-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.pg-title h1 {
+  font: 500 28px/1.25 var(--sans);
+  letter-spacing: -0.015em;
+}
+
+.pg-title .lede {
+  max-width: 640px;
+}
+
+/* Amber, because a build the page cannot vouch for is something to read, not
+ * an error. The default state is simply quiet. */
+/* A sentence a workspace action needs in front of the visitor: an import that
+ * was refused, an export that failed. Amber is the page's only attention
+ * colour and this is one of the few places entitled to it. */
+.pg-notice {
+  margin: 0 0 4px;
+  font: 13px var(--mono);
+  color: var(--fg2);
+}
+
+.pg-notice[data-tone="attention"] {
+  color: var(--amber);
+}
+
+.pg-build-warn {
+  color: var(--amber);
+}
+
+/* ---------- Boot strip ---------- */
+
+.pg-main {
+  display: grid;
+  gap: 0;
+  padding-bottom: 64px;
+}
+
+.pg-boot {
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px;
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--code);
+}
+
+.pg-boot-static {
+  font: 13px/1.5 var(--sans);
+  color: var(--fg2);
+}
+
+.pg-boot-note {
+  font: 13px/1.5 var(--sans);
+  color: var(--mute);
+}
+
+.pg-boot-note em {
+  font-style: normal;
+  color: var(--fg2);
+}
+
+/* ---------- The frame ---------- */
+
+.pg-frame {
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.pg-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.pg-scenario {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pg-scenario-label {
+  font: 500 13.5px var(--sans);
+  color: var(--mute);
+}
+
+/* The native control keeps its own disclosure arrow and its own keyboard
+ * behaviour; only the chrome around it is removed. */
+.pg-select {
+  max-width: 100%;
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--fg);
+  font: 500 13.5px var(--sans);
+  cursor: pointer;
+}
+
+.pg-select:hover {
+  border-color: var(--line);
+}
+
+.pg-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+/* ---------- Status pill ---------- */
+
+.pg-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: 500 12px var(--mono);
+  color: var(--fg2);
+  white-space: nowrap;
+}
+
+.pg-status[data-tone="quiet"] {
+  color: var(--mute);
+}
+
+.pg-status[data-tone="attention"] {
+  color: var(--amber);
+}
+
+.pg-storage {
+  font: 12px var(--mono);
+  color: var(--mute);
+  white-space: nowrap;
+}
+
+/* ---------- Guided steps ---------- */
+
+.pg-steps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border-bottom: 1px solid var(--line);
+}
+
+.pg-step {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  text-align: left;
+  padding: 10px 16px;
+  min-height: 44px;
+  border-right: 1px solid var(--line);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  color: var(--mute);
+  font: 500 13.5px var(--sans);
+}
+
+.pg-step:last-child {
+  border-right: 0;
+}
+
+.pg-step:hover .pg-step-title {
+  color: var(--fg);
+}
+
+.pg-step[aria-current="step"] {
+  color: var(--fg);
+  border-bottom-color: var(--acc);
+}
+
+.pg-step[aria-current="step"] .pg-step-n {
+  color: var(--acc);
+}
+
+.pg-step-n {
+  font: 500 12px var(--mono);
+  color: var(--mute);
+  flex-shrink: 0;
+}
+
+/* Only meaningful in the single-step narrow layout, where the strip has to say
+ * how many steps there are. */
+.pg-step-of {
+  display: none;
+  font: 500 12px var(--mono);
+  color: var(--mute);
+}
+
+.pg-step-title {
+  white-space: nowrap;
+}
+
+.pg-step-hint {
+  font: 400 12px var(--sans);
+  color: var(--mute);
+  min-width: 0;
+}
+
+/* ---------- Pane tabs (narrow layout only) ---------- */
+
+.pg-panetabs {
+  display: none;
+  border-bottom: 1px solid var(--line);
+}
+
+.pg-panetab {
+  font: 500 13.5px var(--sans);
+  padding: 10px 8px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mute);
+}
+
+.pg-panetab[aria-selected="true"] {
+  color: var(--fg);
+  box-shadow: inset 0 -2px 0 var(--acc);
+}
+
+/* ---------- The three panes and the terminal ---------- */
+
+.pg-grid {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: 400px 260px;
+}
+
+.pg-rail {
+  grid-column: 1;
+  grid-row: 1;
+  padding: 16px 0;
+  display: grid;
+  gap: 20px;
+  align-content: start;
+  min-width: 0;
+  overflow: auto;
+  border-right: 1px solid var(--line);
+}
+
+.pg-rail-group {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  /* In the two-column narrow rail the groups share a row; without this the
+     shorter one spreads its rows to fill the taller one's height. */
+  align-content: start;
+}
+
+/* 210px is not wide enough for a label and a note side by side, and a wrapped
+ * two-column head reads as two broken labels. The note goes underneath. */
+.pg-rail-head {
+  display: grid;
+  gap: 2px;
+  padding: 0 16px 4px;
+}
+
+.pg-rail-note {
+  font: 11.5px var(--mono);
+  color: var(--mute);
+}
+
+.pg-files,
+.pg-tables,
+.pg-cols {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pg-file,
+.pg-table-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 16px;
+  font: 13px var(--mono);
+  color: var(--fg2);
+  min-width: 0;
+}
+
+.pg-table-head {
+  color: var(--fg);
+}
+
+.pg-file-name,
+.pg-table-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pg-file.is-current {
+  color: var(--fg);
+  background: var(--code);
+  box-shadow: inset -2px 0 0 var(--acc);
+}
+
+.pg-file-icon {
+  color: var(--mute);
+  flex-shrink: 0;
+}
+
+.pg-file-note {
+  margin-left: auto;
+  padding-left: 8px;
+  font-size: 11.5px;
+  color: var(--mute);
+  white-space: nowrap;
+}
+
+/* Unsaved work is something to act on, so it takes the attention colour. */
+.pg-file-note[data-state="modified"] {
+  color: var(--amber);
+}
+
+.pg-cols {
+  padding: 2px 16px 4px 40px;
+  display: grid;
+  gap: 2px;
+  font: 12px var(--mono);
+  color: var(--fg2);
+}
+
+.pg-col-note {
+  color: var(--mute);
+}
+
+.pg-col-note[data-state="drift"] {
+  color: var(--amber);
+}
+
+.pg-pane {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pg-editor {
+  grid-column: 2;
+  grid-row: 1;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  border-right: 1px solid var(--line);
+}
+
+.pg-db {
+  grid-column: 3;
+  grid-row: 1;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+/* ---------- Pane tabs ---------- */
+
+.pg-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  padding-right: 16px;
+}
+
+.pg-tablist {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pg-tab {
+  font: 500 13.5px var(--sans);
+  padding: 10px 16px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  color: var(--mute);
+  white-space: nowrap;
+}
+
+.pg-tab:hover {
+  color: var(--fg);
+}
+
+.pg-tab[aria-selected="true"] {
+  color: var(--fg);
+  border-bottom-color: var(--acc);
+}
+
+.pg-tabs-note {
+  font: 12px var(--mono);
+  color: var(--mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pg-tabs-note[data-state="attention"] {
+  color: var(--amber);
+}
+
+/* ---------- Editor ---------- */
+
+.pg-editor-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  font: 13px/1.65 var(--mono);
+  overflow: auto;
+  min-height: 0;
+}
+
+.pg-gutter {
+  padding: 14px 10px 14px 14px;
+  border-right: 1px solid var(--line2);
+  color: var(--mute);
+  text-align: right;
+  white-space: pre;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.pg-code {
+  padding: 14px 16px;
+  color: var(--fg);
+  white-space: pre;
+  overflow: visible;
+  font: inherit;
+}
+
+/* Blue is SQL. It is the same blue as a link, deliberately: this is the
+ * language Ptah reads and the language it writes. */
+.pg-code .k {
+  color: var(--acc);
+}
+
+.pg-code .c {
+  color: var(--mute);
+}
+
+/* A line the desired state gained. The tint marks a moment, not a kind of
+ * text, which is why it is the accent wash rather than a colour on the glyphs. */
+.pg-code .n {
+  display: inline-block;
+  width: 100%;
+  background: var(--accbg);
+  box-shadow: -16px 0 0 var(--accbg), 16px 0 0 var(--accbg);
+}
+
+.pg-pane-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 16px;
+  border-top: 1px solid var(--line);
+  font: 12px var(--mono);
+  color: var(--mute);
+}
+
+/* ---------- Database pane ---------- */
+
+.pg-db-body {
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  overflow: auto;
+  min-height: 0;
+}
+
+.pg-empty {
+  display: grid;
+  gap: 10px;
+  font: 13.5px/1.55 var(--sans);
+  color: var(--fg2);
+  max-width: 46ch;
+}
+
+.pg-empty strong {
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.pg-empty em {
+  font-style: normal;
+  font-family: var(--mono);
+  font-size: 0.92em;
+}
+
+/* ---------- Terminal ---------- */
+
+.pg-terminal {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  /* .term brings the frame; inside the grid it is a band, not a card. */
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
+}
+
+.pg-terminal .term-bar {
+  align-items: center;
+  gap: 16px;
+}
+
+.pg-term-where,
+.pg-term-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* The exit code is the process's own number. Its colour comes off the code,
+ * never off matching words in the output. */
+#pg-term-exit {
+  color: var(--termfg);
+}
+
+#pg-term-exit[data-tone="attention"] {
+  color: var(--termamber);
+}
+
+.pg-transcript {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--termline) transparent;
+}
+
+.pg-prompt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 22px;
+  border-top: 1px solid var(--termline);
+  font: 13.5px var(--mono);
+  min-width: 0;
+}
+
+.pg-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--termfg);
+  font: inherit;
+  caret-color: var(--termamber);
+}
+
+.pg-input:focus {
+  outline: none;
+}
+
+.pg-input:focus-visible {
+  outline: 2px solid var(--termacc);
+  outline-offset: 3px;
+}
+
+.pg-input:disabled {
+  color: var(--termmute);
+  cursor: not-allowed;
+}
+
+.pg-input::placeholder {
+  color: var(--termmute);
+  opacity: 1;
+}
+
+.pg-prompt-help {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: 16px;
+  font-size: 12px;
+  color: var(--termmute);
+  white-space: nowrap;
+}
+
+.pg-prompt-help[data-tone="attention"] {
+  color: var(--termamber);
+}
+
+/* ---------- Explain strip ---------- */
+
+.pg-next {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 32px;
+  align-items: center;
+  padding-top: 20px;
+}
+
+.pg-next-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.pg-next-copy strong {
+  font: 600 15px var(--sans);
+}
+
+.pg-next-run {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.pg-next-run .cmd {
+  max-width: 560px;
+}
+
+.btn:disabled,
+.btn[disabled] {
+  background: var(--mute);
+  border-color: var(--mute);
+  color: var(--bg);
+  cursor: not-allowed;
+}
+
+.btn-ghost:disabled,
+.btn-ghost[disabled] {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--mute);
+  cursor: not-allowed;
+}
+
+.copy:disabled {
+  color: var(--mute);
+  cursor: not-allowed;
+}
+
+/* ---------- What is running ---------- */
+
+.pg-honesty {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+
+.pg-honesty .flags {
+  max-width: 820px;
+}
+
+.pg-honesty dd {
+  text-wrap: pretty;
+}
+
+/* ---------- Responsive ----------
+ *
+ * Three panes and a terminal do not fit a laptop half-screen, and the answer
+ * is never to shrink the terminal until it shows two lines. Below 1100px the
+ * editor and the database stack beside the rail; below 900px everything is one
+ * column; below 720px the three become tabs and only one is on screen.
+ */
+
+@media (max-width: 1100px) {
+  .pg-grid {
+    grid-template-columns: 210px minmax(0, 1fr);
+    grid-template-rows: minmax(320px, auto) minmax(280px, auto) 300px;
+  }
+  .pg-rail {
+    grid-row: 1 / 3;
+  }
+  .pg-editor {
+    grid-column: 2;
+    grid-row: 1;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .pg-db {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .pg-terminal {
+    grid-row: 3;
+  }
+  .pg-step-hint {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .pg-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(320px, auto) minmax(280px, auto) 320px;
+  }
+  .pg-rail {
+    grid-column: 1;
+    grid-row: 1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .pg-editor {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .pg-db {
+    grid-column: 1;
+    grid-row: 3;
+    border-bottom: 1px solid var(--line);
+  }
+  .pg-terminal {
+    grid-row: 4;
+  }
+  .pg-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pg-step {
+    border-bottom: 1px solid var(--line);
+  }
+  .pg-step:nth-child(2n) {
+    border-right: 0;
+  }
+  .pg-step[aria-current="step"] {
+    border-bottom-color: var(--line);
+    box-shadow: inset 0 -2px 0 var(--acc);
+  }
+  .pg-next {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .pg-title {
+    display: grid;
+    gap: 20px;
+  }
+}
+
+@media (max-width: 720px) {
+  .pg-head {
+    padding-top: 28px;
+    padding-bottom: 20px;
+  }
+
+  /* The scenario name and the status pill cannot share a 390px line, and a
+     select does not shrink below its longest option on its own. */
+  .pg-bar {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .pg-scenario {
+    flex: 1 1 100%;
+  }
+  .pg-select {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .pg-bar-right {
+    width: 100%;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .pg-title h1 {
+    font-size: 24px;
+  }
+  .pg-main {
+    padding-bottom: 40px;
+  }
+
+  /* One step at a time, with its position in the route spelled out. */
+  .pg-steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pg-step {
+    border-right: 0;
+    border-bottom: 0;
+  }
+  .pg-step:not([aria-current="step"]) {
+    display: none;
+  }
+  .pg-step[aria-current="step"] {
+    box-shadow: none;
+  }
+  .pg-step-of {
+    display: inline;
+  }
+  .pg-step-hint {
+    display: inline;
+  }
+
+  /* The tabbed layout needs JavaScript to switch between panes, so without it
+   * the panes simply stay stacked and everything is still reachable. */
+  html.js .pg-panetabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  html.js .pg-grid[data-pane="editor"] > .pg-db,
+  html.js .pg-grid[data-pane="editor"] > .pg-terminal,
+  html.js .pg-grid[data-pane="console"] > .pg-rail,
+  html.js .pg-grid[data-pane="console"] > .pg-editor,
+  html.js .pg-grid[data-pane="console"] > .pg-db,
+  html.js .pg-grid[data-pane="database"] > .pg-editor,
+  html.js .pg-grid[data-pane="database"] > .pg-terminal {
+    display: none;
+  }
+  html.js .pg-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+  }
+  html.js .pg-grid > * {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .pg-terminal {
+    min-height: 380px;
+  }
+  .pg-rail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pg-transcript {
+    padding: 14px 16px;
+    font-size: 12.5px;
+    line-height: 1.65;
+  }
+  .pg-prompt {
+    padding: 10px 16px;
+  }
+  /* There is no room for the syntax note beside the input; the same sentence
+   * is in the guide. */
+  .pg-prompt-help {
+    display: none;
+  }
+  .pg-editor-body {
+    font-size: 12.5px;
+  }
+  .pg-next-run {
+    display: grid;
+    gap: 8px;
+  }
+  .pg-next-run .cmd {
+    max-width: none;
+  }
+  .pg-next-run .btn {
+    text-align: center;
+    padding: 13px 18px;
+  }
+  .pg-boot {
+    padding: 14px 16px;
+  }
+}
+
+/* ---------- Guided route ---------- */
+
+/* The steps are buttons: clicking one points the strip at it, and a step can
+ * be re-run at any time. Only the user-agent chrome is removed; the geometry
+ * and the colours stay in the .pg-step rule above. */
+.pg-step {
+  appearance: none;
+  background: transparent;
+  border-top: 0;
+  border-left: 0;
+  cursor: pointer;
+}
+
+/* A step whose state the page cannot observe keeps its number and says why on
+ * hover. There is no third glyph, because anything softer than a tick would
+ * still read as a quieter kind of success. */
+.pg-step[data-status="unverifiable"] .pg-step-n,
+.pg-step[data-status="unknown"] .pg-step-n {
+  opacity: 0.55;
+}
+
+/* Amber: going off the route is something to read before carrying on. It is
+ * not an error, so it gets the attention colour and not an error treatment. */
+.pg-next-note {
+  margin-top: 6px;
+  font: 13.5px/1.5 var(--sans);
+  color: var(--amber);
+  max-width: 62ch;
+}
+
+/* Secondary commands sit on their own line under the primary one. The wrap is
+ * added here rather than folded into .pg-next-run so that rule stays the
+ * single-action case it was written for. */
+.pg-next-run {
+  flex-wrap: wrap;
+}
+
+.pg-next-also {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-basis: 100%;
+  min-width: 0;
+}
+
+.pg-next-also .cmd {
+  max-width: 560px;
+}

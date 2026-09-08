@@ -1,0 +1,218 @@
+{
+  "id": "c",
+  "title": "Versioned migrations",
+  "description": "Write the change into migration files, hash and check them, then apply them in order.",
+  "note": "Direct apply and versioned migrations are different ways of working, not two halves of one. schema apply writes nothing into migrations/, and migrations up never reads schema.sql. A project picks one.",
+  "database": {
+    "path": "app.db",
+    "url": "sqlite://app.db"
+  },
+  "files": {
+    "schema.sql": "-- The schema you want the database to have.\n--\n-- Ptah reads this file as the desired state, reads the real catalog out of\n-- app.db, and works out the difference. You never write ALTER statements here.\n\nCREATE TABLE users (\n  id    INTEGER PRIMARY KEY,\n  name  TEXT NOT NULL,\n  email TEXT NOT NULL\n);\n\nCREATE TABLE tasks (\n  id      INTEGER PRIMARY KEY,\n  user_id INTEGER NOT NULL,\n  title   TEXT NOT NULL,\n  done    INTEGER NOT NULL DEFAULT 0,\n  FOREIGN KEY (user_id) REFERENCES users (id)\n);\n",
+    "README.md": "# Workspace\n\n    schema.sql   the schema you want\n    app.db       an empty SQLite database\n    migrations/  written by ptah migrations generate\n\nThis is the other route. Scenario A applies a plan straight to the database.\nHere Ptah writes the plan into files you review, commit and replay in order.\n\n    ptah migrations plan     --schema-file schema.sql --db-url sqlite://app.db\n    ptah migrations generate --schema-file schema.sql --db-url sqlite://app.db \\\n                             --migrations-dir migrations --name init\n    ptah migrations hash     --dir migrations\n    ptah migrations validate --dir migrations\n    ptah migrations lint     --dir migrations --dialect sqlite\n    ptah migrations status   --migrations-dir migrations --db-url sqlite://app.db\n    ptah migrations up       --migrations-dir migrations --db-url sqlite://app.db\n\nThe flag is --dir on the verbs that only read the directory, and\n--migrations-dir on the verbs that also talk to a database. That is the CLI's\nown spelling, not a typo here.\n"
+  },
+  "seed": "-- Scenario C starts from an empty database. The migrations build it.\nPRAGMA user_version = 0;\n",
+  "baseline": {
+    "check": {
+      "kind": "file",
+      "path": "schema.sql",
+      "present": true
+    },
+    "message": "This route reads schema.sql out of the workspace, and it is not there. The steps below no longer describe what you have. Everything still works; Reset puts the scenario back."
+  },
+  "steps": [
+    {
+      "id": "plan",
+      "title": "Plan",
+      "caption": "See the SQL first",
+      "headline": "See the SQL before it becomes a file.",
+      "instruction": "app.db is empty. plan prints the statements that would close the gap, with a safety classification per statement, and writes nothing.",
+      "action": {
+        "kind": "run",
+        "argv": [
+          "migrations",
+          "plan",
+          "--schema-file",
+          "schema.sql",
+          "--db-url",
+          "sqlite://app.db"
+        ]
+      },
+      "check": {
+        "kind": "ran",
+        "prefix": [
+          "migrations",
+          "plan"
+        ],
+        "exit": 0
+      },
+      "done": "Two CREATE TABLE statements, both classified safe. Still nothing on disk and nothing in the database."
+    },
+    {
+      "id": "generate",
+      "title": "Generate",
+      "caption": "Write the files",
+      "headline": "The plan becomes something you can review and commit.",
+      "instruction": "Same difference, written to disk this time: an up file and a down file, named with a version prefix. Note that this verb spells the flag --migrations-dir.",
+      "action": {
+        "kind": "run",
+        "argv": [
+          "migrations",
+          "generate",
+          "--schema-file",
+          "schema.sql",
+          "--db-url",
+          "sqlite://app.db",
+          "--migrations-dir",
+          "migrations",
+          "--name",
+          "init"
+        ]
+      },
+      "check": {
+        "kind": "all",
+        "of": [
+          {
+            "kind": "files",
+            "dir": "migrations",
+            "suffix": ".up.sql",
+            "atLeast": 1
+          },
+          {
+            "kind": "files",
+            "dir": "migrations",
+            "suffix": ".down.sql",
+            "atLeast": 1
+          }
+        ]
+      },
+      "done": "The migration is a file now. It can be read in review and replayed on another database."
+    },
+    {
+      "id": "hash",
+      "title": "Hash",
+      "caption": "Lock the directory",
+      "headline": "Hashing stops history being rewritten quietly.",
+      "instruction": "hash writes migrations/ptah.sum. Anyone editing an already-shipped migration afterwards will fail validation instead of quietly changing history. This verb spells the flag --dir.",
+      "action": {
+        "kind": "run",
+        "argv": [
+          "migrations",
+          "hash",
+          "--dir",
+          "migrations"
+        ]
+      },
+      "check": {
+        "kind": "file",
+        "path": "migrations/ptah.sum",
+        "present": true
+      },
+      "done": "ptah.sum is in the workspace. Commit it alongside the migrations."
+    },
+    {
+      "id": "check",
+      "title": "Check",
+      "caption": "Validate and lint",
+      "headline": "The two checks you would run in CI.",
+      "instruction": "validate compares the directory with ptah.sum. Without a sum file it exits 2 and tells you to run hash. lint reads the statements and reports what it thinks is risky.",
+      "action": {
+        "kind": "run",
+        "argv": [
+          "migrations",
+          "validate",
+          "--dir",
+          "migrations"
+        ]
+      },
+      "also": [
+        [
+          "migrations",
+          "lint",
+          "--dir",
+          "migrations",
+          "--dialect",
+          "sqlite"
+        ]
+      ],
+      "check": {
+        "kind": "all",
+        "of": [
+          {
+            "kind": "ran",
+            "prefix": [
+              "migrations",
+              "validate"
+            ],
+            "exit": 0
+          },
+          {
+            "kind": "ran",
+            "prefix": [
+              "migrations",
+              "lint"
+            ],
+            "exit": 0
+          }
+        ]
+      },
+      "done": "The directory matches its sum and lint found nothing. Both are checks you would run in CI."
+    },
+    {
+      "id": "up",
+      "title": "Apply them",
+      "caption": "In order, once each",
+      "headline": "Applied in order, recorded, and never applied twice.",
+      "instruction": "up applies every pending migration in version order and records what it applied in schema_migrations. Run status before and after to see the version move.",
+      "action": {
+        "kind": "run",
+        "argv": [
+          "migrations",
+          "up",
+          "--migrations-dir",
+          "migrations",
+          "--db-url",
+          "sqlite://app.db"
+        ]
+      },
+      "also": [
+        [
+          "migrations",
+          "status",
+          "--migrations-dir",
+          "migrations",
+          "--db-url",
+          "sqlite://app.db"
+        ]
+      ],
+      "check": {
+        "kind": "all",
+        "of": [
+          {
+            "kind": "ran",
+            "prefix": [
+              "migrations",
+              "up"
+            ],
+            "exit": 0
+          },
+          {
+            "kind": "table",
+            "name": "schema_migrations",
+            "present": true
+          },
+          {
+            "kind": "table",
+            "name": "users",
+            "present": true
+          }
+        ]
+      },
+      "done": "users and tasks exist, and schema_migrations records the version that created them. Running up again applies nothing."
+    }
+  ],
+  "finished": {
+    "headline": "Two routes to the same desired state.",
+    "caption": "schema apply changes the database now; migrations up replays a reviewed history. A project picks one, and Ptah does both."
+  }
+}

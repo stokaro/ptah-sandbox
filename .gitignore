@@ -16,3 +16,6 @@ dist/
 /tmp/
 .DS_Store
 web/dist/
+
+# The staging directory the deploy workflow builds; never committed.
+/_site/

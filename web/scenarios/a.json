@@ -1,0 +1,208 @@
+{
+  "id": "a",
+  "title": "Change a schema, keep the data",
+  "description": "Add a column to a table that already has rows, and read the rows back afterwards.",
+  "database": {
+    "path": "app.db",
+    "url": "sqlite://app.db"
+  },
+  "files": {
+    "schema.sql": "-- The schema you want the database to have.\n--\n-- Ptah reads this file as the desired state, reads the real catalog out of\n-- app.db, and works out the difference. You never write ALTER statements here.\n\nCREATE TABLE users (\n  id    INTEGER PRIMARY KEY,\n  name  TEXT NOT NULL,\n  email TEXT NOT NULL\n);\n\nCREATE TABLE tasks (\n  id      INTEGER PRIMARY KEY,\n  user_id INTEGER NOT NULL,\n  title   TEXT NOT NULL,\n  done    INTEGER NOT NULL DEFAULT 0,\n  FOREIGN KEY (user_id) REFERENCES users (id)\n);\n",
+    "README.md": "# Workspace\n\n    schema.sql   the schema you want\n    app.db       the SQLite database you have\n    README.md    this file\n\nPtah's job is the gap between the two.\n\nTry it:\n\n    ptah schema drift --schema-file schema.sql --db-url sqlite://app.db\n\nThat reads both and tells you whether they agree. Right now they do.\n\nAdd a column to `users` in `schema.sql`:\n\n    active INTEGER NOT NULL DEFAULT 1\n\nand an index below the tables:\n\n    CREATE INDEX idx_users_email ON users (email);\n\nThen look before you leap:\n\n    ptah schema apply --schema-file schema.sql --db-url sqlite://app.db --dry-run\n\nNothing changed — that was a plan. Run it again without `--dry-run` to apply it,\nand confirm when asked. Then check the rows are still there in the SQL pane:\n\n    SELECT id, name, active FROM users ORDER BY id;\n\nEverything here runs in this browser tab. Export takes the workspace with you.\n"
+  },
+  "seed": "-- Builds app.db for the playground. Synthetic data only.\nPRAGMA foreign_keys = ON;\n\nCREATE TABLE users (\n  id    INTEGER PRIMARY KEY,\n  name  TEXT NOT NULL,\n  email TEXT NOT NULL\n);\n\nCREATE TABLE tasks (\n  id      INTEGER PRIMARY KEY,\n  user_id INTEGER NOT NULL,\n  title   TEXT NOT NULL,\n  done    INTEGER NOT NULL DEFAULT 0,\n  FOREIGN KEY (user_id) REFERENCES users (id)\n);\n\nINSERT INTO users (id, name, email) VALUES\n  (1, 'Ada',   'ada@example.com'),\n  (2, 'Grace', 'grace@example.com'),\n  (3, 'Alan',  'alan@example.com');\n\nINSERT INTO tasks (id, user_id, title, done) VALUES\n  (1, 1, 'Draft the analytical engine notes', 1),\n  (2, 1, 'Review the note G example',         0),\n  (3, 2, 'Write the compiler proposal',       0),\n  (4, 3, 'Prepare the Bombe report',          1);\n",
+  "baseline": {
+    "check": {
+      "kind": "all",
+      "of": [
+        {
+          "kind": "table",
+          "name": "users",
+          "present": true
+        },
+        {
+          "kind": "file",
+          "path": "schema.sql",
+          "present": true
+        }
+      ]
+    },
+    "message": "This route expects a users table in app.db and a schema.sql in the workspace. One of them is gone, so the steps below no longer describe what you have. Everything still works; Reset puts the scenario back."
+  },
+  "steps": [
+    {
+      "id": "explore",
+      "title": "Explore",
+      "caption": "Start from existing data",
+      "headline": "Start by asking whether the file and the database agree.",
+      "instruction": "app.db already holds three users and four tasks. Ask Ptah whether schema.sql and the database agree.",
+      "action": {
+        "kind": "run",
+        "argv": [
+          "schema",
+          "drift",
+          "--schema-file",
+          "schema.sql",
+          "--db-url",
+          "sqlite://app.db"
+        ]
+      },
+      "check": {
+        "kind": "ran",
+        "prefix": [
+          "schema",
+          "drift"
+        ],
+        "exit": 0
+      },
+      "done": "They agree. Exit 0 from schema drift means the desired schema and the live catalog match."
+    },
+    {
+      "id": "edit",
+      "title": "Edit schema",
+      "caption": "Add a column and an index",
+      "headline": "You describe the schema you want, not the steps to get there.",
+      "instruction": "Add the column to users in schema.sql, and the index below the tables. You are describing the schema you want; you never write ALTER here.",
+      "action": {
+        "kind": "edit",
+        "file": "schema.sql",
+        "snippet": "  active INTEGER NOT NULL DEFAULT 1\n\nCREATE INDEX idx_users_email ON users (email);",
+        "hint": "The column goes inside the users body, after email. The index goes on its own, below both tables."
+      },
+      "check": {
+        "kind": "all",
+        "of": [
+          {
+            "kind": "declares",
+            "file": "schema.sql",
+            "table": "users",
+            "column": "active",
+            "present": true
+          },
+          {
+            "kind": "declares",
+            "file": "schema.sql",
+            "index": "idx_users_email",
+            "present": true
+          }
+        ]
+      },
+      "done": "schema.sql now asks for a column and an index the database does not have."
+    },
+    {
+      "id": "preview",
+      "title": "Preview SQL",
+      "caption": "Review before applying",
+      "headline": "Review the exact SQL before applying.",
+      "instruction": "Run apply with --dry-run. It opens app.db to read the catalog, works out the difference and prints the statements. It executes none of them.",
+      "action": {
+        "kind": "run",
+        "argv": [
+          "schema",
+          "apply",
+          "--schema-file",
+          "schema.sql",
+          "--db-url",
+          "sqlite://app.db",
+          "--dry-run"
+        ]
+      },
+      "check": {
+        "kind": "ran",
+        "prefix": [
+          "schema",
+          "apply"
+        ],
+        "has": [
+          "--dry-run"
+        ],
+        "exit": 0
+      },
+      "done": "That plan came out of the real planner. Nothing has been executed: the database still has the columns it started with."
+    },
+    {
+      "id": "apply",
+      "title": "Apply",
+      "caption": "Keep the existing rows",
+      "headline": "Type YES yourself. Nothing here approves on your behalf.",
+      "instruction": "Run the same command without --dry-run. Ptah prints the plan again and then waits: type YES at the prompt to proceed. Anything else cancels. Nothing is auto-approved for you.",
+      "action": {
+        "kind": "run",
+        "argv": [
+          "schema",
+          "apply",
+          "--schema-file",
+          "schema.sql",
+          "--db-url",
+          "sqlite://app.db"
+        ]
+      },
+      "check": {
+        "kind": "all",
+        "of": [
+          {
+            "kind": "column",
+            "table": "users",
+            "column": "active",
+            "present": true
+          },
+          {
+            "kind": "index",
+            "name": "idx_users_email",
+            "present": true
+          },
+          {
+            "kind": "rows",
+            "table": "users",
+            "op": "eq",
+            "count": 3
+          }
+        ]
+      },
+      "done": "The column and the index are in the catalog, and users still has its three rows."
+    },
+    {
+      "id": "verify",
+      "title": "Verify",
+      "caption": "Query data, check drift",
+      "headline": "Read the rows back, then ask for drift once more.",
+      "instruction": "Read the rows back yourself, then ask for drift once more. Both should agree that the change landed and nothing was lost.",
+      "action": {
+        "kind": "sql",
+        "sql": "SELECT id, name, active FROM users ORDER BY id;"
+      },
+      "also": [
+        [
+          "schema",
+          "drift",
+          "--schema-file",
+          "schema.sql",
+          "--db-url",
+          "sqlite://app.db"
+        ]
+      ],
+      "check": {
+        "kind": "ran",
+        "prefix": [
+          "schema",
+          "drift"
+        ],
+        "exit": 0,
+        "after": {
+          "prefix": [
+            "schema",
+            "apply"
+          ],
+          "lacks": [
+            "--dry-run"
+          ]
+        }
+      },
+      "done": "Desired and actual agree again, checked after the apply rather than before it."
+    }
+  ],
+  "finished": {
+    "headline": "A text file changed and the data survived. That is the whole idea.",
+    "caption": "Export takes this workspace to the installed CLI, with the commands to continue where you left off."
+  }
+}

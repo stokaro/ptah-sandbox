@@ -15,6 +15,7 @@
     "test:integration": "node ../test/integration/run.mjs",
     "typecheck": "tsc --noEmit",
     "test:migrations": "node ../test/integration/migrations.mjs",
+    "test:ui": "node scripts/ui-probe-run.mjs",
     "build": "node build.mjs"
   },
   "devDependencies": {

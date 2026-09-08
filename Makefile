@@ -4,11 +4,52 @@
 SHELL := /bin/sh
 
 .POSIX:
-.PHONY: wasm dev-tree clean test test-integration test-migrations test-go capture-native
+.PHONY: wasm dev-tree clean test test-integration test-migrations test-go capture-native \
+	build-web serve check-site smoke
 
 # wasm builds web/vendor/ptah/{ptah.wasm,wasm_exec.js,manifest.json}.
 wasm:
 	scripts/build-wasm.sh
+
+# build-web installs the pinned npm dependencies and bundles the page's
+# TypeScript into web/dist. It does not touch the wasm; `make wasm` does that,
+# and the two are independent -- the page loads and reads as a page before any
+# WebAssembly arrives.
+build-web:
+	cd web && npm ci && npm run build
+
+# serve serves web/ the way GitHub Pages does: a directory of static files at
+# the root of the origin, nothing generated on request. Run `make build-web`
+# and `make wasm` first, or the page will 404 on dist/ and on the binary.
+serve:
+	@echo "web/ on http://127.0.0.1:8788/ -- ^C to stop"
+	cd web && python3 -m http.server 8788 --bind 127.0.0.1
+
+# check-site is the gate the deploy workflow runs before publishing: the CNAME,
+# every href/src and CSS url() resolving, no github.io address, and the
+# manifest agreeing with both the wasm and the submodule pin. Run it before
+# pushing and CI will not tell you anything you did not already know.
+check-site:
+	node web/scripts/check-site.mjs --root web
+
+# ui-probe drives the real playground page in headless Chrome and asserts by
+# reading the DOM: the fixture renders before the runtime does, the loader
+# counts real bytes, a typed command exits 0, an edit marks the plan stale, the
+# apply asks for YES, the rows survive it. It needs `make serve` running in
+# another shell, and Chrome on the PATH or in $CHROME.
+#   make ui-probe                  assert only
+#   make ui-probe SHOTS=.refs      assert, then write ui-light/dark/mobile.png
+SHOTS =
+ui-probe:
+	cd web && node scripts/ui-probe-run.mjs --base http://127.0.0.1:8788/ \
+	  $(if $(SHOTS),--shots $(abspath $(SHOTS)),)
+
+# smoke drives the deployed site over the network. With no argument it tests
+# production; pass a base URL to point it at `make serve`:
+#   make smoke BASE=http://127.0.0.1:8788/
+BASE = https://play.ptah.run/
+smoke:
+	sh web/scripts/smoke.sh "$(BASE)"
 
 # dev-tree materializes build/ptah-src with runtime/ptah symlinked in and
 # writes a go.work, so an editor can typecheck the sandbox's Go sources against

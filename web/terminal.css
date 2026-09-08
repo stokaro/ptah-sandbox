@@ -1,0 +1,345 @@
+/* The terminal pane.
+ *
+ * Built on site.css's own .term, .term-bar, .p, .m and .a. Nothing here
+ * introduces a colour: every value is one of the site's terminal tokens
+ * (--term, --termfg, --termmute, --termacc, --termamber, --termline), which is
+ * also what makes the pane follow the site's dark theme without a second
+ * palette. Amber is the only attention colour, and it is never used alone --
+ * every amber thing on screen also carries a glyph or a word.
+ */
+
+.pg-term {
+  display: grid;
+  /* minmax(0, 1fr), not 1fr: a grid item's automatic minimum is its max-content
+     width, so one long line of output -- a refusal message, a wide SELECT --
+     would size the whole column to itself, push the bar past the pane's own
+     border and clip the controls at the far end. The column is told it may be
+     narrower than its content, and the transcript wraps inside it. */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
+  /* The pane's width comes from the playground's grid, not from the viewport,
+     so "is there room for the hint" is a question about this box. */
+  container-type: inline-size;
+  container-name: term;
+}
+.pg-term > * {
+  min-width: 0;
+}
+
+/* ---------- The bar ---------- */
+
+.pg-term .term-bar {
+  align-items: center;
+  gap: 12px;
+  min-height: 37px;
+}
+
+.term-where,
+.term-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.term-where > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The one word that says what the pane is doing. Amber, because every state
+   it names -- queued, waiting, stopping, recovering -- is one the visitor is
+   waiting on; "running" is the exception and stays muted. */
+.term-state {
+  color: var(--termamber);
+}
+.pg-term[data-state="running"] .term-state,
+.pg-term[data-state="idle"] .term-state {
+  color: var(--termmute);
+}
+.term-state:empty {
+  display: none;
+}
+
+.term-exit {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* Off the exit code as a number, never off the text of the output. Zero is
+   neutral. One is an expected negative -- drift found, lint findings,
+   migrations pending -- and two is everything else; both are amber, because
+   both are something to read, and neither is a crash of this page. */
+.term-exit[data-code="0"] {
+  color: var(--termfg);
+}
+.term-exit[data-code="nonzero"] {
+  color: var(--termamber);
+}
+
+.term-duration {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.term-btn {
+  flex-shrink: 0;
+  font: 500 12px var(--sans);
+  color: var(--termfg);
+  border: 1px solid var(--termline);
+  border-radius: 2px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+.term-btn:hover:not(:disabled) {
+  border-color: var(--termmute);
+}
+.term-btn:disabled {
+  cursor: default;
+  color: var(--termamber);
+  border-color: color-mix(in oklab, var(--termamber) 40%, transparent);
+}
+.term-kill {
+  color: var(--termamber);
+  border-color: color-mix(in oklab, var(--termamber) 55%, transparent);
+}
+
+.pg-term .term-copy {
+  color: var(--termmute);
+}
+.pg-term .term-copy:hover {
+  color: var(--termfg);
+}
+/* site.css tints a finished copy with --acc, which is the link blue. On the
+   terminal ground that is the one place blue would appear for something that
+   is not a link, so it stays --termfg here. */
+.pg-term .term-copy[data-state="done"] {
+  color: var(--termfg);
+}
+
+/* ---------- The transcript ---------- */
+
+.term-screen {
+  margin: 0;
+  padding: 20px 22px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  /* `migrations status` prints emoji, so the emoji families are named rather
+     than left to whatever the browser reaches for: a glyph resolved from an
+     arbitrary fallback face has an arbitrary advance, and naming the platform
+     faces fixes one width per glyph. Measured in Chrome on macOS at 13.5px:
+     a colour emoji is 2.10 cells and a text-presentation glyph (✕ △ ✔) is
+     1.00, both constant, so a column of one kind stays aligned with itself.
+
+     Emoji presentation is deliberately NOT forced. font-variant-emoji: emoji
+     also catches the keycap bases -- every digit, "#" and "*" -- and renders
+     them from the colour font at 2.10 cells, which would double the width of
+     every row count, line number and duration Ptah prints. Measured, not
+     assumed. */
+  font-family: var(--mono), "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
+  font-size: 13.5px;
+  line-height: 1.7;
+  /* Ligatures would join "!=" and "->" into glyphs whose width is not the sum
+     of their parts, which is the same alignment problem by another route. */
+  font-variant-ligatures: none;
+}
+
+.term-cmd,
+.term-echo {
+  color: var(--termfg);
+}
+
+.term-out {
+  color: var(--termfg);
+}
+
+/* stderr. Two channels, not one: amber and a tint, so it is still distinct
+   where colour is not available. Ptah's stderr carries three different error
+   shapes and none of them is keyed off a prefix, so the pane marks the stream
+   rather than trying to classify the message. */
+.term-err,
+.term-attn {
+  color: var(--termamber);
+  background: color-mix(in oklab, var(--termamber) 10%, transparent);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.term-trunc {
+  display: block;
+  color: var(--termmute);
+  border-bottom: 1px solid var(--termline);
+  margin-bottom: 6px;
+}
+.term-trunc:empty {
+  display: none;
+}
+
+/* ---------- The prompt ---------- */
+
+.term-prompt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 22px;
+  border-top: 1px solid var(--termline);
+  font: 13.5px var(--mono);
+}
+
+.term-sigil {
+  flex-shrink: 0;
+}
+/* The prompt changes shape when the run is waiting on stdin. The glyph is the
+   signal; the note beside it is the sentence. */
+.term-sigil-ask {
+  color: var(--termamber);
+}
+
+.term-field {
+  position: relative;
+  /* Keeps a usable field at every width: the note and the hint give up their
+     space first, and the line being typed is never squeezed to nothing. */
+  flex: 1 1 12ch;
+  min-width: 10ch;
+  display: flex;
+}
+
+.term-field-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  color: var(--termfg);
+  background: none;
+  border: 0;
+  padding: 0;
+  /* A real caret, in the terminal's own attention colour. caret-shape is
+     ignored where it is not supported, which leaves the platform's bar caret
+     in the same colour rather than nothing. */
+  caret-color: var(--termamber);
+  caret-shape: block;
+}
+.term-field-input::placeholder {
+  color: var(--termmute);
+}
+.term-field-input:disabled {
+  color: var(--termmute);
+}
+
+/* The block shown while the field is empty and unfocused: the mock's caret,
+   as an affordance saying the line is typeable. It does not blink, so there is
+   no motion here to reduce. */
+.term-caret {
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--termamber);
+  pointer-events: none;
+}
+.term-field[data-empty="0"] .term-caret,
+.pg-term:focus-within .term-caret {
+  display: none;
+}
+
+.term-note {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.term-note:not(:empty) + .term-hint {
+  /* Both of these are guidance, and the note is the one about right now. */
+  flex-shrink: 1;
+}
+.term-note:empty {
+  display: none;
+}
+
+.term-hint {
+  margin-left: auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  color: var(--termmute);
+  white-space: nowrap;
+}
+
+/* ---------- Focus ---------- */
+
+/* site.css's global ring is --acc, which on the light theme is a dark blue on
+   a near-black ground: it is there, but barely. The terminal has its own
+   lighter accent for exactly this, so the ring is swapped locally rather than
+   left low-contrast. */
+.pg-term :focus-visible {
+  outline: 2px solid var(--termacc);
+  outline-offset: 2px;
+}
+.pg-term .term-field-input:focus-visible {
+  /* The field fills its row; a ring around it would box the whole prompt. The
+     caret is the focus indicator here, and it is the one the caret-color rule
+     above makes clearly visible. */
+  outline: none;
+}
+.pg-term:focus-within .term-prompt {
+  box-shadow: inset 2px 0 0 var(--termacc);
+}
+
+/* ---------- Narrow ---------- */
+
+/* Below this the note and the hint cannot both be read, and the note is the
+   one that is about the run in front of the visitor. */
+@container term (max-width: 1000px) {
+  .term-note:not(:empty) + .term-hint {
+    display: none;
+  }
+}
+
+@container term (max-width: 620px) {
+  .term-screen {
+    padding: 14px 16px;
+    font-size: 12.5px;
+    line-height: 1.65;
+  }
+  .term-prompt {
+    padding: 10px 16px;
+    flex-wrap: wrap;
+  }
+  /* The hint is the first thing to go: it repeats what the refusal messages
+     say in full when they are actually needed. */
+  .term-hint {
+    display: none;
+  }
+  .pg-term .term-bar {
+    gap: 8px;
+  }
+  .term-right {
+    gap: 10px;
+  }
+  /* "sh" is the least informative word in the bar, and the state word is
+     already spelled out on the prompt row below. Dropping both leaves room
+     for the two controls, which are the only things here that do something. */
+  .term-where > span:first-child,
+  .term-state {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .term-hint {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Nothing in this pane animates: the caret is a static glyph and the state
+     word is text. This block exists so that a future addition has to justify
+     itself here rather than shipping motion by default. */
+  .pg-term * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

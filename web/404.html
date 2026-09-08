@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Page not found — Ptah playground</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#161311" media="(prefers-color-scheme: dark)">
+<!-- Absolute paths, not relative ones: GitHub Pages serves this file for every
+     unknown address, including /a/b/c/, and a relative stylesheet would be
+     looked for under that address. -->
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="stylesheet" href="/assets/site.css">
+<script>(function(){var d=document.documentElement,t=null;try{t=localStorage.getItem("ptah-theme")}catch(e){}if(t!=="light"&&t!=="dark"){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}d.setAttribute("data-theme",t);d.classList.add("js")})();</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/assets/logo.svg" alt="" width="22" height="22">Ptah</a>
+    <nav class="nav" aria-label="Site">
+      <ul class="nav-links">
+        <li><a href="https://docs.ptah.run/">Docs</a></li>
+        <li><a href="https://ptah.run/install/">Install</a></li>
+        <li><a href="/">Playground</a></li>
+        <li><a href="https://github.com/stokaro/ptah">GitHub&nbsp;↗</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="notfound">
+  <div class="wrap">
+    <div class="label">HTTP 404</div>
+    <h1>No such page.</h1>
+    <p>play.ptah.run is one page: the playground itself. Nothing is served from
+    this address. The playground is at the root of the domain, the documentation
+    lives on docs.ptah.run, and the source of this sandbox is on GitHub.</p>
+    <div class="actions">
+      <a class="btn" href="/">Playground</a>
+      <a class="btn btn-ghost" href="https://docs.ptah.run/">Docs</a>
+      <a class="btn btn-ghost" href="https://github.com/stokaro/ptah-sandbox">Source</a>
+    </div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="foot-brand"><img src="/assets/logo.svg" alt="" width="18" height="18"><span>play.ptah.run · Ptah and SQLite compiled to WebAssembly · MIT</span></div>
+    <ul class="foot-links">
+      <li><a href="https://ptah.run/">ptah.run</a></li>
+      <li><a href="https://github.com/stokaro/ptah-sandbox">Sandbox</a></li>
+      <li><a href="https://github.com/stokaro/ptah/issues">Issues</a></li>
+    </ul>
+  </div>
+</footer>
+</body>
+</html>

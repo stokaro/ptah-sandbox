@@ -1,0 +1,655 @@
+/* The editor, the left rail and the three result panes.
+ *
+ * Everything here is prefixed `pgc-` (playground component) and every root
+ * class is applied by the component's own constructor. The prefix exists
+ * because the page shell's playground.css uses `pg-` for a different set of
+ * things -- `.pg-pane` there is a top-level column, `.pg-editor` is a static
+ * pre -- and two stylesheets disagreeing about what a class means is a bug
+ * that only shows up once both are linked.
+ *
+ * Every colour is a site.css token. Blue (--acc) appears on the active tab
+ * underline, on SQL keywords, on the current row's edge and behind a changed
+ * line; amber (--amber) appears only where a person has to act or read
+ * something -- drift, a modified buffer, a stale plan, a failed read. There
+ * is no green and no red on this page.
+ *
+ * The one new token here is the editor's selection colour, which has to be
+ * translucent: the textarea's text is transparent and the highlighting shows
+ * through from the layer behind it, so an opaque selection would hide the
+ * very thing being selected. */
+
+:root {
+  --pgc-sel: rgba(60, 110, 170, 0.24);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --pgc-sel: rgba(120, 170, 220, 0.28);
+  }
+}
+
+:root[data-theme="dark"] {
+  --pgc-sel: rgba(120, 170, 220, 0.28);
+}
+
+/* ---------- Shared chrome ---------- */
+
+.pgc-tabbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--line);
+  padding-right: 16px;
+  min-width: 0;
+}
+
+.pgc-tablist {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pgc-tab {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  font: 500 13.5px var(--sans);
+  color: var(--mute);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pgc-tab:hover {
+  color: var(--fg2);
+}
+
+.pgc-tab.is-active {
+  color: var(--fg);
+  border-bottom-color: var(--acc);
+}
+
+.pgc-tab:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: -2px;
+}
+
+.pgc-tabmeta {
+  font: 12px var(--mono);
+  color: var(--mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pgc-tabmeta.is-amber {
+  color: var(--amber);
+}
+
+/* A trailing note: `PK`, `28 KiB`, `not in schema.sql`. */
+.pgc-mark {
+  font-size: 11.5px;
+  color: var(--mute);
+}
+
+.pgc-mark-amber {
+  color: var(--amber);
+}
+
+.pgc-hint {
+  font: 12.5px var(--sans);
+  color: var(--mute);
+}
+
+.pgc-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- Editor ---------- */
+
+.pgc-editor {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
+.pgc-ed {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* One block of metrics, shared by the three layers that must line up: the
+   numbers, the highlight overlay and the textarea the caret lives in. Change
+   any of these and change all three. */
+.pgc-ed-nums,
+.pgc-ed-overlay,
+.pgc-ed-input {
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 21px;
+  letter-spacing: 0;
+  tab-size: 2;
+  -moz-tab-size: 2;
+  font-kerning: none;
+  font-variant-ligatures: none;
+  font-feature-settings: normal;
+}
+
+.pgc-ed-gutter {
+  padding: 14px 10px 14px 14px;
+  border-right: 1px solid var(--line2);
+  overflow: hidden;
+  user-select: none;
+}
+
+.pgc-ed-nums {
+  display: block;
+  text-align: right;
+  white-space: pre;
+  color: var(--mute);
+  font-variant-numeric: tabular-nums;
+}
+
+.pgc-ed-code {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.pgc-ed-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0;
+  padding: 14px 0;
+  width: max-content;
+  min-width: 100%;
+  white-space: pre;
+  color: var(--fg);
+  pointer-events: none;
+}
+
+.pgc-ed-line {
+  display: block;
+  padding: 0 16px;
+}
+
+/* Lines that differ from the file on disk. The full-bleed background is why
+   the horizontal padding lives on the line rather than on the overlay. */
+.pgc-ed-line.is-changed {
+  background: var(--accbg);
+}
+
+.pgc-t-keyword {
+  color: var(--acc);
+}
+
+.pgc-t-comment {
+  color: var(--mute);
+}
+
+.pgc-t-string {
+  color: var(--fg2);
+}
+
+.pgc-ed-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 14px 16px;
+  border: 0;
+  background: transparent;
+  /* The characters are drawn by the overlay underneath; this layer
+     contributes the caret, the selection and the editing behaviour. */
+  color: transparent;
+  caret-color: var(--fg);
+  white-space: pre;
+  overflow: auto;
+  resize: none;
+  scrollbar-width: thin;
+}
+
+.pgc-ed-input:focus {
+  outline: 0;
+}
+
+.pgc-ed-input::selection {
+  background: var(--pgc-sel);
+}
+
+.pgc-ed-input:read-only {
+  caret-color: transparent;
+}
+
+.pgc-ed-run {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+}
+
+.pgc-ed-notice {
+  padding: 8px 16px;
+  border-top: 1px solid var(--line);
+  font: 12.5px/1.5 var(--sans);
+  color: var(--amber);
+}
+
+.pgc-strip {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 16px;
+  border-top: 1px solid var(--line);
+  font: 12px var(--mono);
+  color: var(--mute);
+}
+
+/* ---------- Left rail ---------- */
+
+.pgc-rail {
+  padding: 16px 0;
+  display: grid;
+  gap: 20px;
+  align-content: start;
+  min-width: 0;
+  overflow: auto;
+}
+
+.pgc-rail-group {
+  display: grid;
+  gap: 4px;
+}
+
+.pgc-rail-head {
+  padding: 0 16px 4px;
+}
+
+.pgc-rail-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 5px 16px;
+  border: 0;
+  background: none;
+  text-align: left;
+  font: 13px var(--mono);
+  color: var(--fg2);
+  cursor: pointer;
+}
+
+.pgc-rail-row.is-static {
+  cursor: default;
+}
+
+.pgc-rail-row:hover:not(.is-static) {
+  color: var(--fg);
+}
+
+/* The edge marker sits on the inside so it cannot be mistaken for a border
+   between the rail and the editor. */
+.pgc-rail-row.is-current {
+  color: var(--fg);
+  background: var(--code);
+  box-shadow: inset -2px 0 0 var(--acc);
+}
+
+.pgc-rail-row:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: -2px;
+}
+
+.pgc-rail-glyph {
+  color: var(--mute);
+  flex-shrink: 0;
+}
+
+.pgc-rail-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pgc-rail-row .pgc-mark {
+  margin-left: auto;
+  padding-left: 8px;
+  flex-shrink: 0;
+}
+
+.pgc-rail-cols {
+  padding: 2px 16px 4px 40px;
+  display: grid;
+  gap: 2px;
+  font: 12px var(--mono);
+  color: var(--fg2);
+}
+
+.pgc-rail-col {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.pgc-rail-colname {
+  color: var(--fg2);
+}
+
+.pgc-rail-col .pgc-mark {
+  margin-left: 6px;
+}
+
+.pgc-rail-empty {
+  padding: 2px 16px 4px;
+  font: 12.5px/1.5 var(--sans);
+  color: var(--mute);
+}
+
+/* ---------- Result panes ---------- */
+
+.pgc-panes {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
+.pgc-pane {
+  /* All three share one grid row, so switching tabs cannot change the height
+     of the column. */
+  grid-row: 2;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+/* An author `display` declaration beats the user agent's `[hidden]` rule, so
+   every element here that sets `display` has to opt back out explicitly. */
+.pgc-pane[hidden],
+.pgc-ed-run[hidden],
+.pgc-ed-notice[hidden] {
+  display: none;
+}
+
+.pgc-pane-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 16px 16px 0;
+  min-width: 0;
+}
+
+.pgc-pane-title {
+  font: 500 15px var(--sans);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pgc-pane-status-line {
+  font: 12px var(--mono);
+  color: var(--mute);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.pgc-pane-status-line.is-amber {
+  color: var(--amber);
+}
+
+.pgc-pane-body {
+  padding: 14px 16px 16px;
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  overflow: auto;
+  min-height: 0;
+}
+
+/* A child that is itself a scroll container has an automatic minimum size of
+   zero, which lets this grid shrink it instead of scrolling to it. Stating a
+   min-content floor keeps the body the thing that scrolls. */
+.pgc-pane-body > * {
+  min-height: min-content;
+}
+
+.pgc-pane-note {
+  font: 13.5px/1.55 var(--sans);
+  color: var(--fg2);
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.pgc-pane-note.is-amber {
+  color: var(--amber);
+}
+
+/* Consecutive notes are one block of prose, not a stack of dividers. */
+.pgc-pane-note + .pgc-pane-note {
+  border-top: 0;
+  padding-top: 0;
+  margin-top: -6px;
+}
+
+/* ---------- Empty, loading, error ---------- */
+
+.pgc-pane-status {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  align-content: start;
+  padding: 4px 0;
+}
+
+.pgc-pane-status-head {
+  font: 500 13.5px var(--sans);
+  color: var(--amber);
+}
+
+/* The message the runtime produced, kept verbatim and kept on screen. */
+.pgc-pane-status-detail {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--code);
+  font: 12.5px/1.6 var(--mono);
+  color: var(--fg);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.pgc-pane-status-note {
+  font: 13.5px/1.55 var(--sans);
+  color: var(--mute);
+  text-wrap: pretty;
+}
+
+.pgc-pane-spin {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--line);
+  border-top-color: var(--acc);
+  border-radius: 50%;
+  animation: pgc-spin 0.7s linear infinite;
+}
+
+@keyframes pgc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pgc-pane-spin {
+    animation: none;
+  }
+}
+
+/* ---------- Tables ---------- */
+
+/* Wide row sets scroll inside the pane body, which is the column's only
+   scroller; the page itself never scrolls sideways.
+ *
+ * This wrapper deliberately does NOT set `overflow`. A scroll container has an
+ * automatic minimum size of zero, so as a grid item it gets shrunk to fit
+ * instead of making its parent scroll -- which cost the last table row three
+ * pixels and produced no scrollbar to recover them with. */
+.pgc-table-wrap {
+  min-width: 0;
+}
+
+.pgc-table {
+  border-collapse: collapse;
+  width: 100%;
+  font: 13px var(--mono);
+}
+
+.pgc-th {
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  font: 500 12px var(--mono);
+  letter-spacing: 0.04em;
+  color: var(--mute);
+  white-space: nowrap;
+}
+
+.pgc-th.is-new {
+  color: var(--fg);
+}
+
+.pgc-th .pgc-mark {
+  margin-left: 6px;
+}
+
+.pgc-td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line2);
+  color: var(--fg);
+  white-space: pre;
+  vertical-align: top;
+}
+
+.pgc-td.is-null {
+  color: var(--mute);
+}
+
+.pgc-table tr.is-pending .pgc-td {
+  color: var(--mute);
+}
+
+/* The sort control is an affordance, not a label: it appears when the header
+   is pointed at or focused, and stays visible on the column being sorted. */
+.pgc-sort {
+  margin-left: 6px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  font: 11px var(--mono);
+  color: var(--mute);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 90ms linear;
+}
+
+.pgc-th:hover .pgc-sort,
+.pgc-sort:focus-visible,
+.pgc-sort.is-sorted {
+  opacity: 1;
+}
+
+.pgc-sort:hover {
+  color: var(--fg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pgc-sort {
+    transition: none;
+  }
+}
+
+.pgc-sort:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 1px;
+}
+
+.pgc-flags {
+  font-size: 13px;
+  max-width: none;
+}
+
+/* ---------- Plan ---------- */
+
+.pgc-plan {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.pgc-plan-item {
+  display: grid;
+  gap: 6px;
+}
+
+.pgc-plan-note {
+  font: 12.5px/1.5 var(--sans);
+  color: var(--mute);
+}
+
+.pgc-plan-sql,
+.pgc-plan-raw {
+  margin: 0;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.pgc-plan-meta {
+  font: 12.5px/1.5 var(--sans);
+  color: var(--mute);
+}
+
+/* ---------- Narrow screens ---------- */
+
+/* At mobile widths the page shell shows one column at a time, so the panes
+   only have to stop insisting on their desktop heights. */
+@media (max-width: 900px) {
+  .pgc-rail {
+    padding: 12px 0;
+  }
+
+  .pgc-pane-head {
+    flex-wrap: wrap;
+    gap: 4px 16px;
+  }
+
+  .pgc-pane-status-line {
+    white-space: normal;
+  }
+}

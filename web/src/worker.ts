@@ -54,8 +54,9 @@ let runtime: Runtime | null = null;
 let sqlite: SqliteBridge | null = null;
 let ptah: PtahGoHalf | null = null;
 
-function post(event: HostEvent): void {
-  self.postMessage(event);
+function post(event: HostEvent, transfer?: Transferable[]): void {
+  if (transfer) self.postMessage(event, transfer);
+  else self.postMessage(event);
 }
 
 /**
@@ -227,6 +228,11 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
         post({ type: "files", entries: runtime!.workspace.list(msg.dir) });
         return;
       }
+      case "remove": {
+        runtime!.workspace.remove(msg.path);
+        post({ type: "removed", path: msg.path, revision: runtime!.workspace.revision() });
+        return;
+      }
       case "sql": {
         const rows = querySQL(msg.path, msg.sql);
         post({ type: "sql", id: msg.id, rows });
@@ -242,13 +248,34 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
         post({ type: "sqlDone", id: msg.id });
         return;
       }
+      case "serialize": {
+        // sqlite3_js_db_export hands back a detached copy, so the buffer can be
+        // transferred rather than cloned; nothing in the wasm heap aliases it.
+        const bytes = sqlite!.serialize(msg.path);
+        post({ type: "serialized", id: msg.id, bytes }, [bytes.buffer]);
+        return;
+      }
+      case "deserialize": {
+        sqlite!.deserialize(msg.path, msg.bytes);
+        post({ type: "deserialized", id: msg.id });
+        return;
+      }
+      case "dropDB": {
+        sqlite!.drop(msg.path);
+        post({ type: "dropped", id: msg.id });
+        return;
+      }
       default: {
         const never: never = msg;
         throw new Error(`worker: unknown request ${JSON.stringify(never)}`);
       }
     }
   } catch (err) {
-    post({ type: "error", request: msg.type, message: String(err) });
+    // FsError carries an errno; anything else has no code and the page treats
+    // it as a failure rather than as an answer.
+    const carried = (err as { code?: unknown } | null)?.code;
+    const code = typeof carried === "string" ? carried : undefined;
+    post({ type: "error", request: msg.type, message: String(err), code });
   }
 };
 

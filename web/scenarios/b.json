@@ -1,0 +1,203 @@
+{
+  "id": "b",
+  "title": "Detect drift",
+  "description": "Change the database behind the schema file's back, then ask Ptah what differs and read the exit code.",
+  "database": {
+    "path": "app.db",
+    "url": "sqlite://app.db"
+  },
+  "files": {
+    "schema.sql": "-- The schema you want the database to have.\n--\n-- Ptah reads this file as the desired state, reads the real catalog out of\n-- app.db, and works out the difference. You never write ALTER statements here.\n\nCREATE TABLE users (\n  id    INTEGER PRIMARY KEY,\n  name  TEXT NOT NULL,\n  email TEXT NOT NULL\n);\n\nCREATE TABLE tasks (\n  id      INTEGER PRIMARY KEY,\n  user_id INTEGER NOT NULL,\n  title   TEXT NOT NULL,\n  done    INTEGER NOT NULL DEFAULT 0,\n  FOREIGN KEY (user_id) REFERENCES users (id)\n);\n",
+    "README.md": "# Workspace\n\n    schema.sql   the schema you want\n    app.db       the SQLite database you have\n\nThis time schema.sql stays as it is. The database is what changes.\n\nRun drift first, so you can see it clean:\n\n    ptah schema drift --schema-file schema.sql --db-url sqlite://app.db\n\nThen change the database directly, in the SQL pane:\n\n    ALTER TABLE users ADD COLUMN nickname TEXT;\n\nNothing told schema.sql about that. Run drift again and read the exit code.\n0 means in sync, 1 means drifted, 2 means Ptah could not decide.\n"
+  },
+  "seed": "-- Builds app.db for the playground. Synthetic data only.\nPRAGMA foreign_keys = ON;\n\nCREATE TABLE users (\n  id    INTEGER PRIMARY KEY,\n  name  TEXT NOT NULL,\n  email TEXT NOT NULL\n);\n\nCREATE TABLE tasks (\n  id      INTEGER PRIMARY KEY,\n  user_id INTEGER NOT NULL,\n  title   TEXT NOT NULL,\n  done    INTEGER NOT NULL DEFAULT 0,\n  FOREIGN KEY (user_id) REFERENCES users (id)\n);\n\nINSERT INTO users (id, name, email) VALUES\n  (1, 'Ada',   'ada@example.com'),\n  (2, 'Grace', 'grace@example.com'),\n  (3, 'Alan',  'alan@example.com');\n\nINSERT INTO tasks (id, user_id, title, done) VALUES\n  (1, 1, 'Draft the analytical engine notes', 1),\n  (2, 1, 'Review the note G example',         0),\n  (3, 2, 'Write the compiler proposal',       0),\n  (4, 3, 'Prepare the Bombe report',          1);\n",
+  "baseline": {
+    "check": {
+      "kind": "all",
+      "of": [
+        {
+          "kind": "table",
+          "name": "users",
+          "present": true
+        },
+        {
+          "kind": "file",
+          "path": "schema.sql",
+          "present": true
+        }
+      ]
+    },
+    "message": "This route expects a users table in app.db and a schema.sql in the workspace. One of them is gone, so the steps below no longer describe what you have. Everything still works; Reset puts the scenario back."
+  },
+  "steps": [
+    {
+      "id": "sync",
+      "title": "Start in sync",
+      "caption": "Desired = actual",
+      "headline": "In sync is what a deploy pipeline wants to see.",
+      "instruction": "Establish the baseline. schema.sql and app.db describe the same tables, so drift has nothing to report.",
+      "action": {
+        "kind": "run",
+        "argv": [
+          "schema",
+          "drift",
+          "--schema-file",
+          "schema.sql",
+          "--db-url",
+          "sqlite://app.db"
+        ]
+      },
+      "check": {
+        "kind": "ran",
+        "prefix": [
+          "schema",
+          "drift"
+        ],
+        "exit": 0
+      },
+      "done": "Exit 0. This is the state a deploy pipeline would want to see."
+    },
+    {
+      "id": "change",
+      "title": "Change the DB",
+      "caption": "DDL in the SQL pane",
+      "headline": "Change the database directly, the way a hotfix does.",
+      "instruction": "Add a column straight to the database, the way a hotfix or a hand-run migration would. schema.sql is not touched.",
+      "action": {
+        "kind": "sql",
+        "sql": "ALTER TABLE users ADD COLUMN nickname TEXT;"
+      },
+      "check": {
+        "kind": "any",
+        "of": [
+          {
+            "kind": "all",
+            "of": [
+              {
+                "kind": "column",
+                "table": "users",
+                "column": "nickname",
+                "present": true
+              },
+              {
+                "kind": "not",
+                "of": {
+                  "kind": "declares",
+                  "file": "schema.sql",
+                  "table": "users",
+                  "column": "nickname",
+                  "present": true
+                }
+              }
+            ]
+          },
+          {
+            "kind": "ran",
+            "prefix": [
+              "schema",
+              "drift"
+            ],
+            "exit": 1
+          }
+        ]
+      },
+      "done": "The catalog has users.nickname and schema.sql does not mention it. That gap is drift, and a drift run that exits 1 keeps proving it happened even after the column is put back."
+    },
+    {
+      "id": "drift",
+      "title": "Run drift",
+      "caption": "Real exit code",
+      "headline": "Ask the same question again and read the number.",
+      "instruction": "Ask the same question as in step 1. The command is identical; only the database changed.",
+      "action": {
+        "kind": "run",
+        "argv": [
+          "schema",
+          "drift",
+          "--schema-file",
+          "schema.sql",
+          "--db-url",
+          "sqlite://app.db"
+        ]
+      },
+      "check": {
+        "kind": "ran",
+        "prefix": [
+          "schema",
+          "drift"
+        ],
+        "exit": 1
+      },
+      "done": "Exit 1 is a negative check result, not a tool failure. The command worked and answered no."
+    },
+    {
+      "id": "report",
+      "title": "Read the report",
+      "caption": "What differs",
+      "headline": "Exit 1 is a negative check result, not a tool failure.",
+      "instruction": "The report names the finding and its severity. A removed column is destructive; an added one is not. The failure threshold decides which severities make the command exit 1.",
+      "check": null,
+      "unverified": "Nothing to check here. Whether you have read the report is not something this page can observe, so this step never marks itself done."
+    },
+    {
+      "id": "reconcile",
+      "title": "Reconcile",
+      "caption": "Edit schema or revert",
+      "headline": "Adopt the change or revert it, then check again.",
+      "instruction": "Two honest ways out: adopt the column by adding nickname to schema.sql, or drop it in the SQL pane. Either way, run drift again to prove it.",
+      "also": [
+        [
+          "schema",
+          "drift",
+          "--schema-file",
+          "schema.sql",
+          "--db-url",
+          "sqlite://app.db"
+        ]
+      ],
+      "check": {
+        "kind": "all",
+        "of": [
+          {
+            "kind": "any",
+            "of": [
+              {
+                "kind": "declares",
+                "file": "schema.sql",
+                "table": "users",
+                "column": "nickname",
+                "present": true
+              },
+              {
+                "kind": "column",
+                "table": "users",
+                "column": "nickname",
+                "present": false
+              }
+            ]
+          },
+          {
+            "kind": "ran",
+            "prefix": [
+              "schema",
+              "drift"
+            ],
+            "exit": 0,
+            "after": {
+              "prefix": [
+                "schema",
+                "drift"
+              ],
+              "exit": 1
+            }
+          }
+        ]
+      },
+      "done": "Reconciled, and checked by a drift run that happened after the reconciliation rather than before it."
+    }
+  ],
+  "finished": {
+    "headline": "Drift is a question with three answers: 0, 1 and 2.",
+    "caption": "Run this in CI against a real database and you learn about the gap before your users do."
+  }
+}
