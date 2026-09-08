@@ -558,6 +558,64 @@ async function run(): Promise<void> {
       `rail: ${textOf("#pg-rail").replace(/\s+/g, " ").trim().slice(0, 100)}`,
   );
 
+  /* ---- Clicking a file does not cost you the schema ---- */
+
+  // Opening another workspace file used to reuse the schema buffer: the schema
+  // tab then showed that file, clicking schema.sql did nothing visible, and
+  // the "read-only view" was editable, so typing in it saved the wrong text
+  // over schema.sql. Each of those is checked here.
+  {
+    const clickFile = (name: string): boolean => {
+      const row = [...doc.querySelectorAll<HTMLElement>("#pg-rail .pgc-rail-row")]
+        .find((r) => (r.textContent ?? "").includes(name));
+      row?.click();
+      return row !== undefined;
+    };
+    const area = () => doc.querySelector<HTMLTextAreaElement>(".pgc-editor textarea");
+    const schemaHead = "-- The schema you want";
+
+    const opened = clickFile("README.md");
+    await sleep(400);
+    const viewing = area();
+    check(
+      "opening another file gives it its own read-only tab",
+      opened && viewing !== null && viewing.readOnly && !viewing.value.startsWith(schemaHead),
+      `readOnly ${viewing?.readOnly}, showing "${(viewing?.value ?? "").slice(0, 30)}"`,
+    );
+
+    clickFile("schema.sql");
+    await sleep(400);
+    const back = area();
+    check(
+      "and going back to schema.sql returns the schema, editable",
+      back !== null && back.value.startsWith(schemaHead) && !back.readOnly,
+      `readOnly ${back?.readOnly}, showing "${(back?.value ?? "").slice(0, 30)}"`,
+    );
+
+    clickFile("app.db");
+    await sleep(600);
+    const afterDb = area();
+    check(
+      "clicking the database shows its structure instead of its bytes",
+      afterDb !== null && afterDb.value.startsWith(schemaHead)
+        && textOf("#pg-db .pgc-tab.is-active").includes("Structure"),
+      `editor "${(afterDb?.value ?? "").slice(0, 24)}", right pane "${textOf("#pg-db .pgc-tab.is-active")}"`,
+    );
+
+    clickFile("schema.sql");
+    await sleep(300);
+  }
+
+  // The file on disk is what Ptah reads, so ask Ptah rather than the DOM.
+  {
+    const drift = await runCommand(DRIFT);
+    check(
+      "and schema.sql on disk was never written over",
+      drift.exit.includes("exit 0"),
+      `after opening other files, drift said "${drift.exit}"`,
+    );
+  }
+
   /* ---- The explain strip keeps its prose column ---- */
 
   // A grid `auto` track is sized from max-content, and max-content is measured

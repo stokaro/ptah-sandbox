@@ -780,21 +780,32 @@ async function selectTable(name: string): Promise<void> {
 
 async function openFile(name: string): Promise<void> {
   rail?.selectFile(name);
+
   if (name === "schema.sql") {
+    // Put any file view away first, so the schema tab is what comes forward.
+    editor.closeFile();
     editor.activate("schema");
     store.paneSelected("editor");
     return;
   }
+
   if (name === DB) {
+    // The database is bytes, and the panes beside the editor are the way to
+    // read it. Sending it to the editor would either show a binary or show
+    // nothing; showing its structure is the thing the click was asking for.
+    editor.closeFile();
+    panes.show("structure");
     store.paneSelected("database");
+    void paintPanes();
     return;
   }
-  // Any other workspace file is shown read-only in the schema tab rather than
-  // being silently unavailable; the footer says which file it is.
+
+  // Any other workspace file gets its own read-only tab. It must NOT be shown
+  // in the schema tab: that replaced the desired schema with the clicked file
+  // and left no way back to it, so schema.sql then looked like it did nothing.
   try {
     const value = await session.readFile(name);
-    editor.setText("schema", value, { baseline: value });
-    editor.setFooter("schema", `${name} · read-only view`);
+    editor.showFile(name, value);
     store.paneSelected("editor");
   } catch (err) {
     store.noticed({ text: `${name} could not be read: ${String(err)}`, tone: "attention" });

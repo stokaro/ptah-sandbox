@@ -22,7 +22,15 @@
 
 import { clear, el, fill } from "./panes/dom.ts";
 
-export type EditorTabId = "schema" | "sql";
+/**
+ * `file` is the read-only view of some other workspace file.
+ *
+ * It is a buffer of its own rather than a reuse of `schema`, because reusing
+ * that one replaced the desired schema with whatever was clicked and left no
+ * way back to it: activating the schema tab afterwards showed the other file,
+ * and typing into the "read-only view" saved it over schema.sql.
+ */
+export type EditorTabId = "schema" | "sql" | "file";
 
 export interface EditorHandlers {
   /** Fired on every edit, with the buffer's own revision counter. */
@@ -267,7 +275,7 @@ interface Buffer {
   footerRight: string | null;
 }
 
-const TAB_LABELS: Record<EditorTabId, string> = { schema: "schema.sql", sql: "SQL" };
+const TAB_LABELS: Record<EditorTabId, string> = { schema: "schema.sql", sql: "SQL", file: "file" };
 
 export class Editor {
   private handlers: EditorHandlers;
@@ -288,6 +296,8 @@ export class Editor {
   private notice: HTMLElement;
 
   private repaintQueued = false;
+  private lockedByHost = false;
+  private lockReason = "";
 
   constructor(host: HTMLElement, handlers: EditorHandlers = {}) {
     // The root class carries every metric the overlay depends on, so the
@@ -317,6 +327,18 @@ export class Editor {
         meta: "",
         metaTone: "mute",
         footerLeft: "SQL · executes in app.db",
+        footerRight: null,
+      },
+      file: {
+        id: "file",
+        label: TAB_LABELS.file,
+        text: "",
+        baseline: null,
+        revision: 0,
+        syncedAt: null,
+        meta: "",
+        metaTone: "mute",
+        footerLeft: "read-only",
         footerRight: null,
       },
     };
@@ -352,7 +374,11 @@ export class Editor {
     this.tabs = {
       schema: this.makeTab(tablist, "schema"),
       sql: this.makeTab(tablist, "sql"),
+      // Hidden until a file is opened into it, so the bar carries two tabs
+      // until there is a third thing to show.
+      file: this.makeTab(tablist, "file"),
     };
+    this.tabs.file.hidden = true;
     this.meta = host.querySelector<HTMLElement>(".pgc-tabmeta")!;
     this.gutter = host.querySelector<HTMLElement>(".pgc-ed-nums")!;
     this.overlay = host.querySelector<HTMLElement>(".pgc-ed-overlay")!;
@@ -391,13 +417,14 @@ export class Editor {
   activate(id: EditorTabId): void {
     const changed = this.current !== id;
     this.current = id;
-    for (const key of ["schema", "sql"] as const) {
+    for (const key of ["schema", "sql", "file"] as const) {
       const on = key === id;
       this.tabs[key].classList.toggle("is-active", on);
       this.tabs[key].setAttribute("aria-selected", on ? "true" : "false");
     }
     this.input.value = this.buffers[id].text;
     this.runRow.hidden = id !== "sql";
+    this.applyReadOnly();
     this.repaint();
     if (changed) this.handlers.onTabChange?.(id);
   }
@@ -460,6 +487,33 @@ export class Editor {
   }
 
   /** The footer strip. The right half defaults to the revision. */
+  /**
+   * Shows one workspace file, read-only, in its own tab.
+   *
+   * Read-only is enforced here rather than left to the caller: the text is a
+   * copy of a file the playground does not write back, and an editable copy
+   * would either lose what was typed or save it somewhere surprising.
+   */
+  showFile(name: string, text: string, note = "read-only"): void {
+    const buffer = this.buffers.file;
+    buffer.label = name;
+    buffer.text = text;
+    buffer.baseline = text;
+    buffer.footerLeft = `${name} · ${note}`;
+    buffer.footerRight = null;
+    this.tabs.file.textContent = name;
+    this.tabs.file.hidden = false;
+    this.activate("file");
+  }
+
+  /** Puts the file tab away; the schema tab keeps its own text throughout. */
+  closeFile(): void {
+    this.tabs.file.hidden = true;
+    this.buffers.file.text = "";
+    this.buffers.file.label = TAB_LABELS.file;
+    if (this.current === "file") this.activate("schema");
+  }
+
   setFooter(id: EditorTabId, left: string, right?: string | null): void {
     this.buffers[id].footerLeft = left;
     if (right !== undefined) this.buffers[id].footerRight = right;
@@ -474,8 +528,25 @@ export class Editor {
    * reading.
    */
   setReadOnly(on: boolean, reason = ""): void {
+    this.lockedByHost = on;
+    this.lockReason = reason;
+    this.applyReadOnly();
+  }
+
+  /**
+   * The file tab is always read-only, whatever the host asked for; the other
+   * two follow the host. Applied on every activation, because otherwise
+   * leaving the file tab would leave the textarea locked and entering it from
+   * an unlocked tab would leave it writable.
+   */
+  private applyReadOnly(): void {
+    const viewing = this.current === "file";
+    const on = viewing || this.lockedByHost;
+    const reason = viewing && !this.lockedByHost
+      ? "A view of a workspace file. Ptah reads the file, so edit it where it lives, not here."
+      : this.lockReason;
     this.input.readOnly = on;
-    this.runButton.disabled = on;
+    this.runButton.disabled = this.lockedByHost;
     this.notice.hidden = !on || reason === "";
     this.notice.textContent = reason;
   }
