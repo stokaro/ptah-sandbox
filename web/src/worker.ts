@@ -71,8 +71,8 @@ function post(event: HostEvent, transfer?: Transferable[]): void {
  * that built ptah.wasm; a minifier or a version bump would desync the pair
  * silently, and the manifest records its hash for exactly that reason.
  */
-async function loadWasmExec(base: string): Promise<void> {
-  await import(/* @vite-ignore */ new URL("vendor/ptah/wasm_exec.js", base).href);
+async function loadWasmExec(base: string, sha: string): Promise<void> {
+  await import(/* @vite-ignore */ versioned(new URL("vendor/ptah/wasm_exec.js", base).href, sha));
   if (typeof (self as unknown as { Go?: unknown }).Go !== "function") {
     throw new Error("wasm_exec.js did not install globalThis.Go");
   }
@@ -120,6 +120,16 @@ async function compileWithProgress(url: string, total: number): Promise<WebAssem
   );
 }
 
+/**
+ * The same URL, keyed to the bytes it should return.
+ *
+ * Empty hash means the manifest did not carry one, and the plain URL is then
+ * better than a query that pins nothing.
+ */
+function versioned(url: string, sha: string): string {
+  return sha === "" ? url : `${url}?v=${sha.slice(0, 16)}`;
+}
+
 function phase(name: BootPhase): void {
   post({ type: "progress", phase: name, loaded: 0, total: 0 });
 }
@@ -133,14 +143,30 @@ async function boot(base: string): Promise<ReadyInfo> {
   runtime.memfs.setStdout((text) => post({ type: "stray", stream: "stdout", text }));
   runtime.memfs.setStderr((text) => post({ type: "stray", stream: "stderr", text }));
 
-  const manifest = await (await fetch(new URL("vendor/ptah/manifest.json", base).href)).json();
+  // The manifest names the versions, so it is the one file that must never be
+  // read from cache without asking. `no-cache` revalidates rather than
+  // re-downloads: two kilobytes and an ETag, against the alternative of
+  // describing a build the tab is not running.
+  const manifest = await (
+    await fetch(new URL("vendor/ptah/manifest.json", base).href, { cache: "no-cache" })
+  ).json();
+
+  // Both vendored artefacts are requested at a URL carrying the hash of their
+  // own bytes. GitHub Pages serves everything with a fixed max-age and cannot
+  // be told otherwise, so a plain path lets a browser pair a freshly
+  // revalidated manifest with the previous binary still in its cache -- the
+  // tab then reports one version before boot and a different one after. A URL
+  // that changes with the content makes that pairing impossible rather than
+  // merely detectable. The detector stays as the net.
+  const wasmSha = String(manifest?.wasm?.sha256 ?? "");
+  const execSha = String(manifest?.wasmExec?.sha256 ?? "");
 
   // SQLite is ~1 MB and Ptah is ~124 MB, so initializing the first while the
   // second downloads costs nothing and removes it from the critical path. Both
   // must finish before Go starts: the driver resolves the bridge on its first
   // connection, and nothing may run before that.
   const compiled = compileWithProgress(
-    new URL("vendor/ptah/ptah.wasm", base).href,
+    versioned(new URL("vendor/ptah/ptah.wasm", base).href, wasmSha),
     Number(manifest?.wasm?.bytes) || 0,
   );
 
@@ -157,7 +183,7 @@ async function boot(base: string): Promise<ReadyInfo> {
   sqlite = bridge;
 
   phase("initializing SQLite");
-  await loadWasmExec(base);
+  await loadWasmExec(base, execSha);
   phase("starting");
 
   const ready = new Promise<ReadyInfo>((resolve) => {

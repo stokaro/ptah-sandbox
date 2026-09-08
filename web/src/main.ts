@@ -496,6 +496,10 @@ async function boot(): Promise<void> {
 
   const { info, sqlite } = await session.init(base);
   store.runtimeReady(info, sqlite);
+  if (store.state.runtime.buildMismatch && recoverStaleCache()) return;
+  // Booted on a matching pair, so a mismatch later in this tab's life is a new
+  // one and gets its own attempt.
+  try { sessionStorage.removeItem(STALE_KEY); } catch { /* storage refused */ }
 
   store.bootProgress("seeding", 0, 0);
   await loadScenario(guide.scenario);
@@ -1053,6 +1057,46 @@ const grid = need<HTMLElement>(".pg-grid");
 const importBtn = need<HTMLButtonElement>("#pg-import");
 const exportBtn = need<HTMLButtonElement>("#pg-export");
 const resetBtn = need<HTMLButtonElement>("#pg-reset");
+
+/**
+ * The manifest and the module disagree. Reload once, and only once.
+ *
+ * Both vendored files are requested at a URL carrying the hash of their own
+ * bytes, so a fresh manifest cannot be paired with a stale binary. Reaching
+ * here therefore means the manifest itself came from cache -- GitHub Pages
+ * serves everything with a fixed max-age and no way to say otherwise, and a
+ * deploy replaces both files at once. A reload re-reads it with `no-cache` and
+ * lands on the matching pair.
+ *
+ * Guarded by sessionStorage rather than trusted to converge: if the second
+ * attempt still disagrees the cause is not the cache, and a page that reloads
+ * itself forever is worse than a page that says what is wrong. Returns true
+ * when it has taken over and the caller should stop booting.
+ */
+const STALE_KEY = "ptah-playground:reloaded-for-stale-cache";
+
+function recoverStaleCache(): boolean {
+  let alreadyTried = false;
+  try {
+    alreadyTried = sessionStorage.getItem(STALE_KEY) !== null;
+    if (!alreadyTried) sessionStorage.setItem(STALE_KEY, "1");
+  } catch {
+    // Private mode, or storage refused. Reloading blind could loop, so treat
+    // it as already tried and say what is wrong instead.
+    alreadyTried = true;
+  }
+  if (alreadyTried) {
+    store.noticed({
+      text:
+        "This tab is running a different build than the one the site describes, and reloading did not " +
+        "settle it. The version on the page is the one that is actually running.",
+      tone: "attention",
+    });
+    return false;
+  }
+  location.reload();
+  return true;
+}
 
 function renderBuild(state: State): void {
   const { ready: info, sqlite, manifest, buildMismatch } = state.runtime;
