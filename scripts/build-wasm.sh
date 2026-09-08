@@ -92,7 +92,13 @@ dirt=$(git -C "$submodule" status --porcelain)
 [ -z "$dirt" ] || die "$submodule has local modifications:
 $dirt"
 
-ptah_version=$(git -C "$submodule" describe --tags --always)
+# --abbrev is pinned because git sizes the default one from the repository's
+# object count, so the same commit describes as g4c5825d4a in a full clone and
+# g4c5825d4 in CI's shallower one -- identical sources, different version
+# string, and a deploy gate that compares manifests fails on nothing. Twelve is
+# the width Go pseudo-versions use, and it makes the suffix the first twelve of
+# ptahCommit, which the manifest carries in full beside it.
+ptah_version=$(git -C "$submodule" describe --tags --always --abbrev=12)
 ptah_date=$(git -C "$submodule" show -s --format=%cI "$pinned")
 
 # ---------------------------------------------------------------------------
