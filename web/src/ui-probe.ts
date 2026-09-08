@@ -558,6 +558,51 @@ async function run(): Promise<void> {
       `rail: ${textOf("#pg-rail").replace(/\s+/g, " ").trim().slice(0, 100)}`,
   );
 
+  /* ---- The explain strip keeps its prose column ---- */
+
+  // A grid `auto` track is sized from max-content, and max-content is measured
+  // as if nothing wrapped. When a step carried a second command the actions
+  // column was therefore measured as both rows side by side, took the whole
+  // width, and left the prose beside it at zero -- one word per line. Measured,
+  // because it is a layout bug no assertion about the DOM tree would catch.
+  {
+    const strip = need<HTMLElement>("#pg-next");
+    const run = strip.querySelector<HTMLElement>(".pg-next-run");
+    const title = strip.querySelector<HTMLElement>(".pg-next-copy strong");
+    let copyWidth = 0;
+    let titleHeight = 0;
+    let rows = 0;
+    if (run && title) {
+      // Synthesise the second row exactly as the guide builds it, so the check
+      // does not depend on which step happens to be focused.
+      const row = doc.createElement("div");
+      row.className = "pg-next-also";
+      const box = doc.createElement("div");
+      box.className = "cmd";
+      const pre = doc.createElement("pre");
+      pre.textContent = "$ ptah schema drift --schema-file schema.sql --db-url sqlite://app.db";
+      box.appendChild(pre);
+      row.appendChild(box);
+      const button = doc.createElement("button");
+      button.className = "btn btn-ghost";
+      button.textContent = "Run";
+      row.appendChild(button);
+      run.appendChild(row);
+
+      rows = run.children.length;
+      copyWidth = Math.round(
+        (strip.querySelector<HTMLElement>(".pg-next-copy") as HTMLElement).getBoundingClientRect().width,
+      );
+      titleHeight = Math.round(title.getBoundingClientRect().height);
+      row.remove();
+    }
+    check(
+      "a step with two commands still leaves the prose a column to sit in",
+      rows === 2 && copyWidth > 240 && titleHeight < 60,
+      `rows ${rows}, prose column ${copyWidth}px, headline ${titleHeight}px tall`,
+    );
+  }
+
   /* ---- Done ---- */
 
   check(

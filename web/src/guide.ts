@@ -303,10 +303,16 @@ export class Guide {
     copy.appendChild(note);
   }
 
-  private appendActions(actions: HTMLElement, state: StepState): void {
+  private appendActions(container: HTMLElement, state: StepState): void {
     const step = state.step;
     const action = step.action;
     const waiting = this.host.busy();
+
+    // The primary action gets its own row for the same reason the secondary
+    // ones do: .pg-next-run is a column of rows, and a box and its button
+    // belong on one line inside a row rather than as siblings of it.
+    const actions = el("div", "pg-next-row");
+    if (action) container.appendChild(actions);
 
     if (action?.kind === "run") {
       actions.appendChild(commandBox(action.argv));
@@ -358,7 +364,7 @@ export class Guide {
         this.host.run(argv);
       });
       row.appendChild(button);
-      actions.appendChild(row);
+      container.appendChild(row);
     }
   }
 }

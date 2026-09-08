@@ -306,11 +306,13 @@
       <span class="caption" id="pg-next-body">The workspace has a schema file and a SQLite database with rows already in it. Drift compares the two and tells you, with an exit code, whether they match.</span>
     </div>
     <div class="pg-next-run">
-      <div class="cmd">
-        <pre id="pg-next-cmd"><span class="p">$</span> ptah schema drift --schema-file schema.sql --db-url sqlite://app.db</pre>
-        <button class="copy" type="button" id="pg-next-copy">Copy</button>
+      <div class="pg-next-row">
+        <div class="cmd">
+          <pre id="pg-next-cmd"><span class="p">$</span> ptah schema drift --schema-file schema.sql --db-url sqlite://app.db</pre>
+          <button class="copy" type="button" id="pg-next-copy">Copy</button>
+        </div>
+        <button class="btn" type="button" id="pg-run-next" disabled>Run next →</button>
       </div>
-      <button class="btn" type="button" id="pg-run-next" disabled>Run next →</button>
     </div>
   </section>
 

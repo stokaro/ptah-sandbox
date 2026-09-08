@@ -635,7 +635,13 @@
 
 .pg-next {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  /* fit-content rather than auto on the actions column. A grid `auto` track is
+   * sized from max-content, and max-content is measured as if nothing wrapped,
+   * so a step carrying a second command claimed the width of both rows laid
+   * side by side and squeezed the prose to one word per line. The cap makes
+   * that impossible rather than merely unlikely; .pg-next-run below removes
+   * the reason it happened. */
+  grid-template-columns: minmax(0, 1fr) fit-content(680px);
   gap: 32px;
   align-items: center;
   padding-top: 20px;
@@ -650,11 +656,25 @@
   font: 600 15px var(--sans);
 }
 
+/* One column of rows, not a wrapping flex line. A single-column grid measures
+ * its max-content as the widest row; a wrapping flex container measures its
+ * own as every child on one line, which is what collapsed the prose beside it.
+ * Each row lays its own box and button out horizontally. */
 .pg-next-run {
-  display: flex;
+  display: grid;
+  grid-auto-flow: row;
+  justify-items: start;
   gap: 10px;
-  align-items: center;
   min-width: 0;
+}
+
+.pg-next-row,
+.pg-next-also {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .pg-next-run .cmd {
@@ -920,21 +940,6 @@
   font: 13.5px/1.5 var(--sans);
   color: var(--amber);
   max-width: 62ch;
-}
-
-/* Secondary commands sit on their own line under the primary one. The wrap is
- * added here rather than folded into .pg-next-run so that rule stays the
- * single-action case it was written for. */
-.pg-next-run {
-  flex-wrap: wrap;
-}
-
-.pg-next-also {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-basis: 100%;
-  min-width: 0;
 }
 
 .pg-next-also .cmd {
