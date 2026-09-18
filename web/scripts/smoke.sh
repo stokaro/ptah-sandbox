@@ -4,9 +4,9 @@
 # This runs against the real origin after a deploy, because the two things it
 # measures cannot be measured anywhere else:
 #
-#   1. Whether the CDN in front of GitHub Pages compresses a 124 MB asset.
+#   1. Whether the CDN in front of GitHub Pages compresses a 125 MB asset.
 #      Nobody has tested Pages with a file this size. If it does, a cold visit
-#      transfers ~22 MB; if it does not, it transfers ~124 MB, the load takes
+#      transfers ~23 MB; if it does not, it transfers ~125 MB, the load takes
 #      five times as long as the design assumes, and the 100 GB/month Pages
 #      bandwidth allowance is gone in a few hundred visits. The script reports
 #      the measured number either way, and warns loudly on the bad one.
@@ -179,8 +179,8 @@ wasm_gzip=$(json '.wasm.gzipBytes')
 
 note "smoke: OK  manifest: $served_version ($(printf '%s' "$served_commit" | cut -c1-12))"
 
-# The deploy passes the submodule pin it built from. If the origin serves a
-# different one, what went out is not this commit's build.
+# The deploy passes the pin it built from. If the origin serves a different
+# one, what went out is not this commit's build.
 if [ -n "$expect_commit" ] && [ "$served_commit" != "$expect_commit" ]; then
 	problem "the origin serves ptahCommit $served_commit, this run deployed $expect_commit"
 fi

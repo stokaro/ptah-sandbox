@@ -1,12 +1,12 @@
 #!/bin/sh
-# Build web/vendor/ptah/{ptah.wasm,wasm_exec.js,manifest.json} from the pinned
-# Ptah submodule.
+# Build web/vendor/ptah/{ptah.wasm,wasm_exec.js,manifest.json} from the commit
+# named in third_party/ptah.pin.
 #
 # The sandbox has no Go module of its own. Everything is built inside a
 # materialized copy of ptah at the pinned commit, so a package added here lives
 # under ptah.run/... and no new public Ptah API is invented. The copy is
-# rebuilt from scratch on every run: third_party/ptah is never written to, and
-# build/ptah-src is never edited by hand.
+# rebuilt from scratch on every run, and build/ptah-src is never edited by
+# hand.
 #
 # Usage:
 #   scripts/build-wasm.sh              build everything
@@ -28,7 +28,6 @@ export GOWORK GOFLAGS
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$repo"
 
-submodule=third_party/ptah
 srcdir=build/ptah-src
 outdir=web/vendor/ptah
 runtime=runtime/ptah
@@ -73,33 +72,44 @@ json_string() {
 }
 
 # ---------------------------------------------------------------------------
-# 1. The pin. The superproject's gitlink is the pin; the checkout must match it
-#    exactly and carry no local edits, or the patch below is being applied to
-#    something other than what this repo claims to build.
+# 1. The pin. third_party/ptah.pin names the commit, the version git describes
+#    it as, and its commit date. All three are checked against git rather than
+#    trusted, so an edited line fails the build instead of mislabeling a binary
+#    or applying the patch below to something other than what it was written
+#    against.
 # ---------------------------------------------------------------------------
 
-[ -d "$submodule/.git" ] || [ -f "$submodule/.git" ] ||
-	die "$submodule is not checked out; run: git submodule update --init"
+. "$repo/scripts/ptah-git.sh"
 
-pinned=$(git ls-files -s -- "$submodule" | awk '$1 == "160000" { print $2 }')
-[ -n "$pinned" ] || die "$submodule is not recorded as a submodule in the index"
+pinned=$(pin_field commit)
+ptah_version=$(pin_field version)
+ptah_date=$(pin_field date)
 
-actual=$(git -C "$submodule" rev-parse HEAD)
-[ "$pinned" = "$actual" ] ||
-	die "$submodule is at $actual but the pin is $pinned; run: git submodule update"
+case "$pinned" in
+*[!0-9a-f]* | "") die "$PTAH_PIN records commit $pinned, which is not a hexadecimal object name" ;;
+esac
+[ ${#pinned} -eq 40 ] || die "$PTAH_PIN records a $((${#pinned}))-character commit; the full 40 are needed"
 
-dirt=$(git -C "$submodule" status --porcelain)
-[ -z "$dirt" ] || die "$submodule has local modifications:
-$dirt"
+mirror_ready
+mirror_has "$pinned" || mirror_fetch
+mirror_has "$pinned" ||
+	die "$PTAH_REMOTE has no commit $pinned; run: scripts/pin-ptah.sh REF"
 
 # --abbrev is pinned because git sizes the default one from the repository's
 # object count, so the same commit describes as g4c5825d4a in a full clone and
-# g4c5825d4 in CI's shallower one -- identical sources, different version
-# string, and a deploy gate that compares manifests fails on nothing. Twelve is
-# the width Go pseudo-versions use, and it makes the suffix the first twelve of
+# g4c5825d4 in a shallower one -- identical sources, different version string,
+# and a deploy gate that compares manifests fails on nothing. Twelve is the
+# width Go pseudo-versions use, and it makes the suffix the first twelve of
 # ptahCommit, which the manifest carries in full beside it.
-ptah_version=$(git -C "$submodule" describe --tags --always --abbrev=12)
-ptah_date=$(git -C "$submodule" show -s --format=%cI "$pinned")
+actual_version=$(git -C "$PTAH_MIRROR" describe --tags --always --abbrev=12 "$pinned")
+[ "$actual_version" = "$ptah_version" ] ||
+	die "$PTAH_PIN says version $ptah_version but git describes $pinned as $actual_version;
+run: scripts/pin-ptah.sh $pinned"
+
+actual_date=$(git -C "$PTAH_MIRROR" show -s --format=%cI "$pinned")
+[ "$actual_date" = "$ptah_date" ] ||
+	die "$PTAH_PIN says date $ptah_date but $pinned was committed at $actual_date;
+run: scripts/pin-ptah.sh $pinned"
 
 # ---------------------------------------------------------------------------
 # 2. Materialize. git archive gives a tree with no .git and with mtimes taken
@@ -108,8 +118,8 @@ ptah_date=$(git -C "$submodule" show -s --format=%cI "$pinned")
 
 rm -rf "$srcdir"
 mkdir -p "$srcdir"
-git -C "$submodule" archive --format=tar "$pinned" | tar -x -C "$srcdir"
-echo "build-wasm: materialized $submodule@$(echo "$pinned" | cut -c1-12) -> $srcdir"
+git -C "$PTAH_MIRROR" archive --format=tar "$pinned" | tar -x -C "$srcdir"
+echo "build-wasm: materialized ptah@$(echo "$pinned" | cut -c1-12) -> $srcdir"
 
 # An empty upstream-patch/ is the goal state, not an error: every change the
 # browser build needs is meant to end up in Ptah itself. See its README.
@@ -166,7 +176,17 @@ fi
 #    the shim's digest is recorded next to the binary's.
 # ---------------------------------------------------------------------------
 
+# The manifest records the toolchain, and CI re-links to compare, so the two
+# hosts have to agree on the compiler. Reading it out of the materialized tree
+# ties it to the pin: the compiler would move whenever Ptah's go.mod moves, and
+# that rewrites the committed wasm_exec.js, which has to byte-match whatever
+# linked the binary. The toolchain is this repository's decision, so
+# .go-version declares it once and this script and the workflow both read it.
+pinned_go=$(tr -d '[:space:]' <"$repo/.go-version")
 go_version=$(go version | awk '{print $3}')
+if [ "$go_version" != "go$pinned_go" ]; then
+	die "this Go is $go_version; .go-version pins go$pinned_go. Install it or change the pin."
+fi
 goroot=$(go env GOROOT)
 wasm_exec="$goroot/lib/wasm/wasm_exec.js"
 [ -f "$wasm_exec" ] || wasm_exec="$goroot/misc/wasm/wasm_exec.js"

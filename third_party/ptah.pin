@@ -1,0 +1,11 @@
+# The Ptah commit this playground is built from. Every deploy is built from
+# exactly this commit, so the version the footer prints names a real revision.
+#
+# Bump with: scripts/pin-ptah.sh [ref]     (default: origin/master)
+#
+# version and date are what git reports for commit. scripts/build-wasm.sh
+# checks all three against git before it builds, so a hand-edited line fails
+# the build rather than mislabeling a binary.
+commit 127aa247772027f9ac8f5b16107552a7e1b541ed
+version v0.7.0
+date 2026-09-17T17:19:23+02:00

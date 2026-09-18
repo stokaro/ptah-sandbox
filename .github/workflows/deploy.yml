@@ -24,9 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      # No submodules here. The gitlink for third_party/ptah is in the index
-      # either way, and the pin is all this job compares against; cloning the
-      # whole of Ptah to read a hash would cost a minute for nothing.
+      # The pin is a checked-in file, so this job needs nothing but the
+      # checkout to compare the manifest against it.
       - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
@@ -56,8 +55,8 @@ jobs:
 
       # CNAME, index.html and 404.html present, every href/src and every CSS
       # url() resolving to a real file, no github.io address, and the committed
-      # manifest naming the commit third_party/ptah is pinned at. --no-wasm
-      # because this job does not link the 124 MB binary; the deploy job runs
+      # manifest naming the commit third_party/ptah.pin records. --no-wasm
+      # because this job does not link the 125 MB binary; the deploy job runs
       # the same script without it, so the binary is never unchecked.
       - name: The site is publishable
         run: node web/scripts/check-site.mjs --root web --no-wasm
@@ -76,38 +75,27 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      # fetch-depth: 0 so the submodule is cloned with its tags. `git describe
-      # --tags` inside it is where ptahVersion comes from, and a shallow
-      # submodule would silently stamp a bare commit hash as the version the
-      # footer shows.
+      # Ptah is not a submodule. third_party/ptah.pin names the commit, and
+      # scripts/build-wasm.sh fetches exactly that commit into a blobless
+      # mirror, so this checkout carries only the sandbox.
       - uses: actions/checkout@v7
-        with:
-          submodules: recursive
-          fetch-depth: 0
 
       - name: Read the Ptah pin
         id: pin
         run: |
           set -euo pipefail
-          sha="$(git ls-files -s -- third_party/ptah | awk '$1 == "160000" { print $2 }')"
-          if [ -z "$sha" ]; then
-            echo "::error::third_party/ptah is not recorded as a submodule gitlink"
+          pin=third_party/ptah.pin
+          field() { awk -v key="$1" '$1 == key { $1 = ""; sub(/^ /, ""); print; exit }' "$pin"; }
+          sha="$(field commit)"
+          version="$(field version)"
+          if [ -z "$sha" ] || [ -z "$version" ]; then
+            echo "::error::$pin is missing its commit or version line"
             exit 1
           fi
-          actual="$(git -C third_party/ptah rev-parse HEAD)"
-          if [ "$sha" != "$actual" ]; then
-            echo "::error::third_party/ptah is checked out at $actual but pinned at $sha"
-            exit 1
-          fi
-          # Not all of checkout's submodule paths bring tags. Ask for them
-          # explicitly rather than depend on that; failing here is fine,
-          # the assertion below is what actually decides.
-          git -C third_party/ptah fetch --tags --force origin >/dev/null 2>&1 || true
-          version="$(git -C third_party/ptah describe --tags --always)"
           case "$version" in
             v*) ;;
             *)
-              echo "::error::git describe in third_party/ptah returned '$version', not a tag."
+              echo "::error::$pin records version '$version', which is not a tag description."
               echo "::error::The build would stamp that as the version the footer shows."
               exit 1
               ;;
@@ -117,20 +105,23 @@ jobs:
           echo "Ptah $version ($sha)"
 
       # The wasm itself, keyed on everything that decides its bytes: the pin,
-      # the Go sources overlaid onto it, any upstream patch, and the build
-      # script. No restore-keys -- a near-miss here would restore a binary
-      # built from different sources, which is worse than a slow build.
+      # the Go sources overlaid onto it, any upstream patch, the build script,
+      # and the toolchain that links it -- `.go-version` decides the binary's
+      # bytes and the shim beside it, so a key that ignored it would hand the
+      # next Go bump a binary the shim no longer matches. No restore-keys -- a
+      # near-miss here would restore a binary built from different sources,
+      # which is worse than a slow build.
       - name: Restore the built wasm
         id: wasm-cache
         uses: actions/cache@v6
         with:
           path: web/vendor/ptah
-          key: wasm-${{ runner.os }}-${{ steps.pin.outputs.sha }}-${{ hashFiles('runtime/**', 'upstream-patch/**', 'scripts/build-wasm.sh', 'scripts/commandlist/**') }}
+          key: wasm-${{ runner.os }}-${{ steps.pin.outputs.sha }}-${{ hashFiles('.go-version', 'runtime/**', 'upstream-patch/**', 'scripts/build-wasm.sh', 'scripts/ptah-git.sh', 'scripts/commandlist/**') }}
 
       - uses: actions/setup-go@v7
         if: steps.wasm-cache.outputs.cache-hit != 'true'
         with:
-          go-version-file: third_party/ptah/go.mod
+          go-version-file: .go-version
           # Cached below instead, keyed on the pin rather than on go.sum, so a
           # runtime/ change reuses the compiled standard library and the whole
           # of Ptah's dependency tree.
@@ -186,14 +177,15 @@ jobs:
             exit 1
           fi
 
-          # Byte-for-byte reproducibility of a js/wasm link across host
-          # operating systems is not something this project has measured, so a
+          # A js/wasm link is not byte-reproducible, and not only across hosts:
+          # two builds of the same materialized tree with the same toolchain on
+          # one machine agree on the byte count and differ in the hash. So a
           # difference here is reported, not fatal. The identity check above is
           # what actually gates the deploy.
           want="$(jq -r .wasm.sha256 /tmp/committed-manifest.json)"
           got="$(jq -r .wasm.sha256 web/vendor/ptah/manifest.json)"
           if [ "$want" != "$got" ]; then
-            echo "::warning::ptah.wasm built here hashes to $got; the committed manifest recorded $want. Same sources, different bytes -- the js/wasm link is not reproducible across hosts."
+            echo "::warning::ptah.wasm built here hashes to $got; the committed manifest recorded $want. Same sources, different bytes."
           else
             echo "ptah.wasm is byte-identical to the locally built one ($got)."
           fi
@@ -237,7 +229,7 @@ jobs:
           find _site -maxdepth 1 -mindepth 1 | sort
 
       # The same checker the check job ran, this time against the directory
-      # that is about to be uploaded and with nothing exempt: the 124 MB binary
+      # that is about to be uploaded and with nothing exempt: the 125 MB binary
       # is present, so its sha256 and byte count are compared to the manifest.
       - name: The staged site is publishable
         run: node web/scripts/check-site.mjs --root _site
@@ -276,8 +268,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      # Only the checked-in scripts and the pin are needed; the submodule
-      # contents are not.
+      # Only the checked-in scripts and the pin are needed; Ptah's own sources
+      # are not.
       - uses: actions/checkout@v7
 
       # Fetches the live site and asserts it is the build this run produced:
@@ -286,12 +278,12 @@ jobs:
       # against the manifest the same origin serves.
       #
       # It also measures what nobody has measured: whether GitHub Pages
-      # compresses a 124 MB asset. Uncompressed, a cold visit costs 118 MiB
+      # compresses a 125 MB asset. Uncompressed, a cold visit costs 119 MiB
       # instead of 22 MiB and the 100 GB/month bandwidth allowance covers about
       # 865 visits instead of 4600. That comes out as a warning with the
       # measured numbers, not a silent pass.
       - name: Fetch play.ptah.run and measure it
         run: |
           set -euo pipefail
-          pin="$(git ls-files -s -- third_party/ptah | awk '$1 == "160000" { print $2 }')"
+          pin="$(awk '$1 == "commit" { print $2; exit }' third_party/ptah.pin)"
           sh web/scripts/smoke.sh https://play.ptah.run/ "$pin"

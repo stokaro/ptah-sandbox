@@ -3,7 +3,7 @@ build/
 go.work
 go.work.sum
 
-# The wasm binary is ~80 MB; it is a build product, not a source.
+# The wasm binary is ~125 MB; it is a build product, not a source.
 web/vendor/ptah/*.wasm
 
 node_modules/

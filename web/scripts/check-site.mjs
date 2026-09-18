@@ -2,7 +2,7 @@
 //
 // Every assertion here exists because breaking it produces a site that looks
 // fine in a diff and is broken in a browser: a link to a file that is not in
-// the artifact, a 124 MB WebAssembly binary that does not match the manifest
+// the artifact, a 125 MB WebAssembly binary that does not match the manifest
 // the page quotes it from, a github.io address that leaks the hosting.
 //
 // Run it against the source tree before the build, and against the staged
@@ -14,14 +14,13 @@
 // Exit status is 0 with no findings, 1 with any.
 
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const CNAME_EXPECTED = "play.ptah.run";
 
-// The wasm binary is a build product and is gitignored on purpose: a 124 MB
+// The wasm binary is a build product and is gitignored on purpose: a 125 MB
 // file does not belong in git history. Jobs that have not linked it pass
 // --no-wasm, and only this one path is then allowed to be missing.
 const WASM_BINARY = "vendor/ptah/ptah.wasm";
@@ -217,8 +216,8 @@ for (const file of [...pages, ...walk(root, [".css"])]) {
 }
 
 // ---------------------------------------------------------------------------
-// 5. The manifest and the binaries agree, and both agree with the submodule
-//    pin. This is the check that keeps a stale 124 MB wasm from shipping
+// 5. The manifest and the binaries agree, and both agree with the recorded
+//    pin. This is the check that keeps a stale 125 MB wasm from shipping
 //    beside freshly built JavaScript: the page reads its version, its commit
 //    and its byte count out of this file, so if the file describes a different
 //    build than the one in the artifact, the footer is lying.
@@ -230,26 +229,36 @@ if (!exists(manifestPath)) {
 } else {
   const manifest = JSON.parse(readText(manifestPath));
 
-  let pinned = "";
-  try {
-    const line = execFileSync("git", ["ls-files", "-s", "--", "third_party/ptah"], {
-      cwd: repoRoot,
-      encoding: "utf8",
-    }).trim();
-    const fields = line.split(/\s+/);
-    if (fields[0] === "160000") pinned = fields[1];
-  } catch (err) {
-    fail(`could not read the third_party/ptah pin from git: ${err.message}`);
-  }
+  // third_party/ptah.pin is three "key value" lines under a comment header.
+  // Reading it here rather than asking git keeps this check working in a
+  // checkout that was exported rather than cloned.
+  const pinPath = join(repoRoot, "third_party/ptah.pin");
+  const pin = new Map();
+  if (!exists(pinPath)) {
+    fail("third_party/ptah.pin is missing; there is no pin to compare the manifest against");
+  } else {
+    for (const line of readText(pinPath).split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed === "" || trimmed.startsWith("#")) continue;
+      const space = trimmed.indexOf(" ");
+      if (space > 0) pin.set(trimmed.slice(0, space), trimmed.slice(space + 1).trim());
+    }
 
-  if (!pinned) {
-    fail("third_party/ptah is not recorded as a submodule gitlink; there is no pin to compare against");
-  } else if (manifest.ptahCommit !== pinned) {
-    fail(
-      `manifest.ptahCommit is ${manifest.ptahCommit}, but third_party/ptah is pinned at ${pinned}. ` +
-        "Run `make wasm` and commit web/vendor/ptah/manifest.json.",
-      "web/vendor/ptah/manifest.json",
-    );
+    for (const [key, field] of [
+      ["commit", "ptahCommit"],
+      ["version", "ptahVersion"],
+    ]) {
+      const recorded = pin.get(key);
+      if (!recorded) {
+        fail(`third_party/ptah.pin has no ${key} line`);
+      } else if (manifest[field] !== recorded) {
+        fail(
+          `manifest.${field} is ${manifest[field]}, but third_party/ptah.pin records ${recorded}. ` +
+            "Run `make wasm` and commit web/vendor/ptah/manifest.json.",
+          "web/vendor/ptah/manifest.json",
+        );
+      }
+    }
   }
 
   const binaries = [
