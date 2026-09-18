@@ -9,7 +9,7 @@ pinned Ptah module, so a package added here has an import path under
 `ptah.run/...` and needs no new public Ptah API to reach the internals it
 depends on.
 
-Three directories make that work:
+What makes that work is the pin and the two overlay trees beside it:
 
 | Path                   | What it holds                                     | Tracked |
 | ---------------------- | ------------------------------------------------- | ------- |

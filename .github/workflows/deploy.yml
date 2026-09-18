@@ -105,15 +105,18 @@ jobs:
           echo "Ptah $version ($sha)"
 
       # The wasm itself, keyed on everything that decides its bytes: the pin,
-      # the Go sources overlaid onto it, any upstream patch, and the build
-      # script. No restore-keys -- a near-miss here would restore a binary
-      # built from different sources, which is worse than a slow build.
+      # the Go sources overlaid onto it, any upstream patch, the build script,
+      # and the toolchain that links it -- `.go-version` decides the binary's
+      # bytes and the shim beside it, so a key that ignored it would hand the
+      # next Go bump a binary the shim no longer matches. No restore-keys -- a
+      # near-miss here would restore a binary built from different sources,
+      # which is worse than a slow build.
       - name: Restore the built wasm
         id: wasm-cache
         uses: actions/cache@v6
         with:
           path: web/vendor/ptah
-          key: wasm-${{ runner.os }}-${{ steps.pin.outputs.sha }}-${{ hashFiles('runtime/**', 'upstream-patch/**', 'scripts/build-wasm.sh', 'scripts/ptah-git.sh', 'scripts/commandlist/**') }}
+          key: wasm-${{ runner.os }}-${{ steps.pin.outputs.sha }}-${{ hashFiles('.go-version', 'runtime/**', 'upstream-patch/**', 'scripts/build-wasm.sh', 'scripts/ptah-git.sh', 'scripts/commandlist/**') }}
 
       - uses: actions/setup-go@v7
         if: steps.wasm-cache.outputs.cache-hit != 'true'
