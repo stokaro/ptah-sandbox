@@ -1,15 +1,22 @@
 # The sandbox has no Go module of its own; everything is built inside a
-# materialized copy of the pinned Ptah submodule. See scripts/build-wasm.sh.
+# materialized copy of the commit third_party/ptah.pin names. See
+# scripts/build-wasm.sh.
 
 SHELL := /bin/sh
 
 .POSIX:
-.PHONY: wasm dev-tree clean test test-integration test-migrations test-go capture-native \
+.PHONY: wasm pin dev-tree clean test test-integration test-migrations test-go capture-native \
 	build-web serve check-site smoke
 
 # wasm builds web/vendor/ptah/{ptah.wasm,wasm_exec.js,manifest.json}.
 wasm:
 	scripts/build-wasm.sh
+
+# pin moves the playground to another Ptah commit and records it in
+# third_party/ptah.pin. `make pin REF=v0.7.0` takes a tag or a commit; with no
+# REF it takes the tip of master. Run `make wasm` after it.
+pin:
+	scripts/pin-ptah.sh $(REF)
 
 # build-web installs the pinned npm dependencies and bundles the page's
 # TypeScript into web/dist. It does not touch the wasm; `make wasm` does that,
@@ -27,7 +34,7 @@ serve:
 
 # check-site is the gate the deploy workflow runs before publishing: the CNAME,
 # every href/src and CSS url() resolving, no github.io address, and the
-# manifest agreeing with both the wasm and the submodule pin. Run it before
+# manifest agreeing with both the wasm and the recorded pin. Run it before
 # pushing and CI will not tell you anything you did not already know.
 check-site:
 	node web/scripts/check-site.mjs --root web
@@ -57,7 +64,7 @@ smoke:
 dev-tree:
 	scripts/build-wasm.sh --tree-only --link
 
-# test runs everything, from the pinned submodule to the end-to-end suite:
+# test runs everything, from the pinned commit to the end-to-end suite:
 # a full wasm build, the js/wasm Go tests, the TypeScript runtime unit suites,
 # and the two integration suites that drive the real binary. It rebuilds the wasm
 # first on purpose -- the integration suites load web/vendor/ptah/ptah.wasm, so

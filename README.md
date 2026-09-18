@@ -30,7 +30,7 @@ query tool, so the pane is the playground's own and is labeled as such.
 
 ## Layout
 
-    third_party/ptah      pinned upstream, a submodule, never edited
+    third_party/ptah.pin  the upstream commit every build is made from
     upstream-patch/       empty, and meant to stay that way -- see below
     runtime/ptah/         new Go packages copied into Ptah's module at build time
     web/                  the playground itself, and its vendored runtime
@@ -46,14 +46,16 @@ the sake of a website.
 ## Build
 
     make wasm        # materialize, build ptah.wasm, write the manifest
+    make pin         # move the pin to another Ptah commit
     make build-web   # npm ci and bundle web/src into web/dist
     make test        # drive the whole runtime under node, no browser needed
     make serve       # serve web/ on http://127.0.0.1:8788/
     make check-site  # the gate CI runs before publishing
     make ui-probe    # drive the real page in headless Chrome (needs `make serve`)
 
-`make wasm` needs the Go toolchain the pinned Ptah declares; `wasm_exec.js` is
-copied from that same toolchain, because the pair has to match.
+`make wasm` needs the Go toolchain `.go-version` names, and refuses to build
+with any other; `wasm_exec.js` is copied from that same toolchain, because the
+pair has to match.
 
 `make test` proves the runtime and the components; it never opens a browser.
 `make ui-probe` is the one that proves they are wired to each other. It loads
@@ -61,6 +63,44 @@ copied from that same toolchain, because the pair has to match.
 -- typing into the terminal, typing into the editor, clicking the panes -- then
 asserts by reading the DOM the page produced. Add `SHOTS=.refs` to write the
 1440px light and dark renders and the 390px one as well.
+
+## The pin
+
+`third_party/ptah.pin` is the pin: three lines naming the upstream commit, the
+version `git describe` gives it, and its commit date. It is the only place that
+records which Ptah the site is built from.
+
+Move it with `make pin`, which takes the tip of `master`, or `make pin
+REF=v0.7.0` for a tag or a commit. Then `make wasm` and commit both the pin and
+`web/vendor/ptah/manifest.json`.
+
+There is no submodule. `scripts/build-wasm.sh` fetches the pinned commit into
+`build/ptah-git`, a blobless bare mirror that holds the commit graph and the
+tags and pulls file contents only when asked. It is 6.5 MB before the first
+build and about 20 MB after it, against 88 MB for a full clone.
+
+The build checks the pin against git rather than trusting it: the commit must
+exist, `git describe` must give the recorded version, and the commit date must
+match. A hand-edited line fails the build instead of mislabeling a binary, and
+`make check-site` makes the same comparison against the committed manifest.
+
+The build then assembles a disposable tree from three tracked inputs:
+
+1. `git archive` of the pinned commit into `build/ptah-src`, which gives a tree
+   with no `.git` and with mtimes taken from the commit;
+2. any patch in `upstream-patch/`, applied with `--directory` so a hunk that
+   tried to escape the overlay would land outside it and fail;
+3. `runtime/ptah/`, copied in at its target paths inside the module.
+
+`build/ptah-src` is gitignored and rebuilt from scratch on every run, and so is
+the mirror it is archived from.
+
+The Go toolchain is `.go-version`, not whatever the pinned Ptah's `go.mod`
+declares. The deploy re-links the binary and compares it against the committed
+manifest, so the runner and the desk have to agree on one compiler; tying that
+to the pin would move the compiler — and with it the committed `wasm_exec.js` —
+whenever Ptah's own `go.mod` moves. The two agree today at `go1.27.1`, and
+keeping them in step is a deliberate edit rather than a side effect.
 
 ## Deploy
 
@@ -71,13 +111,13 @@ stops. `workflow_dispatch` re-runs a deploy by hand.
 
 Two things about the tree matter before anything else:
 
-`ptah.wasm` is **not** in git. It is 124 MB, it is a build product, and it is
+`ptah.wasm` is **not** in git. It is 125 MB, it is a build product, and it is
 rebuilt in CI. `manifest.json` and `wasm_exec.js` *are* in git, because the page
 reads its version stamp out of the manifest and because `wasm_exec.js` has to
-match the toolchain that linked the binary. So when the `third_party/ptah` pin
-moves, run `make wasm` and commit the manifest and the shim the build rewrote.
-CI fails the deploy if you forget: it compares the manifest's `ptahCommit`
-against the submodule gitlink, and compares what it built against what you
+match the toolchain that linked the binary. So when the pin moves, run `make
+wasm` and commit the manifest and the shim the build rewrote. CI fails the
+deploy if you forget: it compares the manifest's `ptahCommit` and `ptahVersion`
+against `third_party/ptah.pin`, and compares what it built against what you
 committed.
 
 `web/dist` is not in git either. CI bundles it. Locally, `make build-web`.
@@ -92,18 +132,19 @@ still publish every file rather than quietly dropping the ones Jekyll ignores.)
 the CNAME says exactly `play.ptah.run`; `index.html` and `404.html` exist; every
 `href`, `src` and CSS `url()` on every page resolves to a real file; no
 `github.io` address appears anywhere; the committed manifest names the commit
-the submodule is pinned at. No Go and no 124 MB link, so it fails fast.
+the pin records. No Go and no 125 MB link, so it fails fast.
 
-**deploy** — checks out the submodule with its tags (`git describe` inside it is
-where the version in the footer comes from; a shallow clone would stamp a bare
-hash), restores or builds the wasm, verifies it against what is committed,
-bundles, stages `_site`, runs the same site check with nothing exempt — the
-binary's sha256 and byte count against the manifest this time — and uploads.
+**deploy** — reads the pin, restores or builds the wasm, verifies it against
+what is committed, bundles, stages `_site`, runs the same site check with
+nothing exempt — the binary's sha256 and byte count against the manifest this
+time — and uploads. It checks out the sandbox alone; the build fetches the
+pinned commit itself.
 
 The wasm cache is keyed on the pin plus a hash of `runtime/`,
-`upstream-patch/` and the build script, with **no** restore-keys: a near miss
-would hand the deploy a binary built from different sources, which is worse
-than a slow build. When the key hits, the Go toolchain is not even installed.
+`upstream-patch/` and the two build scripts, with **no** restore-keys: a near
+miss would hand the deploy a binary built from different sources, which is
+worse than a slow build. When the key hits, the Go toolchain is not even
+installed.
 The Go build and module caches sit behind a second, looser key so a change under
 `runtime/` still reuses Ptah's whole dependency tree.
 
@@ -113,7 +154,7 @@ bytes the CDN actually returned against the manifest that same origin serves.
 
 ### The open question: compression
 
-A cold visit downloads a 124 MB WebAssembly binary. It compresses to 22.6 MB,
+A cold visit downloads a 125 MB WebAssembly binary. It compresses to 23 MB,
 and the whole design of the loading experience assumes that is what crosses the
 wire. Whether the CDN in front of GitHub Pages compresses an asset that large
 has not been tested by anyone we can find, so the smoke test measures it rather
@@ -121,7 +162,7 @@ than assuming it, sending `Accept-Encoding: gzip` by hand and reporting the wire
 bytes.
 
 If it is compressed, the run says so and the budget holds. If it is not, the run
-raises a warning with the measured numbers: 118 MiB per cold visit instead of
+raises a warning with the measured numbers: 119 MiB per cold visit instead of
 22 MiB, and the 100 GB/month Pages bandwidth allowance covering roughly 865
 visits instead of 4600. That would need a real fix — a CDN in front that does
 compress, or a pre-compressed copy served deliberately — not a smaller loader
@@ -136,8 +177,8 @@ To measure it yourself against anything, including `make serve`:
 The Go changes that make Ptah build for `js/wasm` belong in Ptah, not here, so
 `upstream-patch/` is empty: they landed in
 [stokaro/ptah#3046](https://github.com/stokaro/ptah/pull/3046), closing
-[#3045](https://github.com/stokaro/ptah/issues/3045), and the submodule now
-pins a commit that carries them. The build applies no patches at all.
+[#3045](https://github.com/stokaro/ptah/issues/3045), and the pin names a
+commit that carries them. The build applies no patches at all.
 
 If something the browser needs cannot be done from outside Ptah again, a patch
 goes back in that directory in the shape it will be proposed as, and leaves

@@ -17,7 +17,6 @@
  */
 
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import nodeProcess from "node:process";
 
@@ -26,16 +25,15 @@ import { boot } from "./harness.mjs";
 const REPO = new URL("../../", import.meta.url);
 
 /**
- * The commit third_party/ptah is pinned at, read from the index rather than
- * from the submodule's HEAD: the index is what scripts/build-wasm.sh
- * materializes, so it is what the binary was actually built from.
+ * The commit third_party/ptah.pin records. That file is what
+ * scripts/build-wasm.sh materializes from, so it is what the binary was
+ * actually built from.
  */
-function submodulePin() {
-  const line = execFileSync("git", ["ls-files", "-s", "third_party/ptah"], {
-    cwd: REPO.pathname,
-    encoding: "utf8",
-  });
-  return line.trim().split(/\s+/)[1];
+function recordedPin() {
+  const text = readFileSync(new URL("third_party/ptah.pin", REPO), "utf8");
+  const match = /^commit[ \t]+(\S+)/m.exec(text);
+  assert.ok(match, "third_party/ptah.pin has no commit line");
+  return match[1];
 }
 const FIXTURE = new URL("fixtures/scenario-a/", REPO);
 const EXPECTED = new URL("test/integration/expected/", REPO);
@@ -465,14 +463,14 @@ section("known divergences from the native binary");
     for (let i = 0; i < gotL.length; i++) if (gotL[i] !== wantL[i]) differing.push(gotL[i].split(":")[0]);
     assert.deepEqual(differing, ["Version", "Commit", "Date", "Platform"]);
     // Commit and Date differ because the ground truth is a frozen capture from
-    // whatever commit it was taken at, while this build tracks the submodule
+    // whatever commit it was taken at, while this build tracks the recorded
     // pin; the two are not required to agree, and the version block is the one
     // place that shows it. What must agree is the binary and its manifest --
     // the point of printing a commit at all is that it names the code actually
     // running, never a release number stamped over an older artifact.
     assert.match(v.stdout, new RegExp(`^Version: ${session.ready.version}$`, "m"));
     assert.match(v.stdout, new RegExp(`^Commit: ${session.ready.commit}$`, "m"));
-    assert.equal(session.ready.commit, submodulePin());
+    assert.equal(session.ready.commit, recordedPin());
     // Date is the same shape, rendered in the commit's own offset rather than
     // UTC, so it parses even though the instant is a different commit's.
     assert.equal(Number.isNaN(Date.parse(/^Date: (.+)$/m.exec(v.stdout)[1])), false);
