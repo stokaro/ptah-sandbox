@@ -32,6 +32,8 @@
 -->
 <link rel="stylesheet" href="panes.css">
 <link rel="stylesheet" href="terminal.css">
+<!-- The first-visit tour draws on top of all of them, so it comes last. -->
+<link rel="stylesheet" href="tour.css">
 <script>(function(){var d=document.documentElement,t=null;try{t=localStorage.getItem("ptah-theme")}catch(e){}if(t!=="light"&&t!=="dark"){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}d.setAttribute("data-theme",t);d.classList.add("js")})();</script>
 </head>
 <body>
@@ -66,6 +68,13 @@
       <p class="lede">Edit a schema, run real Ptah commands against a SQLite database in this tab, inspect the result. Nothing is installed and nothing leaves the browser.</p>
     </div>
     <div class="actions">
+      <!--
+        Opens the tour the first visit shows by itself. It is here because a
+        one-shot overlay nobody can summon back is a worse deal than none:
+        the visitor who dismisses it by reflex would have no way to read it.
+        See src/tour.ts.
+      -->
+      <button class="btn btn-ghost" type="button" id="pg-tour-open">Tour</button>
       <button class="btn btn-ghost" type="button" id="pg-import">Import…</button>
       <button class="btn btn-ghost" type="button" id="pg-export">Export…</button>
       <button class="btn btn-ghost" type="button" id="pg-reset">Reset</button>

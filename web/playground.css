@@ -267,10 +267,21 @@
 
 /* ---------- The three panes and the terminal ---------- */
 
+/*
+ * The rows scale with the window instead of being two fixed numbers.
+ *
+ * 400px and 260px were the whole desktop layout, and on a large screen that
+ * left the terminal showing about eight lines with a band of empty page under
+ * it -- the schema needs scrolling to read, and a command's output scrolls
+ * away while you are still reading it. The floors are what the old values
+ * were sized for, so nothing shrinks on a small laptop; the ceilings stop a
+ * very tall window from pushing the next-step strip below the fold, which is
+ * the one piece of furniture a first-time visitor is meant to reach.
+ */
 .pg-grid {
   display: grid;
   grid-template-columns: 210px minmax(0, 1fr) minmax(0, 1fr);
-  grid-template-rows: 400px 260px;
+  grid-template-rows: clamp(400px, 46vh, 620px) clamp(280px, 28vh, 420px);
 }
 
 .pg-rail {
@@ -729,7 +740,7 @@
 @media (max-width: 1100px) {
   .pg-grid {
     grid-template-columns: 210px minmax(0, 1fr);
-    grid-template-rows: minmax(320px, auto) minmax(280px, auto) 300px;
+    grid-template-rows: minmax(320px, auto) minmax(280px, auto) clamp(300px, 28vh, 420px);
   }
   .pg-rail {
     grid-row: 1 / 3;
