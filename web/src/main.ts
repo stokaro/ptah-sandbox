@@ -36,6 +36,7 @@
 import { Editor } from "./editor.ts";
 import { Guide, type GuideHost } from "./guide.ts";
 import { Loader } from "./loader.ts";
+import { Tour } from "./tour.ts";
 import {
   ResultPanes,
   columnsAddedBetween,
@@ -1286,6 +1287,15 @@ wireChrome();
 wireEvents();
 store.subscribe((state) => render(state));
 render(store.state);
+
+// The tour describes regions that are already on screen -- the page is drawn
+// before the runtime exists -- so it opens now rather than waiting for boot.
+// It is offered after `render`, because the rail and the panes have to hold
+// their real size before anything measures them.
+const tour = new Tour();
+tour.mount();
+document.getElementById("pg-tour-open")?.addEventListener("click", () => tour.start());
+requestAnimationFrame(() => tour.offerFirstVisit());
 
 // Running is the only thing that waits for the runtime. Everything above this
 // line has already drawn.

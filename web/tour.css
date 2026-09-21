@@ -1,0 +1,169 @@
+/*
+ * The first-visit tour (src/tour.ts): the scrim, the ring and the card.
+ *
+ * Every colour is a token from assets/site.css, so the overlay follows the
+ * theme without a rule of its own for either. The vocabulary is the site's:
+ * 1px rules, 2px radii, one accent, and no shadows -- which is why the
+ * cut-out is four rectangles around the target rather than one very large
+ * `box-shadow` spread, the usual trick for this effect.
+ *
+ * The geometry is set from script, because it is measured from the element
+ * being described. What is here is only how it looks.
+ */
+
+.pg-tour {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+
+.pg-tour[hidden] {
+  display: none;
+}
+
+/* ---------- The scrim ---------- */
+
+/*
+ * Four rectangles that meet around the target and leave it uncovered. They
+ * take the pointer, so the page underneath cannot be clicked while the tour
+ * is open -- except the target itself, which stays live on purpose: a visitor
+ * who wants to try the thing being described should not have to dismiss the
+ * card first.
+ */
+.pg-tour-scrim {
+  position: fixed;
+  background: var(--bg);
+  opacity: 0.82;
+}
+
+/* ---------- The ring ---------- */
+
+/*
+ * A 1px accent outline on the region being named, drawn just outside it so it
+ * never covers a border the pane already has. It takes no pointer events, so
+ * the region underneath stays usable.
+ */
+.pg-tour-ring {
+  position: fixed;
+  pointer-events: none;
+  outline: 1px solid var(--acc);
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+
+/* ---------- The card ---------- */
+
+.pg-tour-card {
+  position: fixed;
+  width: min(23rem, calc(100vw - 24px));
+  box-sizing: border-box;
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px 12px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  font-family: var(--sans);
+}
+
+.pg-tour-card:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}
+
+.pg-tour-title {
+  margin: 0;
+  color: var(--fg);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.pg-tour-body {
+  margin: 0;
+  color: var(--fg2);
+  font-size: 0.84375rem;
+  line-height: 1.55;
+}
+
+.pg-tour-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 2px;
+}
+
+/* "3 of 6" in mono, the face this site uses for anything countable. */
+.pg-tour-count {
+  color: var(--mute);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.pg-tour-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Skip is the quietest control in the card: it is always available and never
+   the thing to press. A plain text button, not a third bordered box. */
+.pg-tour-skip {
+  padding: 4px 2px;
+  border: 0;
+  background: none;
+  color: var(--mute);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.pg-tour-skip:hover {
+  color: var(--fg);
+}
+
+.pg-tour-skip:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}
+
+/* The two navigation buttons inherit .btn / .btn-ghost from site.css; only
+   their size is reduced here, so the card does not read as a page section. */
+.pg-tour-card .btn {
+  padding: 5px 12px;
+  font-size: 0.8125rem;
+}
+
+.pg-tour-back[disabled] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---------- Motion ---------- */
+
+/*
+ * The card moves between regions rather than appearing somewhere else, which
+ * is what makes the sequence read as one tour. The ring is deliberately not
+ * animated: it is a statement about where you are, and a sliding ring reads
+ * as the page itself moving.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .pg-tour-card {
+    transition: top 160ms ease, left 160ms ease;
+  }
+}
+
+/* ---------- The button that reopens it ---------- */
+
+/*
+ * On a phone the actions row already carries Import, Export and Reset, and a
+ * fourth control pushes the row onto a second line in front of the lede. The
+ * tour is the least urgent of the four, so it is the one that goes.
+ */
+@media (max-width: 560px) {
+  #pg-tour-open {
+    display: none;
+  }
+}
