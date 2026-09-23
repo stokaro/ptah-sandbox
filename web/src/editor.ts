@@ -21,7 +21,9 @@
  * a string literal from being coloured, and nothing downstream reads it.
  */
 
-import { lineMarks, splitLines } from "./linediff.ts";
+import { diffView } from "./diffview.ts";
+import { hunks, revertHunk, splitLines, type Hunk } from "./linediff.ts";
+import { anchorPopover } from "./popover.ts";
 import { clear, el, fill } from "./panes/dom.ts";
 
 /**
@@ -232,6 +234,18 @@ interface Buffer {
 
 const TAB_LABELS: Record<EditorTabId, string> = { schema: "schema.sql", sql: "SQL", file: "file" };
 
+/** "Lines 9–10 changed", "Line 20 added", "1 line removed above line 16". */
+function describeRun(run: Hunk, lineCount: number): string {
+  const span = (from: number, count: number): string =>
+    count === 1 ? `Line ${from + 1}` : `Lines ${from + 1}–${from + count}`;
+  if (run.added.length === 0) {
+    const removed = run.removed.length === 1 ? "1 line removed" : `${run.removed.length} lines removed`;
+    return run.start < lineCount ? `${removed} above line ${run.start + 1}` : `${removed} at the end`;
+  }
+  const verb = run.removed.length === 0 ? "added" : "changed";
+  return `${span(run.start, run.added.length)} ${verb}`;
+}
+
 export class Editor {
   private handlers: EditorHandlers;
   private buffers: Record<EditorTabId, Buffer>;
@@ -249,6 +263,13 @@ export class Editor {
   private stripLeft: HTMLElement;
   private stripRight: HTMLElement;
   private notice: HTMLElement;
+
+  /** The runs of changes as last painted, which the gutter marks open. */
+  private changes: Hunk[] = [];
+  /** The popover a gutter mark opens: what was there, and a revert. */
+  private peek: HTMLElement;
+  /** The run the peek shows, so a repaint can find its mark again. */
+  private peeking = -1;
 
   private repaintQueued = false;
   private lockedByHost = false;
@@ -306,7 +327,7 @@ export class Editor {
         <span class="pgc-tabmeta"></span>
       </div>
       <div class="pgc-ed">
-        <div class="pgc-ed-gutter" aria-hidden="true"><span class="pgc-ed-nums"></span></div>
+        <div class="pgc-ed-gutter"><span class="pgc-ed-nums"></span></div>
         <div class="pgc-ed-code">
           <pre class="pgc-ed-overlay" aria-hidden="true"></pre>
           <textarea class="pgc-ed-input" spellcheck="false" autocapitalize="off"
@@ -343,6 +364,27 @@ export class Editor {
     this.stripLeft = host.querySelector<HTMLElement>(".pgc-strip-left")!;
     this.stripRight = host.querySelector<HTMLElement>(".pgc-strip-right")!;
     this.notice = host.querySelector<HTMLElement>(".pgc-ed-notice")!;
+
+    // One peek for every mark: marks are drawn again on every edit, so the
+    // popover is placed under whichever mark is showing its run now.
+    this.peek = el("div", "pgc-ed-peek");
+    this.peek.popover = "auto";
+    this.peek.setAttribute("role", "dialog");
+    host.appendChild(this.peek);
+    anchorPopover(this.peek, () => this.markFor(this.peeking));
+    this.peek.addEventListener("toggle", (event) => {
+      if (event.newState === "open") return;
+      // Closed with focus inside it -- Escape, or after a revert -- the mark
+      // that opened it takes focus back, if the run is still there.
+      if (this.peek.contains(document.activeElement) || document.activeElement === document.body) {
+        this.markFor(this.peeking)?.focus();
+      }
+      this.peeking = -1;
+    });
+    this.gutter.addEventListener("click", (event) => {
+      const mark = (event.target as Element).closest<HTMLElement>("[data-change]");
+      if (mark !== null) this.openPeek(Number(mark.dataset["change"]));
+    });
 
     this.input.addEventListener("input", () => this.onInput());
     this.input.addEventListener("scroll", () => this.syncScroll());
@@ -609,22 +651,47 @@ export class Editor {
 
     // Lines as a version-control tool counts them, which drops the empty tail
     // after a final newline; the indexes line up with `lines` all the same.
-    const marks =
+    this.changes =
       buffer.baseline === null || lines.length > HIGHLIGHT_LINE_LIMIT
-        ? null
-        : lineMarks(splitLines(buffer.baseline), splitLines(buffer.text));
+        ? []
+        : hunks(splitLines(buffer.baseline), splitLines(buffer.text));
 
-    // One row per line, so a line can carry its mark in the gutter too.
+    // Which run each line belongs to, and how: a line a run put in is added
+    // or modified, and a run that only removed is marked on the line below
+    // the gap -- or on the last line, when the gap is at the end.
+    const rowChange = new Map<number, { run: number; kind: string }>();
+    this.changes.forEach((run, index) => {
+      run.added.forEach((_, k) => {
+        rowChange.set(run.start + k, { run: index, kind: k < run.removed.length ? "is-modified" : "is-added" });
+      });
+      if (run.added.length === 0) {
+        const below = run.start < lines.length;
+        rowChange.set(below ? run.start : lines.length - 1, {
+          run: index,
+          kind: below ? "has-removed-above" : "has-removed-below",
+        });
+      }
+    });
+
+    // One row per line. A marked row is a button that opens its run; the
+    // plain numbers are hidden from assistive technology, which reads the
+    // textarea's own lines instead.
     const numbers = document.createDocumentFragment();
     for (let i = 0; i < lines.length; i++) {
-      const row = el("span", "pgc-ed-num", String(i + 1));
-      const change = marks?.changed.get(i);
-      if (change) row.classList.add(`is-${change}`);
-      if (marks?.removedAbove.has(i)) row.classList.add("has-removed-above");
+      const change = rowChange.get(i);
+      if (change === undefined) {
+        const row = el("span", "pgc-ed-num", String(i + 1));
+        row.setAttribute("aria-hidden", "true");
+        numbers.appendChild(row);
+        continue;
+      }
+      const row = el("button", `pgc-ed-num ${change.kind}`, String(i + 1));
+      row.type = "button";
+      row.dataset["change"] = String(change.run);
+      row.setAttribute("aria-haspopup", "dialog");
+      row.setAttribute("aria-label", `${describeRun(this.changes[change.run]!, lines.length)}: show what the seeded file had`);
       numbers.appendChild(row);
     }
-    // Lines removed from the very end sit below the last line there is.
-    if (marks?.removedAbove.has(lines.length)) numbers.lastElementChild?.classList.add("has-removed-below");
     clear(this.gutter);
     this.gutter.appendChild(numbers);
 
@@ -640,8 +707,8 @@ export class Editor {
     const frag = document.createDocumentFragment();
     for (let i = 0; i < lines.length; i++) {
       const row = el("span", "pgc-ed-line");
-      const change = marks?.changed.get(i);
-      if (change) row.classList.add(`is-${change}`);
+      const change = rowChange.get(i)?.kind;
+      if (change === "is-added" || change === "is-modified") row.classList.add(change);
       for (const token of tokens[i] ?? []) {
         if (token.kind === "plain") row.appendChild(document.createTextNode(token.text));
         else row.appendChild(el("span", `pgc-t-${token.kind}`, token.text));
@@ -651,6 +718,66 @@ export class Editor {
       frag.appendChild(row);
     }
     fill(this.overlay, frag);
+  }
+
+  /** The gutter mark that opens a run, as the gutter is drawn now. */
+  private markFor(run: number): HTMLElement | null {
+    if (run < 0) return null;
+    return this.gutter.querySelector<HTMLElement>(`[data-change="${run}"]`);
+  }
+
+  /**
+   * Shows one run against the seeded file: the lines it had there and the
+   * lines there are now, and a button that puts that run back and nothing
+   * else.
+   */
+  private openPeek(run: number): void {
+    const change = this.changes[run];
+    if (change === undefined) return;
+    if (this.peek.matches(":popover-open")) this.peek.hidePopover();
+
+    const locked = this.input.readOnly;
+    const revert = el("button", "btn btn-ghost", "Revert this change");
+    revert.type = "button";
+    revert.disabled = locked;
+    if (locked) revert.title = "The file cannot be edited right now";
+    revert.addEventListener("click", () => this.revert(run, change));
+
+    const ops = [
+      ...change.removed.map((text) => ({ op: "del" as const, text })),
+      ...change.added.map((text) => ({ op: "add" as const, text })),
+    ];
+    const lines = this.buffers[this.current].text.split("\n").length;
+    clear(this.peek);
+    fill(
+      this.peek,
+      el("p", "pgc-ed-peek-title", describeRun(change, lines)),
+      diffView([ops]),
+      revert,
+    );
+    this.peek.setAttribute("aria-label", describeRun(change, lines));
+    this.peeking = run;
+    this.peek.showPopover();
+    revert.focus();
+  }
+
+  /**
+   * Puts one run back as the seeded file had it, as an edit: saved, and
+   * reported like typing, so the plan and the route follow. The run is found
+   * again in the text as it is now, and a run that moved since it was drawn
+   * is left alone rather than reverted somewhere else.
+   */
+  private revert(run: number, shown: Hunk): void {
+    const buffer = this.buffers[this.current];
+    if (buffer.baseline === null || this.input.readOnly) return;
+    const now = hunks(splitLines(buffer.baseline), splitLines(buffer.text))[run];
+    if (now === undefined || JSON.stringify(now) !== JSON.stringify(shown)) return;
+    const lines = revertHunk(splitLines(buffer.text), now);
+    const newline = buffer.text.endsWith("\n") && lines.length > 0 ? "\n" : "";
+    this.peek.hidePopover();
+    this.edit(this.current, lines.join("\n") + newline);
+    this.reveal(now.start);
+    this.input.focus();
   }
 
   /** Keeps the overlay and the gutter under the textarea's own scrolling. */

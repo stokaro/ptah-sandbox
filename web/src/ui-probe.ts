@@ -436,6 +436,31 @@ async function run(): Promise<void> {
       `added lines ${added.join(",") || "none"}, changed ${modified.join(",") || "none"}, ${tintedLines} tinted`,
   );
 
+  // A mark opens what the seeded file had there, and reverts that run alone:
+  // the users body goes back, the index stays, and step 02 is not done any
+  // more because schema.sql no longer declares the column.
+  doc.querySelector<HTMLButtonElement>('#pg-editor .pgc-ed-num[data-change="0"]')?.click();
+  const peek = q<HTMLElement>("#pg-editor .pgc-ed-peek");
+  const peekOpen = peek?.matches(":popover-open") ?? false;
+  const peekText = peek?.textContent ?? "";
+  [...(peek?.querySelectorAll<HTMLButtonElement>("button") ?? [])]
+    .find((b) => b.textContent === "Revert this change")
+    ?.click();
+  await until("step 02 to be undone by the revert", () => stepStates()[1] !== "done", 20_000).catch(
+    () => undefined,
+  );
+  const reverted = q<HTMLTextAreaElement>("#pg-editor .pgc-ed-input")?.value ?? "";
+  check(
+    "a gutter mark shows the seeded lines, and Revert puts back that run and no other",
+    peekOpen && peekText.includes("-   email TEXT NOT NULL") && peekText.includes("+   active INTEGER")
+      && !reverted.includes("active INTEGER") && reverted.includes("CREATE INDEX idx_users_email")
+      && markedAs("added").join(",") === "19,20" && markedAs("modified").length === 0
+      && stepStates()[1] !== "done",
+    `peek open ${peekOpen}, says "${peekText.replace(/\s+/g, " ").slice(0, 90)}"; after revert added ` +
+      `${markedAs("added").join(",") || "none"}, changed ${markedAs("modified").join(",") || "none"}; ` +
+      `steps: ${stepStates().join(", ")}`,
+  );
+
   typeSchema(EDITED_SCHEMA);
   await until(
     "schema.sql to be written back to the workspace",

@@ -16,20 +16,28 @@
 const EDGE = 16;
 const GAP = 8;
 
-export function anchorPopover(popover: HTMLElement, control: HTMLElement): void {
+/**
+ * `control` is the element that opens the popover, or a function that says
+ * which one did this time, for a popover shared by many controls -- the
+ * editor's gutter marks, which are drawn again on every edit.
+ */
+export function anchorPopover(popover: HTMLElement, control: HTMLElement | (() => HTMLElement | null)): void {
+  const opener = (): HTMLElement | null => (typeof control === "function" ? control() : control);
   const close = (): void => {
     if (popover.matches(":popover-open")) popover.hidePopover();
   };
 
   popover.addEventListener("beforetoggle", (event) => {
     const opening = event.newState === "open";
-    control.setAttribute("aria-expanded", String(opening));
+    const at = opener();
+    at?.setAttribute("aria-expanded", String(opening));
     if (!opening) {
       window.removeEventListener("scroll", close);
       window.removeEventListener("resize", close);
       return;
     }
-    const box = control.getBoundingClientRect();
+    if (at === null) return;
+    const box = at.getBoundingClientRect();
     popover.style.top = `${Math.round(box.bottom + GAP)}px`;
     popover.style.left = `${Math.round(box.left)}px`;
     window.addEventListener("scroll", close, { once: true });
@@ -40,9 +48,10 @@ export function anchorPopover(popover: HTMLElement, control: HTMLElement): void 
   // corrected after it opens rather than guessed before.
   popover.addEventListener("toggle", (event) => {
     if (event.newState !== "open") return;
+    const at = opener();
     const overflow = popover.getBoundingClientRect().right - (window.innerWidth - EDGE);
-    if (overflow > 0) {
-      popover.style.left = `${Math.max(EDGE, Math.round(control.getBoundingClientRect().left - overflow))}px`;
+    if (overflow > 0 && at !== null) {
+      popover.style.left = `${Math.max(EDGE, Math.round(at.getBoundingClientRect().left - overflow))}px`;
     }
   });
 }

@@ -13,7 +13,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { lineMarks, splitLines } from "./linediff.ts";
+import { hunks, lineMarks, revertHunk, splitLines } from "./linediff.ts";
 import { applyPatch, scenarioById } from "./scenario.ts";
 
 /** The marks as plain data, so a failing test prints what it saw. */
@@ -71,4 +71,48 @@ test("scenario A's patch, applied to its fixture, marks the email line changed a
   assert.equal(current[8], "  email TEXT NOT NULL,");
   assert.equal(current[9], "  active INTEGER NOT NULL DEFAULT 1");
   assert.equal(current[20], "CREATE INDEX idx_users_email ON users (email);");
+});
+
+// ---------------------------------------------------------------------------
+// runs, which the gutter marks open and revert one at a time
+// ---------------------------------------------------------------------------
+
+const SEEDED = readFileSync(new URL("../../fixtures/scenario-a/schema.sql", import.meta.url), "utf8");
+const PATCHED = applyPatch(SEEDED, scenarioById("a").steps.find((s) => s.id === "edit").action.patch).text;
+
+test("scenario A's patch is two runs: the users body, and the index at the end", () => {
+  assert.deepEqual(hunks(splitLines(SEEDED), splitLines(PATCHED)), [
+    {
+      start: 8,
+      removed: ["  email TEXT NOT NULL"],
+      added: ["  email TEXT NOT NULL,", "  active INTEGER NOT NULL DEFAULT 1"],
+    },
+    { start: 19, removed: [], added: ["", "CREATE INDEX idx_users_email ON users (email);"] },
+  ]);
+});
+
+test("reverting one run puts back what the seeded file had there and leaves the other run", () => {
+  const seeded = splitLines(SEEDED);
+  const current = splitLines(PATCHED);
+  const [users] = hunks(seeded, current);
+  const reverted = revertHunk(current, users);
+  assert.equal(reverted[8], "  email TEXT NOT NULL");
+  assert.ok(!reverted.includes("  active INTEGER NOT NULL DEFAULT 1"));
+  // The index run is still there, two lines higher now.
+  assert.deepEqual(marksOf(seeded, reverted), { changed: { 18: "added", 19: "added" }, removedAbove: [] });
+});
+
+test("reverting every run, bottom first, is the seeded file again", () => {
+  const seeded = splitLines(SEEDED);
+  let current = splitLines(PATCHED);
+  for (const run of hunks(seeded, current).reverse()) current = revertHunk(current, run);
+  assert.deepEqual(current, seeded);
+});
+
+test("reverting a removal puts the removed lines back where they were", () => {
+  const seeded = ["a", "b", "c", "d"];
+  const current = ["a", "d"];
+  const [run] = hunks(seeded, current);
+  assert.deepEqual(run, { start: 1, removed: ["b", "c"], added: [] });
+  assert.deepEqual(revertHunk(current, run), seeded);
 });

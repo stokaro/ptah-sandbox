@@ -91,38 +91,67 @@ export function splitLines(text: string): string[] {
 }
 
 /**
- * How each line of `current` differs from `baseline`.
+ * One run of changes, in the current text's line numbers.
  *
- * In a changed run, as many added lines as there were removed ones count as
- * modified and the rest as added, so one comma added to a line and one line
- * inserted after it come out as one modified line and one new one. A run that
- * only removes lines leaves no line to mark, so it is recorded as a place.
+ * `added` occupies lines start .. start + added.length - 1 of the current
+ * text. A run that only removes lines has none, and its start is the line the
+ * removed ones were above; it can equal the number of lines, which means they
+ * were removed from the end.
  */
-export function lineMarks(baseline: readonly string[], current: readonly string[]): LineMarks {
-  const marks: LineMarks = { changed: new Map(), removedAbove: new Set() };
-  if (baseline.length > LINE_LIMIT || current.length > LINE_LIMIT) return marks;
+export interface Hunk {
+  start: number;
+  /** The baseline's lines that the run took out. */
+  removed: string[];
+  /** The current text's lines that the run put in. */
+  added: string[];
+}
 
+/** The runs of changes from `baseline` to `current`, top to bottom. */
+export function hunks(baseline: readonly string[], current: readonly string[]): Hunk[] {
+  if (baseline.length > LINE_LIMIT || current.length > LINE_LIMIT) return [];
+  const out: Hunk[] = [];
   let line = 0;
-  let removed = 0;
-  let added: number[] = [];
-  const close = (): void => {
-    added.forEach((index, k) => marks.changed.set(index, k < removed ? "modified" : "added"));
-    if (added.length === 0 && removed > 0) marks.removedAbove.add(line);
-    removed = 0;
-    added = [];
-  };
-
+  let open: Hunk | null = null;
   for (const op of diffLines(baseline, current)) {
     if (op.op === "same") {
-      close();
+      if (open !== null) out.push(open);
+      open = null;
       line += 1;
-    } else if (op.op === "del") {
-      removed += 1;
+      continue;
+    }
+    open ??= { start: line, removed: [], added: [] };
+    if (op.op === "del") {
+      open.removed.push(op.text);
     } else {
-      added.push(line);
+      open.added.push(op.text);
       line += 1;
     }
   }
-  close();
+  if (open !== null) out.push(open);
+  return out;
+}
+
+/**
+ * How each line of `current` differs from `baseline`.
+ *
+ * In a run, as many added lines as there were removed ones count as modified
+ * and the rest as added, so one comma added to a line and one line inserted
+ * after it come out as one modified line and one new one. A run that only
+ * removes lines leaves no line to mark, so it is recorded as a place.
+ */
+export function lineMarks(baseline: readonly string[], current: readonly string[]): LineMarks {
+  const marks: LineMarks = { changed: new Map(), removedAbove: new Set() };
+  for (const hunk of hunks(baseline, current)) {
+    hunk.added.forEach((_, k) => marks.changed.set(hunk.start + k, k < hunk.removed.length ? "modified" : "added"));
+    if (hunk.added.length === 0) marks.removedAbove.add(hunk.start);
+  }
   return marks;
+}
+
+/**
+ * The current lines with one run put back the way the baseline had it, and
+ * every other run left alone.
+ */
+export function revertHunk(current: readonly string[], hunk: Hunk): string[] {
+  return [...current.slice(0, hunk.start), ...hunk.removed, ...current.slice(hunk.start + hunk.added.length)];
 }

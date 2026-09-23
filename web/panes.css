@@ -247,6 +247,91 @@
   bottom: -4px;
 }
 
+/* A marked line number opens what the seeded file had there. It stays a line
+   number to look at: only the pointer, the hover colour and a focus ring say
+   it is a button. */
+button.pgc-ed-num {
+  appearance: none;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: right;
+  cursor: pointer;
+}
+
+button.pgc-ed-num:hover {
+  color: var(--fg);
+}
+
+button.pgc-ed-num:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: -1px;
+}
+
+/* The peek: the run against the seeded file, and its revert. The popover
+   helper places it under the mark; the top layer puts it over the code. */
+.pgc-ed-peek {
+  inset: auto;
+  margin: 0;
+  width: max-content;
+  min-width: 280px;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.pgc-ed-peek:popover-open {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+.pgc-ed-peek-title {
+  margin: 0;
+  font: 600 13px var(--sans);
+}
+
+.pgc-ed-peek .btn {
+  padding: 5px 12px;
+  font-size: 13px;
+}
+
+/* Lines removed and added, as a unified diff prints them: removed lines
+   grey with a minus, added lines on the tint the editor gives new lines. */
+.pgc-diff {
+  justify-self: stretch;
+  margin: 0;
+  padding: 8px 0;
+  border: 1px solid var(--line2);
+  border-radius: 2px;
+  background: var(--bg);
+  font: 12px/1.6 var(--mono);
+  color: var(--fg2);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.pgc-diff > span {
+  display: block;
+  padding: 0 10px;
+}
+
+.pgc-diff-add {
+  background: color-mix(in oklab, var(--pg-done) 13%, var(--bg));
+  color: var(--fg);
+}
+
+.pgc-diff-del,
+.pgc-diff-gap {
+  color: var(--mute);
+}
+
 .pgc-t-keyword {
   color: var(--acc);
 }

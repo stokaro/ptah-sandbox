@@ -844,35 +844,6 @@
   text-wrap: pretty;
 }
 
-/* A patch before it applies: removed lines grey, added lines on the tint the
- * editor gives them once they are in the file. */
-.pg-next-diff {
-  margin: 0;
-  padding: 8px 0;
-  border: 1px solid var(--line2);
-  border-radius: 2px;
-  background: var(--bg);
-  font: 12px/1.6 var(--mono);
-  color: var(--fg2);
-  overflow-x: auto;
-  white-space: pre;
-}
-
-.pg-next-diff > span {
-  display: block;
-  padding: 0 10px;
-}
-
-.pg-next-diff-add {
-  background: color-mix(in oklab, var(--pg-done) 13%, var(--bg));
-  color: var(--fg);
-}
-
-.pg-next-diff-del,
-.pg-next-diff-gap {
-  color: var(--mute);
-}
-
 /* What the route checked, in the words of the check. */
 .pg-next-check {
   font: 12px/1.5 var(--mono);

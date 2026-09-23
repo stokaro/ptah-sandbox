@@ -17,6 +17,7 @@
  */
 
 import { clear, el, fill } from "./panes/dom.ts";
+import { diffView } from "./diffview.ts";
 import { diffLines, splitLines } from "./linediff.ts";
 import { anchorPopover } from "./popover.ts";
 import {
@@ -411,15 +412,7 @@ function buttonLabel(state: StepState, waiting: boolean): string {
  * the lines shown here as added are the lines marked added once it applies.
  */
 function patchPreview(patch: readonly PatchHunk[]): HTMLElement {
-  const pre = el("pre", "pg-next-diff");
-  patch.forEach((hunk, index) => {
-    if (index > 0) pre.appendChild(el("span", "pg-next-diff-gap", "⋯"));
-    for (const op of diffLines(splitLines(hunk.find), splitLines(hunk.replace))) {
-      const sign = op.op === "add" ? "+" : op.op === "del" ? "-" : " ";
-      pre.appendChild(el("span", `pg-next-diff-${op.op}`, `${sign} ${op.text}`));
-    }
-  });
-  return pre;
+  return diffView(patch.map((hunk) => diffLines(splitLines(hunk.find), splitLines(hunk.replace))));
 }
 
 /** What the hint beside a headline opens. */
