@@ -989,7 +989,9 @@ async function run(): Promise<void> {
   /* ---- Links ---- */
 
   // The workspace is in this tab's memory, so every link to another page
-  // opens a new tab. One off ptah.run asks first, and Stay keeps the page.
+  // opens a new tab. One that leaves the playground asks first -- to
+  // github.com, and to ptah.run's docs just the same -- and Stay keeps the
+  // page.
   const pageLinks = [...doc.querySelectorAll<HTMLAnchorElement>("a[href]")].filter(
     (link) => !(link.getAttribute("href") ?? "").startsWith("#") && !link.hasAttribute("download")
       && link.getAttribute("aria-current") !== "page",
@@ -1001,15 +1003,22 @@ async function run(): Promise<void> {
     `${pageLinks.length} links, ${sameTab.length} in this tab: ${sameTab.map((link) => link.href).join(" ")}`,
   );
   const leave = q<HTMLDialogElement>(".pg-leave");
-  need<HTMLAnchorElement>('.pg-about-links a[href="https://github.com/stokaro/ptah/issues"]').click();
-  const asked = leave?.open ?? false;
-  const askedText = textOf(".pg-leave");
-  [...(leave?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find((b) => b.textContent === "Stay here")?.click();
+  const ask = (selector: string): { asked: boolean; text: string; stayed: boolean } => {
+    need<HTMLAnchorElement>(selector).click();
+    const asked = leave?.open ?? false;
+    const text = textOf(".pg-leave").replace(/\s+/g, " ");
+    [...(leave?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find((b) => b.textContent === "Stay here")?.click();
+    return { asked, text, stayed: !(leave?.open ?? true) };
+  };
+  const toGitHub = ask('.pg-about-links a[href="https://github.com/stokaro/ptah/issues"]');
+  const toDocs = ask('.site-header .nav-links a[href="https://docs.ptah.run/"]');
   check(
-    "a link off ptah.run asks first, and Stay keeps the page",
-    asked && askedText.includes("github.com") && askedText.includes("https://github.com/stokaro/ptah/issues")
-      && !(leave?.open ?? true),
-    `asked ${asked}: "${askedText.replace(/\s+/g, " ").slice(0, 120)}"; open after Stay ${leave?.open}`,
+    "a link that leaves the playground asks first, ptah.run's docs too, and Stay keeps the page",
+    toGitHub.asked && toGitHub.stayed && toGitHub.text.startsWith("Leave Playground?")
+      && toGitHub.text.includes("https://github.com/stokaro/ptah/issues")
+      && toDocs.asked && toDocs.stayed && toDocs.text.includes("docs.ptah.run, outside Playground"),
+    `github: asked ${toGitHub.asked}, "${toGitHub.text.slice(0, 90)}"; `
+      + `docs: asked ${toDocs.asked}, "${toDocs.text.slice(0, 90)}"; stayed ${toGitHub.stayed && toDocs.stayed}`,
   );
 
   /* ---- What Import does ---- */
