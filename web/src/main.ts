@@ -235,8 +235,24 @@ function planOrigin(): PlanOrigin {
  */
 const CONFIRM_PROMPT = "Type 'YES' to confirm:";
 
+/**
+ * What `schema apply` prints once it has applied, in the native binary's own
+ * words (test/integration/ground-truth/11_apply_v2_stdin_yes.txt). The exit
+ * code cannot say it: a declined confirmation prints "Schema apply canceled."
+ * and exits 0 as well.
+ */
+const APPLIED_LINE = "Schema apply completed successfully.";
+
 /** stdout of the run in flight, kept so the plan pane can read a dry run. */
 let runOutput = "";
+
+/**
+ * schema.sql as the last command read it: the editor's text once flushSave
+ * has written it, taken as the run starts. A successful apply makes it the
+ * editor's baseline, the way a commit does, so the change marks measure what
+ * has not been applied yet rather than everything since the seed.
+ */
+let schemaAtRun: string | null = null;
 
 function terminalHost(): TerminalHost {
   return {
@@ -253,6 +269,7 @@ function terminalHost(): TerminalHost {
       let handle: RunHandle | null = null;
       const start = (): void => {
         runOutput = "";
+        schemaAtRun = editor.text("schema");
         showingQuery = false;
         catalogBefore = catalog;
         // The id is taken from the handle rather than closed over as a mutable
@@ -925,6 +942,14 @@ async function afterRun(argv: string[], code: number): Promise<void> {
   // Before the refresh below moves the route on: the part this finished
   // belongs to the step that was on screen when it ran.
   guide.ran(real);
+
+  // Applied: what the apply read is in the database now, so it is what the
+  // editor's marks measure against. A declined or failed apply changed
+  // nothing, and the marks stay.
+  const applied =
+    real[0] === "schema" && real[1] === "apply" && !real.includes("--dry-run")
+    && code === 0 && runOutput.includes(APPLIED_LINE);
+  if (applied && schemaAtRun !== null) editor.setBaseline("schema", schemaAtRun);
   announce(`Command finished with exit code ${code}.`);
 
   const isPlan =

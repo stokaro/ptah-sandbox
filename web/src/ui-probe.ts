@@ -553,6 +553,7 @@ async function run(): Promise<void> {
   );
   typeCommand("no");
   await until("the declined apply to end", () => terminalIdle(), 30_000);
+  const marksAfterDeclined = markedAs("added").length + markedAs("modified").length;
 
   // Started from the strip, the same question is raised where the button
   // was: the strip quotes it, the prompt row is lit, and focus is waiting
@@ -579,6 +580,15 @@ async function run(): Promise<void> {
   typeCommand("YES");
   await until("the apply to finish", () => terminalIdle(), 60_000);
   const applyExit = textOf(".term-exit").trim();
+  // Applied, schema.sql is what the database has, so the editor stops marking
+  // it -- the way a commit clears a gutter. Declined, it had kept its marks.
+  await sleep(100);
+  const marksAfterApplied = markedAs("added").length + markedAs("modified").length;
+  check(
+    "a successful apply clears the editor's change marks, and a declined one kept them",
+    marksAfterDeclined > 0 && marksAfterApplied === 0,
+    `marked lines after the declined apply ${marksAfterDeclined}, after the applied one ${marksAfterApplied}`,
+  );
   check(
     "YES typed at the prompt completes the apply, and the strip and the row stop asking",
     applyExit.includes("exit 0") && !stripAsking() && !rowAsking(),
