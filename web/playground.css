@@ -1328,13 +1328,48 @@
   color: var(--fg);
 }
 
-/* ---------- Dialogs coming and going ----------
+/* ---------- Dialogs and popovers coming and going ----------
  *
  * The scenario picker, About and the leaving dialog fade in and rise a
- * little, over a scrim that fades with them, and go the same way. The start
- * of the move is @starting-style's; the way out keeps the dialog in the top
- * layer until the fade ends (display and overlay, allow-discrete). A browser
- * without those opens and closes at once, as before. */
+ * little, over a scrim that fades with them, and go the same way. The
+ * popovers -- the step's hint, Import's help, the site menu, the editor's
+ * peek at a change -- fade in and drop a little from the control they open
+ * under. The start of each move is @starting-style's; the way out keeps the
+ * element in the top layer until the fade ends (display and overlay,
+ * allow-discrete). A browser without those opens and closes at once. */
+@media (prefers-reduced-motion: no-preference) {
+  .pg-next-detail,
+  .pg-help-pop,
+  .pg-sitemenu,
+  .pgc-ed-peek {
+    opacity: 0;
+    transform: translateY(-4px);
+    transition:
+      opacity 150ms ease-out,
+      transform 150ms ease-out,
+      display 150ms allow-discrete,
+      overlay 150ms allow-discrete;
+  }
+
+  .pg-next-detail:popover-open,
+  .pg-help-pop:popover-open,
+  .pg-sitemenu:popover-open,
+  .pgc-ed-peek:popover-open {
+    opacity: 1;
+    transform: none;
+  }
+
+  @starting-style {
+    .pg-next-detail:popover-open,
+    .pg-help-pop:popover-open,
+    .pg-sitemenu:popover-open,
+    .pgc-ed-peek:popover-open {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .pg-picker,
   .pg-about,
