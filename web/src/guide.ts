@@ -386,12 +386,10 @@ export class Guide {
     if (this.steps.dataset["scenario"] !== this.current.id) {
       clear(this.steps);
       this.steps.dataset["scenario"] = this.current.id;
-      // A scenario with no steps keeps the row, saying so, so switching to it
-      // does not pull everything under the row up by its height.
+      // A scenario with no steps has no row: the strip under it already says
+      // there is no route, and a row saying it again was the same sentence
+      // twice.
       this.steps.classList.toggle("is-empty", steps.length === 0);
-      if (steps.length === 0) {
-        this.steps.appendChild(el("p", "pg-steps-empty", "No steps in this scenario: nothing is suggested and nothing is checked."));
-      }
       steps.forEach((step, index) => {
         const button = el("button", "pg-step");
         button.type = "button";

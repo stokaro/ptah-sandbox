@@ -104,8 +104,7 @@ const STEPS: readonly StepSpec[] = [
     prefer: ["above", "below"],
   },
   {
-    // Not the row a scenario with no steps keeps: there is no route to name.
-    targets: ["#pg-steps:not(.is-empty)"],
+    targets: ["#pg-steps"],
     title: "Five steps, if you want them",
     body:
       "A step ticks when the state actually changed — the column is in the catalog — " +

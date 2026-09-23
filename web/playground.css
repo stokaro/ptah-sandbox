@@ -472,18 +472,9 @@
   min-width: 0;
 }
 
-/* The row a scenario with no steps keeps, at the steps' own height. */
+/* A scenario with no steps draws no row (see Guide.renderSteps). */
 .pg-steps.is-empty {
-  display: flex;
-  align-items: center;
-  min-height: 38px;
-  padding: 0 16px;
-}
-
-.pg-steps-empty {
-  margin: 0;
-  font: 13px var(--sans);
-  color: var(--mute);
+  display: none;
 }
 
 /* ---------- Pane tabs (narrow layout only) ---------- */

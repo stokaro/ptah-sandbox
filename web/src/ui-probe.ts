@@ -1003,9 +1003,8 @@ async function run(): Promise<void> {
 
   /* ---- Free exploration ---- */
 
-  // No steps and no checks: the steps row stays and says so, the strip says
-  // there is no route, and neither is a pixel shorter than on a step with a
-  // command -- switching scenario does not move the panes.
+  // No steps and no checks: there is no steps row, the strip says there is no
+  // route, and it is not a pixel shorter than on a step with a command.
   chooseScenario("free");
   await until(
     "free exploration to load",
@@ -1015,10 +1014,10 @@ async function run(): Promise<void> {
   const freeStripHeight = Math.round(need<HTMLElement>("#pg-next").getBoundingClientRect().height);
   const freeSteps = q<HTMLElement>("#pg-steps");
   check(
-    "free exploration keeps the steps row and the strip at their heights, with no route in them",
+    "free exploration draws no steps row, and its strip says there is no route at the usual height",
     textOf(".pg-scenario-btn") === "Free exploration" && textOf("#pg-next").includes("No route here")
       && (freeSteps?.classList.contains("is-empty") ?? false) && stepStates().length === 0
-      && freeStripHeight === stripHeight && Math.round(freeSteps?.getBoundingClientRect().height ?? 0) >= 38,
+      && freeStripHeight === stripHeight && Math.round(freeSteps?.getBoundingClientRect().height ?? -1) === 0,
     `button "${textOf(".pg-scenario-btn")}"; steps ${stepStates().length}, row ` +
       `${Math.round(freeSteps?.getBoundingClientRect().height ?? 0)}px; strip ${freeStripHeight}px ` +
       `against ${stripHeight}px on a step with a command`,
