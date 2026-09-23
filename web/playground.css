@@ -1328,6 +1328,69 @@
   color: var(--fg);
 }
 
+/* ---------- Dialogs coming and going ----------
+ *
+ * The scenario picker, About and the leaving dialog fade in and rise a
+ * little, over a scrim that fades with them, and go the same way. The start
+ * of the move is @starting-style's; the way out keeps the dialog in the top
+ * layer until the fade ends (display and overlay, allow-discrete). A browser
+ * without those opens and closes at once, as before. */
+@media (prefers-reduced-motion: no-preference) {
+  .pg-picker,
+  .pg-about,
+  .pg-leave,
+  .pg-picker::backdrop,
+  .pg-about::backdrop,
+  .pg-leave::backdrop {
+    transition:
+      opacity 180ms ease-out,
+      transform 180ms ease-out,
+      display 180ms allow-discrete,
+      overlay 180ms allow-discrete;
+  }
+
+  .pg-picker,
+  .pg-about,
+  .pg-leave {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+
+  .pg-picker[open],
+  .pg-about[open],
+  .pg-leave[open] {
+    opacity: 1;
+    transform: none;
+  }
+
+  .pg-picker::backdrop,
+  .pg-about::backdrop,
+  .pg-leave::backdrop {
+    opacity: 0;
+  }
+
+  .pg-picker[open]::backdrop,
+  .pg-about[open]::backdrop,
+  .pg-leave[open]::backdrop {
+    opacity: 0.82;
+  }
+
+  @starting-style {
+    .pg-picker[open],
+    .pg-about[open],
+    .pg-leave[open] {
+      opacity: 0;
+      transform: translateY(8px) scale(0.98);
+    }
+
+    .pg-picker[open]::backdrop,
+    .pg-about[open]::backdrop,
+    .pg-leave[open]::backdrop {
+      opacity: 0;
+    }
+  }
+}
+
 /* ---------- Responsive ----------
  *
  * Two layouts, and nothing between them: above 900px the full-window editor
