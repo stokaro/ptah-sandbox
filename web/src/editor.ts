@@ -236,6 +236,9 @@ interface Buffer {
   footerRight: string | null;
 }
 
+/** Keys pressed only to change another: they neither arm nor disarm Escape. */
+const MODIFIERS = new Set(["Shift", "Control", "Alt", "Meta"]);
+
 const TAB_LABELS: Record<EditorTabId, string> = { schema: "schema.sql", sql: "SQL", file: "file" };
 
 /** "Lines 9–10 changed", "Line 20 added", "1 line removed above line 16". */
@@ -271,6 +274,8 @@ export class Editor {
   private saveButton: HTMLButtonElement;
   private fullButton: HTMLButtonElement;
   private full = false;
+  /** Escape was the last key: the next Tab leaves instead of indenting. */
+  private leaving = false;
 
   /** The runs of changes as last painted, which the gutter marks open. */
   private changes: Hunk[] = [];
@@ -405,6 +410,13 @@ export class Editor {
     this.input.addEventListener("input", () => this.onInput());
     this.input.addEventListener("scroll", () => this.syncScroll());
     this.input.addEventListener("keydown", (e) => this.onKeyDown(e));
+    // Leaving the textarea, or clicking back into it, is going on without
+    // the way out Escape offered.
+    for (const type of ["blur", "pointerdown"] as const) {
+      this.input.addEventListener(type, () => {
+        this.leaving = false;
+      });
+    }
     this.runButton.addEventListener("click", () => {
       this.handlers.onSubmit?.(this.buffers.sql.text);
     });
@@ -695,6 +707,16 @@ export class Editor {
   }
 
   private onKeyDown(e: KeyboardEvent): void {
+    // Escape arms the way out for the next key, and any other key but a
+    // modifier held for it -- Shift, to leave backwards -- disarms it.
+    if (e.key === "Escape") {
+      this.leaving = true;
+      return;
+    }
+    if (MODIFIERS.has(e.key)) return;
+    const leaving = this.leaving;
+    this.leaving = false;
+
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       if (this.current === "sql") {
         e.preventDefault();
@@ -706,6 +728,7 @@ export class Editor {
       // Tab indents, because this is a code editor. Escape then Tab leaves,
       // which is the escape hatch a keyboard user needs and the reason the
       // textarea carries an aria-describedby saying so.
+      if (leaving) return;
       e.preventDefault();
       this.insertAtCursor("  ");
     }

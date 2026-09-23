@@ -843,6 +843,31 @@ async function run(): Promise<void> {
     textOf('[data-result-pane="data"]').replace(/\s+/g, " ").trim().slice(0, 160),
   );
 
+  // Tab indents, because the editor is for code. The textarea tells a
+  // keyboard user that Escape then Tab leaves it, and that has to be true:
+  // nothing else takes focus out of a textarea that keeps Tab. A key that
+  // returns true from dispatchEvent was left to the browser.
+  const press = (key: string): boolean =>
+    queryInput.dispatchEvent(new win.KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+  const typed = queryInput.value;
+  queryInput.focus();
+  queryInput.setSelectionRange(typed.length, typed.length);
+  const indents = !press("Tab") && queryInput.value === `${typed}  `;
+  press("Escape");
+  press("Shift");
+  const leaves = press("Tab");
+  press("Escape");
+  press("ArrowLeft");
+  const indentsAgain = !press("Tab");
+  check(
+    "Tab indents in the editor, and Escape then Tab leaves it",
+    indents && leaves && indentsAgain,
+    `Tab indented ${indents}; after Escape (and Shift) Tab left to the browser ${leaves}; ` +
+      `after Escape and another key Tab indented ${indentsAgain}`,
+  );
+  queryInput.value = typed;
+  queryInput.dispatchEvent(new win.Event("input", { bubbles: true }));
+
   /* ---- 13. Two seedings asked for at once do not tear the page ---- */
 
   // A visitor who picks a scenario and then presses Reset asks twice. The two
