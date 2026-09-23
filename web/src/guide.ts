@@ -375,8 +375,8 @@ export class Guide {
       box.appendChild(copy);
       actions.appendChild(box);
 
-      // No button that edits the file: this step is the visitor's to make, and
-      // a button here would be the page doing the one thing it is showing off.
+      // Without a patch there is nothing the page could apply, so the button
+      // opens the file and the edit is the visitor's to type.
       const button = el("button", "btn", `Open ${action.file} →`);
       button.type = "button";
       button.addEventListener("click", () => this.host.focusFile(action.file));
