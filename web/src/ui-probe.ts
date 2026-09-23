@@ -950,6 +950,32 @@ async function run(): Promise<void> {
     );
   }
 
+  /* ---- Links ---- */
+
+  // The workspace is in this tab's memory, so every link to another page
+  // opens a new tab. One off ptah.run asks first, and Stay keeps the page.
+  const pageLinks = [...doc.querySelectorAll<HTMLAnchorElement>("a[href]")].filter(
+    (link) => !(link.getAttribute("href") ?? "").startsWith("#") && !link.hasAttribute("download")
+      && link.getAttribute("aria-current") !== "page",
+  );
+  const sameTab = pageLinks.filter((link) => link.target !== "_blank" || !link.rel.includes("noopener"));
+  check(
+    "every link to another page opens a new tab",
+    pageLinks.length >= 10 && sameTab.length === 0,
+    `${pageLinks.length} links, ${sameTab.length} in this tab: ${sameTab.map((link) => link.href).join(" ")}`,
+  );
+  const leave = q<HTMLDialogElement>(".pg-leave");
+  need<HTMLAnchorElement>('.pg-about-links a[href="https://github.com/stokaro/ptah/issues"]').click();
+  const asked = leave?.open ?? false;
+  const askedText = textOf(".pg-leave");
+  [...(leave?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find((b) => b.textContent === "Stay here")?.click();
+  check(
+    "a link off ptah.run asks first, and Stay keeps the page",
+    asked && askedText.includes("github.com") && askedText.includes("https://github.com/stokaro/ptah/issues")
+      && !(leave?.open ?? true),
+    `asked ${asked}: "${askedText.replace(/\s+/g, " ").slice(0, 120)}"; open after Stay ${leave?.open}`,
+  );
+
   /* ---- Free exploration ---- */
 
   // No steps and no checks: the steps row stays and says so, the strip says

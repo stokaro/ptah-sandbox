@@ -64,6 +64,7 @@ import { Session, SessionError, type RunHandle } from "./session.ts";
 import { installSplitters } from "./splitters.ts";
 import { installDock } from "./dock.ts";
 import { installSiteMenu } from "./sitemenu.ts";
+import { installLinks } from "./links.ts";
 import {
   Store,
   canRun,
@@ -1129,6 +1130,8 @@ installSplitters({
 installDock(grid, need<HTMLElement>("#pg-dock"));
 // And the site's links, which that layout keeps behind the Ptah mark.
 installSiteMenu(need<HTMLElement>("#pg-sitemenu-btn"), need<HTMLElement>("#pg-sitemenu"));
+// After the menu, so its copies of the header's links are marked too.
+installLinks();
 
 // About: the introduction, what is running and what this profile cannot do.
 // A dialog, because the full-window layout leaves no page under it to scroll
