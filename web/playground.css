@@ -1791,11 +1791,16 @@
 
   /* Each pane is the page: the page is the screen's height, and the pane
    * takes what the toolbar, the steps and the strip leave above the tab
-   * bar, scrolling inside itself, so the page never scrolls away. */
+   * bar, scrolling inside itself, so the page never scrolls away.
+   *
+   * The pane never gets less than 160px, though: on a phone held sideways
+   * the screen leaves it 74px, and the terminal's bar and prompt sat on top
+   * of each other. There the page is taller than the screen and scrolls by
+   * what the pane lacks, the tab bar's room included. */
   html.js body:has(.pg-grid[data-pane]) {
     display: flex;
     flex-direction: column;
-    height: 100dvh;
+    min-height: 100dvh;
   }
   html.js body:has(.pg-grid[data-pane]) .site-header {
     flex: none;
@@ -1812,12 +1817,17 @@
   }
   html.js .pg-grid[data-pane] {
     flex: 1 1 auto;
-    min-height: 0;
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(160px, 1fr);
+  }
+  /* What a pane holds does not size it: a long schema or transcript scrolls
+   * inside the pane rather than lengthening the page. */
+  html.js .pg-grid[data-pane] > :is(.pg-terminal, .pg-editor, .pg-rail),
+  html.js .pg-grid[data-pane] > .pg-db:not([data-view="workspace"]) {
+    contain: size;
   }
   /* Workspace: the strip, the results' tab row, and the list under it. */
   html.js .pg-grid[data-pane="database"]:has(> .pg-db[data-view="workspace"]) {
-    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(160px, 1fr);
   }
   html.js .pg-grid[data-pane] > .pg-terminal {
     height: auto;
