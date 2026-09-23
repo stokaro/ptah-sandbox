@@ -52,13 +52,19 @@ export interface StatusPill {
 const IDLE: StatusPill = { glyph: "…", text: "starting", tone: "quiet" };
 
 /**
- * A tick for a step whose check passed, the number otherwise.
+ * A done step keeps its number and gains a tick after its title. The number
+ * is its place in the route, which does not change when it is done; the tick
+ * is the part that says so. Screen readers get the word, not the glyph.
  *
- * A step that cannot be checked keeps its number forever; there is no third
- * glyph that could be mistaken for a quieter kind of success.
+ * A step that cannot be checked gets no mark at all: anything softer than a
+ * tick would still read as a quieter kind of success.
  */
-function glyphFor(state: StepState): string {
-  return state.status === "done" ? "✓" : pad(state.index + 1);
+function doneMark(state: StepState): HTMLElement | null {
+  if (state.status !== "done") return null;
+  const mark = el("span", "pg-step-done");
+  const tick = el("span", undefined, "✓");
+  tick.setAttribute("aria-hidden", "true");
+  return fill(mark, tick, el("span", "sr-only", "done"));
 }
 
 function commandBox(argv: readonly string[]): HTMLElement {
@@ -237,9 +243,10 @@ export class Guide {
 
       fill(
         button,
-        el("span", "pg-step-n", glyphFor(state)),
+        el("span", "pg-step-n", pad(index + 1)),
         el("span", "pg-step-of", `of ${pad(this.current.steps.length)}`),
         el("span", "pg-step-title", step.title),
+        doneMark(state),
         el("span", "pg-step-hint", step.caption),
       );
       this.steps.appendChild(button);

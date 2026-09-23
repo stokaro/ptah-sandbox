@@ -14,12 +14,30 @@
  * tab strips over the panes) takes --code, and the documents (the editor, the
  * tables, the plan) keep --bg; a selected tab takes the document's surface.
  * Blue marks what is chosen or what runs. --accbg is the selection surface:
- * the step on screen together with its strip, and the selected file.
- * --acc is links, the selected tab and step, SQL keywords, the Run next
- * button and, in the full-window layout, the status bar. Amber (--amber) is
- * the only attention colour, for waiting, drift, recovery and warnings. The
- * site's other buttons stay black. There is no green and no red.
+ * the step on screen and the selected file. --acc is links, the selected tab
+ * and step, SQL keywords and the Run next button. Amber (--amber) is the only
+ * attention colour, for waiting, drift, recovery and warnings. The site's
+ * other buttons stay black. Green (--pg-done, below) is the tick on a step
+ * the route has checked as done, and nothing else. There is no red.
  */
+
+/* The one colour site.css does not have. It sits at the lightness and chroma
+ * the site's blue and amber use in each theme, on the green hue, so it reads
+ * as one of them. The three blocks follow site.css's own: the system
+ * preference, unless a choice was stored, and the stored choice. */
+:root {
+  --pg-done: oklch(0.52 0.13 150);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --pg-done: oklch(0.78 0.13 150);
+  }
+}
+
+:root[data-theme="dark"] {
+  --pg-done: oklch(0.78 0.13 150);
+}
 
 /* The UA's `[hidden] { display: none }` sits at user-agent origin, so any
  * author `display` below would silently win over it and show a hidden node. */
@@ -251,8 +269,9 @@
   color: var(--fg);
 }
 
-.pg-step[data-status="done"] .pg-step-n {
-  color: var(--fg2);
+.pg-step-done {
+  color: var(--pg-done);
+  font-weight: 600;
 }
 
 .pg-step[aria-current="step"] {
@@ -712,9 +731,7 @@
   align-items: center;
   padding: 8px 16px;
   border-top: 1px solid var(--line);
-  /* The step on screen wears --accbg in the nav, and so does what it asks
-   * for, so the two read as one thing. */
-  background: var(--accbg);
+  background: var(--code);
 }
 
 .pg-next .cmd {
@@ -1164,16 +1181,17 @@
 }
 
 /* Where the steps are one row they read as a route: each ends in a chevron
- * pointing at the next, drawn as a hairline and filled with the step's own
- * background, so the hovered and the current step point forward too. */
+ * pointing at the next. It is a hairline drawn wholly inside the step it
+ * ends, tip on the boundary. A filled chevron reaching into the next step
+ * cut a notch out of the step on screen, which read as a rendering fault. */
 @media (min-width: 901px) {
   .pg-step {
     position: relative;
     border-right: 0;
   }
 
-  .pg-step + .pg-step {
-    padding-left: 30px;
+  .pg-step:not(:last-child) {
+    padding-right: 28px;
   }
 
   .pg-step:not(:last-child)::after {
@@ -1186,8 +1204,9 @@
     aspect-ratio: 1;
     border-top: 1px solid var(--line);
     border-right: 1px solid var(--line);
-    background: inherit;
-    transform: translate(50%, -50%) rotate(45deg);
+    /* The tip of a square turned 45 degrees lies half its diagonal from the
+     * centre: 20.7% of its side beyond the right edge it had unturned. */
+    transform: translate(-20.7%, -50%) rotate(45deg);
     pointer-events: none;
   }
 }
@@ -1211,9 +1230,8 @@
  *
  * Above 1100px the playground is an application rather than a page: it takes
  * the window under the site header, 56px and its rule, and the panes share the
- * height between them instead of each asking for its own. The toolbar takes
- * --code with the rest of the frame, and the status bar is the frame's one
- * saturated band, as in an editor.
+ * height between them instead of each asking for its own. The toolbar and
+ * the status bar take --code with the rest of the frame.
  *
  * The page is the window and does not scroll: the application and nothing
  * else. The site header folds into the toolbar -- its links behind the Ptah
@@ -1398,42 +1416,6 @@
 
   .pg-statusbar .meta {
     font-size: 12px;
-  }
-
-  /* The status bar is the frame's one saturated band, the way an editor's
-   * is: what is running and in what state, in the page colour on the
-   * accent. Anything that asks for attention becomes a chip in the page
-   * colour, because amber on the accent would not read. */
-  .pg-statusbar {
-    border-top-color: var(--acc);
-    background: var(--acc);
-  }
-
-  .pg-statusbar .meta,
-  .pg-statusbar .v,
-  .pg-statusbar .pg-status,
-  .pg-statusbar .pg-storage,
-  .pg-statusbar .pg-about-open {
-    color: var(--bg);
-  }
-
-  .pg-statusbar code {
-    padding: 0;
-    border: 0;
-    background: none;
-    color: inherit;
-  }
-
-  .pg-statusbar .pg-status[data-tone="attention"],
-  .pg-statusbar .pg-build-warn {
-    padding: 0 6px;
-    border-radius: 2px;
-    background: var(--bg);
-    color: var(--amber);
-  }
-
-  .pg-statusbar .pg-about-open:focus-visible {
-    outline-color: var(--bg);
   }
 }
 
