@@ -420,6 +420,13 @@
   font-weight: 600;
 }
 
+/* Where a step's tick goes; the row keeps the slot and fills it when the
+ * step is done. It lays out as if the tick were the step's own child. */
+.pg-step-mark {
+  display: contents;
+}
+
+
 .pg-step[aria-current="step"] {
   color: var(--fg);
   background: var(--accbg);
@@ -1457,13 +1464,30 @@
   .pg-steps:not(.is-empty) {
     display: flex;
   }
+  /* Moving to another step widens it and narrows the one it leaves, and
+   * the title shows and hides with the width. Only the grow factor changes
+   * between the two, so the width animates. */
   .pg-step {
-    flex: none;
-    justify-content: center;
+    flex: 0 1 auto;
+    justify-content: flex-start;
     min-width: 44px;
     padding: 10px 12px;
     border-right: 1px solid var(--line);
     border-bottom: 0;
+  }
+  .pg-step-title {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    max-width: 24ch;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .pg-step {
+      transition: flex-grow 260ms ease, background-color 260ms ease, box-shadow 260ms ease;
+    }
+    .pg-step-title {
+      transition: max-width 260ms ease, opacity 200ms ease, margin-right 260ms ease;
+    }
   }
   .pg-step:nth-child(2n) {
     border-right: 1px solid var(--line);
@@ -1471,21 +1495,20 @@
   .pg-step:last-child {
     border-right: 0;
   }
-  .pg-step:not([aria-current="step"]) .pg-step-title,
+  .pg-step:not([aria-current="step"]) .pg-step-title {
+    max-width: 0;
+    margin-right: -10px;
+    opacity: 0;
+  }
   .pg-step-hint,
   .pg-step-of {
     display: none;
   }
   .pg-step[aria-current="step"] {
-    flex: 1 1 auto;
-    justify-content: flex-start;
-    min-width: 0;
+    flex-grow: 1;
+    min-width: 44px;
     border-bottom-color: transparent;
     box-shadow: inset 0 -2px 0 var(--acc);
-  }
-  .pg-step[aria-current="step"] .pg-step-title {
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   /* The tabbed layout needs JavaScript to switch between panes, so without it
@@ -1655,8 +1678,11 @@
     position: relative;
   }
 
-  .pg-step:hover::before,
-  .pg-step[aria-current="step"]::before {
+  /* Every step carries its arrow, invisible until it is the step on screen
+   * or under the pointer, so moving from one step to another is a fade
+   * rather than a jump. It takes no clicks: its notch reaches into the step
+   * before it, and a click there belongs to that step. */
+  .pg-step::before {
     content: "";
     position: absolute;
     z-index: 0;
@@ -1673,6 +1699,19 @@
       var(--pg-chev) 50%
     );
     background: linear-gradient(to top, var(--mute) 2px, transparent 2px);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .pg-step::before {
+      transition: opacity 220ms ease;
+    }
+  }
+
+  .pg-step:hover::before,
+  .pg-step[aria-current="step"]::before {
+    opacity: 1;
   }
 
   .pg-step[aria-current="step"]::before {
@@ -1680,8 +1719,7 @@
   }
 
   /* The first step has no chevron before it, and the last none after it. */
-  .pg-step:first-child:hover::before,
-  .pg-step:first-child[aria-current="step"]::before {
+  .pg-step:first-child::before {
     left: 0;
     clip-path: polygon(
       0 0,
@@ -1692,8 +1730,7 @@
     );
   }
 
-  .pg-step:last-child:hover::before,
-  .pg-step:last-child[aria-current="step"]::before {
+  .pg-step:last-child::before {
     clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, var(--pg-chev) 50%);
   }
 

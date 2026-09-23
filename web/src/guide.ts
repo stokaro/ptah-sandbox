@@ -370,41 +370,56 @@ export class Guide {
     this.renderNext();
   }
 
+  /**
+   * The step row. Its buttons are built once per scenario and then only
+   * updated: a change of step is then a change of attributes on the same
+   * elements, which CSS can animate. A row rebuilt on every render had no
+   * earlier state to move from, so the selection jumped.
+   */
   private renderSteps(): void {
-    clear(this.steps);
     const route = this.route;
     const focused = this.focused();
+    const steps = this.current.steps;
 
-    // A scenario with no steps keeps the row, saying so, so switching to it
-    // does not pull everything under the row up by its height.
-    this.steps.classList.toggle("is-empty", this.current.steps.length === 0);
-    if (this.current.steps.length === 0) {
-      this.steps.appendChild(el("p", "pg-steps-empty", "No steps in this scenario: nothing is suggested and nothing is checked."));
-      return;
+    if (this.steps.dataset["scenario"] !== this.current.id) {
+      clear(this.steps);
+      this.steps.dataset["scenario"] = this.current.id;
+      // A scenario with no steps keeps the row, saying so, so switching to it
+      // does not pull everything under the row up by its height.
+      this.steps.classList.toggle("is-empty", steps.length === 0);
+      if (steps.length === 0) {
+        this.steps.appendChild(el("p", "pg-steps-empty", "No steps in this scenario: nothing is suggested and nothing is checked."));
+      }
+      steps.forEach((step, index) => {
+        const button = el("button", "pg-step");
+        button.type = "button";
+        button.addEventListener("click", () => this.focusStep(index));
+        fill(
+          button,
+          el("span", "pg-step-n", pad(index + 1)),
+          el("span", "pg-step-of", `of ${pad(steps.length)}`),
+          el("span", "pg-step-title", step.title),
+          el("span", "pg-step-mark"),
+          el("span", "pg-step-hint", step.caption),
+        );
+        this.steps.appendChild(button);
+      });
     }
 
-    this.current.steps.forEach((step, index) => {
+    this.steps.querySelectorAll<HTMLButtonElement>(".pg-step").forEach((button, index) => {
+      const step = steps[index] as Step;
       const state: StepState = route?.steps[index]
         ?? { step, index, status: "unknown", detail: "not checked yet" };
-
-      const button = el("button", "pg-step");
-      button.type = "button";
       button.dataset["status"] = state.status;
       if (focused?.index === index) button.setAttribute("aria-current", "step");
+      else button.removeAttribute("aria-current");
       // The tooltip is the check's own words, so hovering a step says what was
       // looked at rather than repeating the caption.
       button.title = detailLine(state);
-      button.addEventListener("click", () => this.focusStep(index));
-
-      fill(
-        button,
-        el("span", "pg-step-n", pad(index + 1)),
-        el("span", "pg-step-of", `of ${pad(this.current.steps.length)}`),
-        el("span", "pg-step-title", step.title),
-        doneMark(state),
-        el("span", "pg-step-hint", step.caption),
-      );
-      this.steps.appendChild(button);
+      const mark = button.querySelector(".pg-step-mark") as HTMLElement;
+      clear(mark);
+      const tick = doneMark(state);
+      if (tick) mark.appendChild(tick);
     });
   }
 
