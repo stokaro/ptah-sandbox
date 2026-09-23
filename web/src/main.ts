@@ -453,7 +453,52 @@ const editor = new Editor(need<HTMLElement>("#pg-editor"), {
     scheduleSave();
   },
   onSubmit: (sql) => void runSql(sql),
+  onSave: () => void flushSave(),
+  onFullChange: (full) => fullScreen(full),
 });
+
+/** What fullScreen made inert, to give back when the editor leaves. */
+let inerted: HTMLElement[] = [];
+
+/**
+ * The page's side of the editor taking the whole screen (Editor.setFull),
+ * which it offers up to 900px (playground.css).
+ *
+ * Everything else on the page is inert meanwhile, so focus and a screen
+ * reader stay in the editor. The editor is sized to what the phone's
+ * keyboard leaves of the screen, the visual viewport, rather than to the
+ * screen: Save at the top and Run at the bottom stay in reach while typing.
+ */
+function fullScreen(full: boolean): void {
+  const host = need<HTMLElement>("#pg-editor");
+  const viewport = window.visualViewport;
+  for (const node of inerted) node.inert = false;
+  inerted = [];
+  viewport?.removeEventListener("resize", fitFullScreen);
+  viewport?.removeEventListener("scroll", fitFullScreen);
+  host.style.removeProperty("--pg-vv-top");
+  host.style.removeProperty("--pg-vv-h");
+  if (!full) return;
+
+  for (let node = host; node !== document.body && node.parentElement !== null; node = node.parentElement) {
+    for (const sibling of node.parentElement.children) {
+      if (sibling === node || !(sibling instanceof HTMLElement) || sibling.inert) continue;
+      sibling.inert = true;
+      inerted.push(sibling);
+    }
+  }
+  fitFullScreen();
+  viewport?.addEventListener("resize", fitFullScreen);
+  viewport?.addEventListener("scroll", fitFullScreen);
+}
+
+function fitFullScreen(): void {
+  const viewport = window.visualViewport;
+  if (viewport === null) return;
+  const host = need<HTMLElement>("#pg-editor");
+  host.style.setProperty("--pg-vv-top", `${Math.round(viewport.offsetTop)}px`);
+  host.style.setProperty("--pg-vv-h", `${Math.round(viewport.height)}px`);
+}
 
 const panes = new ResultPanes(need<HTMLElement>("#pg-db"), {
   onTabChange: () => paintPanes(),
@@ -513,6 +558,10 @@ swap("#pg-next", guide.next);
   };
   place();
   phone.addEventListener("change", place);
+  // The whole-screen editor is offered only here; wider, the pane is back.
+  phone.addEventListener("change", () => {
+    if (!phone.matches) editor.setFull(false);
+  });
 
   // Up to the same width the workspace actions are a menu behind the "⋯" at
   // the end of the scenario's line (see index.html). The row is the menu:
@@ -1030,6 +1079,9 @@ async function afterRun(argv: string[], code: number): Promise<void> {
 /** Runs the SQL tab's buffer against the database the CLI is pointed at. */
 async function runSql(sql: string): Promise<void> {
   if (!canRun(store.state) || sql.trim() === "") return;
+  // What the statement returns is shown outside the editor, so the editor
+  // gives the screen back first.
+  editor.setFull(false);
   editor.offerRun(false);
   guide.sqlRan(sql);
   terminal.note(`[SQL pane] ${sql.replace(/\s+/g, " ").trim()}`);
@@ -1321,6 +1373,9 @@ function render(state: State): void {
   resetBtn.disabled = !idle;
 
   grid.dataset["pane"] = state.ui.pane;
+  // Another pane asked for (a command waiting on an answer, a query's rows):
+  // the editor gives up the screen, or that pane would open under it.
+  if (state.ui.pane !== "editor") editor.setFull(false);
   for (const node of all<HTMLButtonElement>(".pg-panetab")) {
     node.setAttribute("aria-selected", node.dataset["pane"] === state.ui.pane ? "true" : "false");
   }

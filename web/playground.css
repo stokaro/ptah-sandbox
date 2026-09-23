@@ -1936,6 +1936,28 @@
   html.js .pg-grid[data-pane] > .pg-rail {
     min-height: 0;
   }
+
+  /* The editor can take the whole screen (Editor.setFull): a schema is read
+   * and written more than a pane at a time, and here the pane is what the
+   * steps and the strip leave. src/main.ts sets the two variables to the part
+   * of the screen the keyboard leaves, and makes the rest of the page inert
+   * while the editor covers it. */
+  html.js .pgc-ed-full {
+    display: inline-grid;
+  }
+  html.js .pg-editor[data-full] {
+    position: fixed;
+    top: var(--pg-vv-top, 0px);
+    right: 0;
+    left: 0;
+    z-index: 40;
+    height: var(--pg-vv-h, 100dvh);
+    border: 0;
+    background: var(--bg);
+  }
+  html.js .pg-editor[data-full] .pgc-ed-input {
+    overscroll-behavior: contain;
+  }
   .pg-rail {
     grid-template-columns: minmax(0, 1fr);
   }

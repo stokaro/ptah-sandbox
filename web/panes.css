@@ -96,6 +96,7 @@
 .pgc-tabmeta {
   flex: 0 1 auto;
   min-width: 0;
+  margin-left: auto;
   font: 12px var(--mono);
   color: var(--mute);
   white-space: nowrap;
@@ -105,6 +106,62 @@
 
 .pgc-tabmeta.is-amber {
   color: var(--amber);
+}
+
+/* The editor's whole-screen button, and schema.sql's Save while it is on.
+   The page decides where the button is drawn (playground.css); it has no
+   place beside a pane that is already large. */
+.pgc-ed-full {
+  display: none;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  margin-right: -10px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  color: var(--fg2);
+  cursor: pointer;
+}
+
+.pgc-ed-full:hover {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.pgc-ed-full:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: -2px;
+}
+
+.pgc-ed-full-close,
+.pgc-ed-full[aria-pressed="true"] .pgc-ed-full-open {
+  display: none;
+}
+
+.pgc-ed-full[aria-pressed="true"] .pgc-ed-full-close {
+  display: block;
+}
+
+.pgc-ed-save {
+  flex: none;
+  padding: 6px 14px;
+  font-size: 13.5px;
+}
+
+.pgc-ed-save[hidden] {
+  display: none;
+}
+
+/* Saved is a state, not an action: it reads as the note beside it. */
+.pgc-ed-save[aria-disabled="true"],
+.pgc-ed-save[aria-disabled="true"]:hover {
+  border-color: transparent;
+  background: none;
+  color: var(--mute);
+  cursor: default;
 }
 
 /* A trailing note: `PK`, `28 KiB`, `not in schema.sql`. */

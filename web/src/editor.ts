@@ -42,6 +42,10 @@ export interface EditorHandlers {
   onTabChange?(id: EditorTabId): void;
   /** The SQL tab's Run, from the button or from Cmd/Ctrl+Enter. */
   onSubmit?(text: string): void;
+  /** Save, on schema.sql while the editor takes the whole screen. */
+  onSave?(): void;
+  /** The editor took the whole screen, or went back to its pane. */
+  onFullChange?(full: boolean): void;
 }
 
 /**
@@ -247,6 +251,7 @@ function describeRun(run: Hunk, lineCount: number): string {
 }
 
 export class Editor {
+  private host: HTMLElement;
   private handlers: EditorHandlers;
   private buffers: Record<EditorTabId, Buffer>;
   private current: EditorTabId = "schema";
@@ -263,6 +268,9 @@ export class Editor {
   private stripLeft: HTMLElement;
   private stripRight: HTMLElement;
   private notice: HTMLElement;
+  private saveButton: HTMLButtonElement;
+  private fullButton: HTMLButtonElement;
+  private full = false;
 
   /** The runs of changes as last painted, which the gutter marks open. */
   private changes: Hunk[] = [];
@@ -279,6 +287,7 @@ export class Editor {
     // The root class carries every metric the overlay depends on, so the
     // component sets it rather than trusting the caller's markup.
     host.classList.add("pgc-editor");
+    this.host = host;
     this.handlers = handlers;
     this.buffers = {
       schema: {
@@ -325,6 +334,11 @@ export class Editor {
       <div class="pgc-tabbar">
         <div class="pgc-tablist" role="tablist" aria-label="Editor"></div>
         <span class="pgc-tabmeta"></span>
+        <button class="btn pgc-ed-save" type="button" hidden>Save</button>
+        <button class="pgc-ed-full" type="button" aria-pressed="false" aria-label="Full screen" title="Full screen">
+          <svg class="pgc-ed-full-open" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M9.5 2.5h4v4M13.5 2.5 9 7M6.5 13.5h-4v-4M2.5 13.5 7 9" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
+          <svg class="pgc-ed-full-close" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M13.5 6.5h-4v-4M9.5 6.5 14 2M2.5 9.5h4v4M6.5 9.5 2 14" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
+        </button>
       </div>
       <div class="pgc-ed">
         <div class="pgc-ed-gutter"><span class="pgc-ed-nums"></span></div>
@@ -364,6 +378,8 @@ export class Editor {
     this.stripLeft = host.querySelector<HTMLElement>(".pgc-strip-left")!;
     this.stripRight = host.querySelector<HTMLElement>(".pgc-strip-right")!;
     this.notice = host.querySelector<HTMLElement>(".pgc-ed-notice")!;
+    this.saveButton = host.querySelector<HTMLButtonElement>(".pgc-ed-save")!;
+    this.fullButton = host.querySelector<HTMLButtonElement>(".pgc-ed-full")!;
 
     // One peek for every mark: marks are drawn again on every edit, so the
     // popover is placed under whichever mark is showing its run now.
@@ -391,6 +407,19 @@ export class Editor {
     this.input.addEventListener("keydown", (e) => this.onKeyDown(e));
     this.runButton.addEventListener("click", () => {
       this.handlers.onSubmit?.(this.buffers.sql.text);
+    });
+    this.saveButton.addEventListener("click", () => {
+      if (this.saveButton.getAttribute("aria-disabled") !== "true") this.handlers.onSave?.();
+    });
+    this.fullButton.addEventListener("click", () => this.setFull(!this.full));
+    // Escape leaves the whole screen, unless it is closing the peek, which
+    // takes Escape for itself. It is heard on the document: a tap on the
+    // editor's frame leaves focus on the body, and Escape must still work.
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape" || !this.full || this.peek.matches(":popover-open")) return;
+      e.preventDefault();
+      this.setFull(false);
+      this.fullButton.focus();
     });
 
     this.activate("schema");
@@ -607,6 +636,7 @@ export class Editor {
     this.lockedByHost = on;
     this.lockReason = reason;
     this.applyReadOnly();
+    this.paintChrome();
   }
 
   /**
@@ -629,6 +659,28 @@ export class Editor {
 
   focus(): void {
     this.input.focus();
+  }
+
+  /**
+   * The editor over the whole screen, or back in its pane.
+   *
+   * The editor draws the chrome for it -- the button that starts and ends
+   * it, and a Save for schema.sql, which is otherwise written a moment after
+   * each edit -- and the page decides where it is offered and what the rest
+   * of the screen does meanwhile (onFullChange). Focus stays on the button.
+   */
+  setFull(on: boolean): void {
+    if (this.full === on) return;
+    this.full = on;
+    this.host.toggleAttribute("data-full", on);
+    this.fullButton.setAttribute("aria-pressed", String(on));
+    this.fullButton.title = on ? "Back to the pane" : "Full screen";
+    this.paintChrome();
+    this.handlers.onFullChange?.(on);
+  }
+
+  isFull(): boolean {
+    return this.full;
   }
 
   // ---- input -------------------------------------------------------------
@@ -691,6 +743,13 @@ export class Editor {
     this.meta.classList.toggle("is-amber", buffer.metaTone === "amber");
     this.stripLeft.textContent = buffer.footerLeft;
     this.stripRight.textContent = buffer.footerRight ?? this.defaultRevisionText(buffer);
+    // Save says what it would do: write the edits, or nothing, because the
+    // file already holds them. aria-disabled rather than disabled: a button
+    // disabled under the finger that pressed it drops focus to the body.
+    const dirty = this.isDirty("schema");
+    this.saveButton.hidden = !this.full || this.current !== "schema";
+    this.saveButton.setAttribute("aria-disabled", String(!dirty || this.lockedByHost));
+    this.saveButton.textContent = dirty ? "Save" : "Saved";
   }
 
   private defaultRevisionText(buffer: Buffer): string {
