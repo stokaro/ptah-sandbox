@@ -419,17 +419,15 @@
 .pgc-pane-body {
   padding: 14px 16px 16px;
   display: grid;
+  /* Every row as tall as what it holds, so the body is the thing that
+     scrolls. With auto rows a short pane shrank them instead: measured at a
+     202px pane, the table's row came out 47px and the 118px table ran over
+     the note below it. */
+  grid-auto-rows: max-content;
   gap: 14px;
   align-content: start;
   overflow: auto;
   min-height: 0;
-}
-
-/* A child that is itself a scroll container has an automatic minimum size of
-   zero, which lets this grid shrink it instead of scrolling to it. Stating a
-   min-content floor keeps the body the thing that scrolls. */
-.pgc-pane-body > * {
-  min-height: min-content;
 }
 
 .pgc-pane-note {

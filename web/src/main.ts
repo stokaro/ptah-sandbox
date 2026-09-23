@@ -59,6 +59,7 @@ import {
 } from "./scenario.ts";
 import type { FileEntry } from "./protocol.ts";
 import { Session, SessionError, type RunHandle } from "./session.ts";
+import { installSplitters } from "./splitters.ts";
 import {
   Store,
   canRun,
@@ -445,6 +446,7 @@ function swap(selector: string, replacement: HTMLElement): void {
 }
 
 swap("#pg-bar", guide.bar);
+swap("#pg-state", guide.state);
 swap("#pg-steps", guide.steps);
 swap("#pg-next", guide.next);
 
@@ -1055,6 +1057,15 @@ const buildNote = need<HTMLElement>("[data-build-note]");
 const runningLine = need<HTMLElement>("#pg-running");
 const noticeLine = need<HTMLElement>("#pg-notice");
 const grid = need<HTMLElement>(".pg-grid");
+
+// The lines between the panes, draggable in the full-window layout.
+installSplitters({
+  grid,
+  rail: () => document.getElementById("pg-rail"),
+  db: () => document.getElementById("pg-db"),
+  next: () => document.getElementById("pg-next"),
+  terminal: () => document.getElementById("pg-terminal"),
+});
 const importBtn = need<HTMLButtonElement>("#pg-import");
 const exportBtn = need<HTMLButtonElement>("#pg-export");
 const resetBtn = need<HTMLButtonElement>("#pg-reset");

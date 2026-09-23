@@ -63,13 +63,29 @@
   </div>
 </header>
 
-<div class="wrap pg-head">
-  <div class="pg-title">
-    <div class="pg-title-copy">
-      <h1>Playground</h1>
-      <p class="lede">Edit a schema, run real Ptah commands against a SQLite database in this tab, inspect the result. Nothing is installed and nothing leaves the browser.</p>
+<main class="pg-main" id="main">
+
+<!--
+  The playground is an application, so above 1100px it takes the window under
+  the site header the way an editor would: a toolbar, the guided steps, the
+  three panes, the terminal across the bottom and a status bar. The lines
+  between the panes are dragged to resize them (src/splitters.ts). Below 1100px
+  the same elements flow as a page. What the page says about itself follows
+  the application, below it.
+-->
+<div class="wrap pg-app" id="pg-app">
+  <div class="pg-toolbar">
+    <h1 class="pg-toolbar-title">Playground</h1>
+    <div class="pg-bar" id="pg-bar">
+      <label class="pg-scenario" for="pg-scenario">
+        <span class="pg-scenario-label">Scenario</span>
+        <select id="pg-scenario" class="pg-select">
+          <option value="a" selected>A · Change a schema, keep the data</option>
+          <option value="b">B · Detect drift</option>
+        </select>
+      </label>
     </div>
-    <div class="actions">
+    <div class="actions pg-actions">
       <!--
         Opens the tour the first visit shows by itself. It is here because a
         one-shot overlay nobody can summon back is a worse deal than none:
@@ -82,22 +98,7 @@
       <button class="btn btn-ghost" type="button" id="pg-reset">Reset</button>
     </div>
   </div>
-  <!--
-    The build the page is actually running. Until ready() answers there is
-    nothing measured to print, so the line says the runtime has not started
-    rather than repeating a version out of the manifest as if it were a fact
-    about a running program.
-  -->
   <p class="pg-notice" id="pg-notice" role="status" hidden></p>
-  <p class="meta" id="pg-build">
-    <span>Ptah <span class="v" data-build-version>—</span> · commit <code data-build-commit>—</code> · browser profile</span>
-    <span data-build-sqlite>SQLite/WASM</span>
-    <span data-build-note>runtime not started</span>
-  </p>
-</div>
-
-<main class="wrap pg-main" id="main">
-
   <!--
     Real work, in order, with real byte counts. It leaves the flow the moment
     the runtime answers; everything below it is readable while it runs.
@@ -111,123 +112,103 @@
     <div id="pg-boot"><p class="pg-boot-static">The runtime needs JavaScript. Without it this page is still the schema, the file list and the exact commands — they run on your machine instead.</p></div>
     <p class="pg-boot-note">The page below is already yours to read. Only <em>running</em> a command waits for this.</p>
   </div>
+  <nav class="pg-steps" id="pg-steps" aria-label="Guided steps">
+    <button class="pg-step" type="button" data-step="explore" aria-current="step">
+      <span class="pg-step-n">01</span><span class="pg-step-of">/ 05</span>
+      <span class="pg-step-title">Explore</span>
+      <span class="pg-step-hint">Start from existing data</span>
+    </button>
+    <button class="pg-step" type="button" data-step="edit">
+      <span class="pg-step-n">02</span><span class="pg-step-of">/ 05</span>
+      <span class="pg-step-title">Edit schema</span>
+      <span class="pg-step-hint">Add a column and an index</span>
+    </button>
+    <button class="pg-step" type="button" data-step="preview">
+      <span class="pg-step-n">03</span><span class="pg-step-of">/ 05</span>
+      <span class="pg-step-title">Preview SQL</span>
+      <span class="pg-step-hint">Review before applying</span>
+    </button>
+    <button class="pg-step" type="button" data-step="apply">
+      <span class="pg-step-n">04</span><span class="pg-step-of">/ 05</span>
+      <span class="pg-step-title">Apply</span>
+      <span class="pg-step-hint">Keep the existing rows</span>
+    </button>
+    <button class="pg-step" type="button" data-step="verify">
+      <span class="pg-step-n">05</span><span class="pg-step-of">/ 05</span>
+      <span class="pg-step-title">Verify</span>
+      <span class="pg-step-hint">Query data, check drift</span>
+    </button>
+  </nav>
+  <!-- Only shown below 720px, where three panes cannot share a screen. -->
+  <div class="pg-panetabs" role="tablist" aria-label="Panes">
+    <button class="pg-panetab" type="button" role="tab" data-pane="editor" aria-selected="false" aria-controls="pg-editor">Editor</button>
+    <button class="pg-panetab" type="button" role="tab" data-pane="console" aria-selected="true" aria-controls="pg-terminal">Console</button>
+    <button class="pg-panetab" type="button" role="tab" data-pane="database" aria-selected="false" aria-controls="pg-db">Database</button>
+  </div>
+  <div class="pg-grid">
 
-  <div class="pg-frame">
-    <div class="pg-bar" id="pg-bar">
-      <label class="pg-scenario" for="pg-scenario">
-        <span class="pg-scenario-label">Scenario</span>
-        <select id="pg-scenario" class="pg-select">
-          <option value="a" selected>A · Change a schema, keep the data</option>
-          <option value="b">B · Detect drift</option>
-        </select>
-      </label>
-      <div class="pg-bar-right">
-        <span class="pg-status" id="pg-status" role="status" data-tone="quiet">
-          <span class="pg-status-glyph" aria-hidden="true">·</span><span class="pg-status-text">runtime not started</span>
-        </span>
-        <span class="pg-storage" id="pg-storage">memory-only</span>
+    <aside class="pg-rail" id="pg-rail" aria-label="Workspace and database">
+      <div class="pg-rail-group">
+        <div class="pg-rail-head"><span class="label">Workspace</span></div>
+        <ul class="pg-files" id="pg-files">
+          <li class="pg-file is-current" data-file="schema.sql">
+            <span class="pg-file-icon" aria-hidden="true">≡</span><span class="pg-file-name">schema.sql</span>
+          </li>
+          <li class="pg-file" data-file="app.db">
+            <span class="pg-file-icon" aria-hidden="true">▣</span><span class="pg-file-name">app.db</span><span class="pg-file-note" data-db-size>not created yet</span>
+          </li>
+          <li class="pg-file" data-file="README.md">
+            <span class="pg-file-icon" aria-hidden="true">≡</span><span class="pg-file-name">README.md</span>
+          </li>
+        </ul>
       </div>
-    </div>
 
-    <nav class="pg-steps" id="pg-steps" aria-label="Guided steps">
-      <button class="pg-step" type="button" data-step="explore" aria-current="step">
-        <span class="pg-step-n">01</span><span class="pg-step-of">/ 05</span>
-        <span class="pg-step-title">Explore</span>
-        <span class="pg-step-hint">Start from existing data</span>
-      </button>
-      <button class="pg-step" type="button" data-step="edit">
-        <span class="pg-step-n">02</span><span class="pg-step-of">/ 05</span>
-        <span class="pg-step-title">Edit schema</span>
-        <span class="pg-step-hint">Add a column and an index</span>
-      </button>
-      <button class="pg-step" type="button" data-step="preview">
-        <span class="pg-step-n">03</span><span class="pg-step-of">/ 05</span>
-        <span class="pg-step-title">Preview SQL</span>
-        <span class="pg-step-hint">Review before applying</span>
-      </button>
-      <button class="pg-step" type="button" data-step="apply">
-        <span class="pg-step-n">04</span><span class="pg-step-of">/ 05</span>
-        <span class="pg-step-title">Apply</span>
-        <span class="pg-step-hint">Keep the existing rows</span>
-      </button>
-      <button class="pg-step" type="button" data-step="verify">
-        <span class="pg-step-n">05</span><span class="pg-step-of">/ 05</span>
-        <span class="pg-step-title">Verify</span>
-        <span class="pg-step-hint">Query data, check drift</span>
-      </button>
-    </nav>
-
-    <!-- Only shown below 720px, where three panes cannot share a screen. -->
-    <div class="pg-panetabs" role="tablist" aria-label="Panes">
-      <button class="pg-panetab" type="button" role="tab" data-pane="editor" aria-selected="false" aria-controls="pg-editor">Editor</button>
-      <button class="pg-panetab" type="button" role="tab" data-pane="console" aria-selected="true" aria-controls="pg-terminal">Console</button>
-      <button class="pg-panetab" type="button" role="tab" data-pane="database" aria-selected="false" aria-controls="pg-db">Database</button>
-    </div>
-
-    <div class="pg-grid">
-
-      <aside class="pg-rail" id="pg-rail" aria-label="Workspace and database">
-        <div class="pg-rail-group">
-          <div class="pg-rail-head"><span class="label">Workspace</span></div>
-          <ul class="pg-files" id="pg-files">
-            <li class="pg-file is-current" data-file="schema.sql">
-              <span class="pg-file-icon" aria-hidden="true">≡</span><span class="pg-file-name">schema.sql</span>
-            </li>
-            <li class="pg-file" data-file="app.db">
-              <span class="pg-file-icon" aria-hidden="true">▣</span><span class="pg-file-name">app.db</span><span class="pg-file-note" data-db-size>not created yet</span>
-            </li>
-            <li class="pg-file" data-file="README.md">
-              <span class="pg-file-icon" aria-hidden="true">≡</span><span class="pg-file-name">README.md</span>
-            </li>
-          </ul>
+      <div class="pg-rail-group">
+        <div class="pg-rail-head">
+          <span class="label">Database · app.db</span>
+          <span class="pg-rail-note" id="pg-catalog-source">from the seed</span>
         </div>
+        <ul class="pg-tables" id="pg-tables">
+          <li class="pg-table">
+            <div class="pg-table-head"><span class="pg-file-icon" aria-hidden="true">▦</span><span class="pg-table-name">users</span><span class="pg-file-note">3 rows</span></div>
+            <ul class="pg-cols">
+              <li>id <span class="pg-col-note">PK</span></li>
+              <li>name</li>
+              <li>email</li>
+            </ul>
+          </li>
+          <li class="pg-table">
+            <div class="pg-table-head"><span class="pg-file-icon" aria-hidden="true">▦</span><span class="pg-table-name">tasks</span><span class="pg-file-note">4 rows</span></div>
+            <ul class="pg-cols">
+              <li>id <span class="pg-col-note">PK</span></li>
+              <li>user_id <span class="pg-col-note">FK → users.id</span></li>
+              <li>title</li>
+              <li>done</li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+    </aside>
 
-        <div class="pg-rail-group">
-          <div class="pg-rail-head">
-            <span class="label">Database · app.db</span>
-            <span class="pg-rail-note" id="pg-catalog-source">from the seed</span>
-          </div>
-          <ul class="pg-tables" id="pg-tables">
-            <li class="pg-table">
-              <div class="pg-table-head"><span class="pg-file-icon" aria-hidden="true">▦</span><span class="pg-table-name">users</span><span class="pg-file-note">3 rows</span></div>
-              <ul class="pg-cols">
-                <li>id <span class="pg-col-note">PK</span></li>
-                <li>name</li>
-                <li>email</li>
-              </ul>
-            </li>
-            <li class="pg-table">
-              <div class="pg-table-head"><span class="pg-file-icon" aria-hidden="true">▦</span><span class="pg-table-name">tasks</span><span class="pg-file-note">4 rows</span></div>
-              <ul class="pg-cols">
-                <li>id <span class="pg-col-note">PK</span></li>
-                <li>user_id <span class="pg-col-note">FK → users.id</span></li>
-                <li>title</li>
-                <li>done</li>
-              </ul>
-            </li>
-          </ul>
+    <section class="pg-pane pg-editor" id="pg-editor" aria-label="Editor">
+      <div class="pg-tabs">
+        <div class="pg-tablist" role="tablist" aria-label="Editor">
+          <button class="pg-tab" type="button" role="tab" data-editor-tab="schema.sql" aria-selected="true">schema.sql</button>
+          <button class="pg-tab" type="button" role="tab" data-editor-tab="sql" aria-selected="false">SQL</button>
         </div>
-      </aside>
-
-      <section class="pg-pane pg-editor" id="pg-editor" aria-label="Editor">
-        <div class="pg-tabs">
-          <div class="pg-tablist" role="tablist" aria-label="Editor">
-            <button class="pg-tab" type="button" role="tab" data-editor-tab="schema.sql" aria-selected="true">schema.sql</button>
-            <button class="pg-tab" type="button" role="tab" data-editor-tab="sql" aria-selected="false">SQL</button>
-          </div>
-          <span class="pg-tabs-note" id="pg-editor-note">as seeded</span>
-        </div>
-        <!--
-          The fixture, in the markup, so the schema is readable the instant the
-          HTML lands. This element is also where the seed comes FROM: main.ts
-          reads its text and writes exactly those bytes to /workspace/schema.sql,
-          so what the page shows and what Ptah reads cannot drift apart. Because
-          the text is taken with textContent it must hold only inline spans and
-          real newlines -- a <div> per line would swallow them. `npm run build`
-          checks it against fixtures/scenario-a/schema.sql.
-        -->
-        <div class="pg-editor-body">
-          <div class="pg-gutter" aria-hidden="true">1
+        <span class="pg-tabs-note" id="pg-editor-note">as seeded</span>
+      </div>
+      <!--
+        The fixture, in the markup, so the schema is readable the instant the
+        HTML lands. This element is also where the seed comes FROM: main.ts
+        reads its text and writes exactly those bytes to /workspace/schema.sql,
+        so what the page shows and what Ptah reads cannot drift apart. Because
+        the text is taken with textContent it must hold only inline spans and
+        real newlines -- a <div> per line would swallow them. `npm run build`
+        checks it against fixtures/scenario-a/schema.sql.
+      -->
+      <div class="pg-editor-body">
+        <div class="pg-gutter" aria-hidden="true">1
 2
 3
 4
@@ -245,7 +226,7 @@
 16
 17
 18</div>
-          <pre class="pg-code" id="pg-editor-text"><span class="c">-- The schema you want the database to have.
+        <pre class="pg-code" id="pg-editor-text"><span class="c">-- The schema you want the database to have.
 --
 -- Ptah reads this file as the desired state, reads the real catalog out of
 -- app.db, and works out the difference. You never write ALTER statements here.</span>
@@ -264,70 +245,84 @@
   <span class="k">FOREIGN KEY</span> (user_id) <span class="k">REFERENCES</span> users (id)
 );
 </pre>
-        </div>
-        <div class="pg-pane-foot">
-          <span>SQL · desired state</span>
-          <span id="pg-editor-revision">not written yet</span>
-        </div>
-      </section>
+      </div>
+      <div class="pg-pane-foot">
+        <span>SQL · desired state</span>
+        <span id="pg-editor-revision">not written yet</span>
+      </div>
+    </section>
 
-      <section class="pg-pane pg-db" id="pg-db" aria-label="Database">
-        <div class="pg-tabs">
-          <div class="pg-tablist" role="tablist" aria-label="Database">
-            <button class="pg-tab" type="button" role="tab" data-db-tab="data" aria-selected="true">Data</button>
-            <button class="pg-tab" type="button" role="tab" data-db-tab="structure" aria-selected="false">Structure</button>
-            <button class="pg-tab" type="button" role="tab" data-db-tab="plan" aria-selected="false">Plan</button>
+    <section class="pg-pane pg-db" id="pg-db" aria-label="Database">
+      <div class="pg-tabs">
+        <div class="pg-tablist" role="tablist" aria-label="Database">
+          <button class="pg-tab" type="button" role="tab" data-db-tab="data" aria-selected="true">Data</button>
+          <button class="pg-tab" type="button" role="tab" data-db-tab="structure" aria-selected="false">Structure</button>
+          <button class="pg-tab" type="button" role="tab" data-db-tab="plan" aria-selected="false">Plan</button>
+        </div>
+        <span class="pg-tabs-note">sqlite://app.db</span>
+      </div>
+      <div class="pg-db-body" id="pg-db-body">
+        <div class="pg-empty">
+          <p><strong>Nothing has been read out of SQLite yet.</strong></p>
+          <p>This pane only ever shows rows and columns the database actually returned, after a command finished. The list on the left is what the seed will create; it is marked <em>from the seed</em> until the catalog has been read back.</p>
+        </div>
+      </div>
+    </section>
+    <section class="pg-next" id="pg-next" aria-label="Next step">
+      <div class="pg-next-copy">
+        <strong id="pg-next-title">Start by asking whether the file and the database agree.</strong>
+        <span class="caption" id="pg-next-body">The workspace has a schema file and a SQLite database with rows already in it. Drift compares the two and tells you, with an exit code, whether they match.</span>
+      </div>
+      <div class="pg-next-run">
+        <div class="pg-next-row">
+          <div class="cmd">
+            <pre id="pg-next-cmd"><span class="p">$</span> ptah schema drift --schema-file schema.sql --db-url sqlite://app.db</pre>
+            <button class="copy" type="button" id="pg-next-copy">Copy</button>
           </div>
-          <span class="pg-tabs-note">sqlite://app.db</span>
+          <button class="btn" type="button" id="pg-run-next" disabled>Run next →</button>
         </div>
-        <div class="pg-db-body" id="pg-db-body">
-          <div class="pg-empty">
-            <p><strong>Nothing has been read out of SQLite yet.</strong></p>
-            <p>This pane only ever shows rows and columns the database actually returned, after a command finished. The list on the left is what the seed will create; it is marked <em>from the seed</em> until the catalog has been read back.</p>
-          </div>
-        </div>
-      </section>
-
-      <section class="pg-terminal term" id="pg-terminal" aria-label="Terminal">
-        <div class="term-bar">
-          <span class="pg-term-where"><span>sh</span><span>/workspace</span></span>
-          <span class="pg-term-right">
-            <span id="pg-term-exit" hidden></span>
-            <span id="pg-term-duration" hidden></span>
-            <button class="demo-btn" type="button" id="pg-cancel" hidden>Cancel · Ctrl+C</button>
-            <button class="copy" type="button" id="pg-copy-transcript">Copy transcript</button>
-          </span>
-        </div>
-        <pre class="pg-transcript" id="pg-transcript"><span class="m"># Scenario A · users + tasks · synthetic data
+      </div>
+    </section>
+    <section class="pg-terminal term" id="pg-terminal" aria-label="Terminal">
+      <div class="term-bar">
+        <span class="pg-term-where"><span>sh</span><span>/workspace</span></span>
+        <span class="pg-term-right">
+          <span id="pg-term-exit" hidden></span>
+          <span id="pg-term-duration" hidden></span>
+          <button class="demo-btn" type="button" id="pg-cancel" hidden>Cancel · Ctrl+C</button>
+          <button class="copy" type="button" id="pg-copy-transcript">Copy transcript</button>
+        </span>
+      </div>
+      <pre class="pg-transcript" id="pg-transcript"><span class="m"># Scenario A · users + tasks · synthetic data
 # The workspace is seeded once the runtime is up; nothing has run yet.
 </span></pre>
-        <div class="pg-prompt">
-          <span class="p" aria-hidden="true">$</span>
-          <label class="sr-only" for="pg-input">Command</label>
-          <input class="pg-input" id="pg-input" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" disabled aria-describedby="pg-input-help">
-          <span class="pg-prompt-help" id="pg-input-help">argv only · no pipes, redirects or $(…) · ↑ history · Tab completes</span>
-        </div>
-      </section>
-
+      <div class="pg-prompt">
+        <span class="p" aria-hidden="true">$</span>
+        <label class="sr-only" for="pg-input">Command</label>
+        <input class="pg-input" id="pg-input" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" disabled aria-describedby="pg-input-help">
+        <span class="pg-prompt-help" id="pg-input-help">argv only · no pipes, redirects or $(…) · ↑ history · Tab completes</span>
+      </div>
+    </section>
+  </div>
+  <div class="pg-statusbar">
+    <p class="meta" id="pg-build">
+      <span>Ptah <span class="v" data-build-version>—</span> · commit <code data-build-commit>—</code> · browser profile</span>
+      <span data-build-sqlite>SQLite/WASM</span>
+      <span data-build-note>runtime not started</span>
+    </p>
+    <div class="pg-state" id="pg-state">
+      <span class="pg-status" id="pg-status" role="status" data-tone="quiet">
+        <span class="pg-status-glyph" aria-hidden="true">·</span><span class="pg-status-text">runtime not started</span>
+      </span>
+      <span class="pg-storage" id="pg-storage">memory-only</span>
     </div>
   </div>
+</div>
 
-  <section class="pg-next" id="pg-next" aria-label="Next step">
-    <div class="pg-next-copy">
-      <strong id="pg-next-title">Start by asking whether the file and the database agree.</strong>
-      <span class="caption" id="pg-next-body">The workspace has a schema file and a SQLite database with rows already in it. Drift compares the two and tells you, with an exit code, whether they match.</span>
-    </div>
-    <div class="pg-next-run">
-      <div class="pg-next-row">
-        <div class="cmd">
-          <pre id="pg-next-cmd"><span class="p">$</span> ptah schema drift --schema-file schema.sql --db-url sqlite://app.db</pre>
-          <button class="copy" type="button" id="pg-next-copy">Copy</button>
-        </div>
-        <button class="btn" type="button" id="pg-run-next" disabled>Run next →</button>
-      </div>
-    </div>
+<div class="wrap pg-below">
+  <section class="pg-about" aria-label="About the playground">
+    <p class="lede">Edit a schema, run real Ptah commands against a SQLite database in this tab, inspect the result. Nothing is installed and nothing leaves the browser.</p>
   </section>
-
   <!--
     What is actually running, and what this profile cannot do. The first line is
     read off the module in this tab rather than written down here, so it cannot
@@ -343,6 +338,7 @@
       <dd>Nothing. The workspace and the database live in this tab: reloading discards them. Export takes a copy with you.</dd>
     </dl>
   </section>
+</div>
 
 </main>
 
