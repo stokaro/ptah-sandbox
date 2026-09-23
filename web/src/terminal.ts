@@ -97,6 +97,13 @@ export interface TerminalOptions {
   stallMs?: number;
   /** Called after every run, so the page can refresh its panes off real state. */
   onExit?: (argv: string[], code: number, durationMs: number) => void;
+  /**
+   * Called when a run started with `guided` stops to ask on stdin, with the
+   * line it asks, and with null once it has its answer or ends. A command
+   * typed at the prompt never calls it: whoever typed it is already looking
+   * at the prompt, and the page has nothing to add.
+   */
+  onAsk?: (question: string | null) => void;
 }
 
 /** 512 KiB of transcript. Past this the oldest lines go, visibly. */
@@ -704,6 +711,10 @@ interface ActiveRun {
   outLines: number;
   /** Whether the last chunk ended without a newline: a prompt, most likely. */
   partialLine: boolean;
+  /** The output since the last newline: what a prompt asks, when it asks. */
+  tail: string;
+  /** Started from the guide's own button rather than typed at the prompt. */
+  guided: boolean;
 }
 
 /**
@@ -760,6 +771,7 @@ export class Terminal {
   private host: TerminalHost;
   private opts: Required<Pick<TerminalOptions, "cwd" | "maxBytes" | "maxLines" | "stallMs">>;
   private onExit: TerminalOptions["onExit"];
+  private onAsk: TerminalOptions["onAsk"];
 
   private root: HTMLElement;
   /** False when the pane took over an element the page already had. */
@@ -798,6 +810,7 @@ export class Terminal {
   constructor(mount: HTMLElement, options: TerminalOptions) {
     this.host = options.host;
     this.onExit = options.onExit;
+    this.onAsk = options.onAsk;
     this.opts = {
       cwd: options.cwd ?? "/workspace",
       maxBytes: options.maxBytes ?? DEFAULT_MAX_BYTES,
@@ -903,14 +916,19 @@ export class Terminal {
     this.append(tone === "attention" ? "attention" : "note", `${line}\n`);
   }
 
-  /** Runs an argv the page assembled, echoing exactly what the process gets. */
-  run(argv: string[]): void {
+  /**
+   * Runs an argv the page assembled, echoing exactly what the process gets.
+   * `guided` marks a run the guide started from its own button: if it stops
+   * to ask on stdin, the prompt row says so loudly, takes focus unless the
+   * visitor is typing somewhere else, and onAsk tells the page.
+   */
+  run(argv: string[], options: { guided?: boolean } = {}): void {
     if (argv.length === 0) return;
     if (this.state !== "idle") {
       this.note("A command is already running. One runs at a time here.", "attention");
       return;
     }
-    this.startRun(argv, quoteArgv(argv));
+    this.startRun(argv, quoteArgv(argv), options.guided === true);
   }
 
   /** Re-renders the prompt after the runtime finishes booting. */
@@ -1170,7 +1188,7 @@ export class Terminal {
    * while `this.active` was still null, leaving the pane stuck on a run that
    * had already finished.
    */
-  private startRun(argv: string[], echo: string): void {
+  private startRun(argv: string[], echo: string, guided = false): void {
     this.append("cmd", echo);
 
     const ready = this.host.isReady();
@@ -1180,6 +1198,8 @@ export class Terminal {
       startedAt: Date.now(),
       outLines: 0,
       partialLine: false,
+      tail: "",
+      guided,
     };
     this.active = record;
     this.state = ready ? "running" : "queued";
@@ -1228,6 +1248,8 @@ export class Terminal {
     // the output, not a guess about intent, so it is used only to sharpen what
     // the hint says -- never to decide where the next line goes.
     record.partialLine = !chunk.endsWith("\n");
+    const newline = chunk.lastIndexOf("\n");
+    record.tail = newline === -1 ? record.tail + chunk : chunk.slice(newline + 1);
     this.render();
   }
 
@@ -1568,6 +1590,31 @@ export class Terminal {
     }
   }
 
+  /** The question a guided run is asking now, as last reported. */
+  private asked: string | null = null;
+
+  /**
+   * Reports a guided run's question when it starts or stops asking, and on
+   * the start, lights the prompt row and moves focus into it -- unless focus
+   * is in some other field, where it would take the visitor's typing away.
+   */
+  private markAsking(question: string | null): void {
+    if (question === this.asked) return;
+    const starting = this.asked === null;
+    this.asked = question;
+    this.root.toggleAttribute("data-asking", question !== null);
+    if (question !== null && starting) {
+      const here = document.activeElement;
+      const typingElsewhere =
+        here instanceof HTMLElement && !this.root.contains(here)
+        && (here instanceof HTMLTextAreaElement || here instanceof HTMLInputElement
+          || here instanceof HTMLSelectElement || here.isContentEditable);
+      if (!typingElsewhere) this.field.focus();
+      this.announce(`The command asks: ${question} Type the answer at the prompt and press Enter.`);
+    }
+    this.onAsk?.(question);
+  }
+
   private announce(message: string): void {
     this.live.textContent = message;
   }
@@ -1577,6 +1624,8 @@ export class Terminal {
     // flight the pane has something more specific to say.
     const waiting = this.state === "running" && this.active !== null && this.active.partialLine;
     this.root.dataset.state = this.state;
+    const question = waiting && this.active?.guided ? this.active.tail.trim() : null;
+    this.markAsking(question);
 
     this.stateEl.textContent =
       this.state === "running"
@@ -1607,6 +1656,9 @@ export class Terminal {
     if (this.state === "recovering") {
       this.noteEl.textContent = "input disabled until recovery completes";
       this.hintEl.textContent = "the transcript is kept verbatim; nothing is replayed automatically";
+    } else if (question !== null) {
+      this.noteEl.textContent = "waiting for your answer · type it here and press Enter · Ctrl+C cancels";
+      this.hintEl.textContent = "answers go to the command over stdin · no auto-approve is injected";
     } else if (waiting) {
       // Short on purpose: the command's own prompt is on screen directly
       // above, so this says what the row is for, not what to answer.

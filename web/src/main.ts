@@ -34,7 +34,7 @@
  */
 
 import { Editor } from "./editor.ts";
-import { Guide, type GuideHost } from "./guide.ts";
+import { Guide, type GuideHost, type StatusPill } from "./guide.ts";
 import { Loader } from "./loader.ts";
 import { Tour } from "./tour.ts";
 import {
@@ -53,13 +53,19 @@ import { Rail } from "./panes/rail.ts";
 import {
   RunLog,
   SCENARIOS,
+  applyPatch,
   type RunRecord,
   type Scenario,
   type StateProbe,
 } from "./scenario.ts";
+import { diffLines, splitLines } from "./linediff.ts";
 import type { FileEntry } from "./protocol.ts";
 import { Session, SessionError, type RunHandle } from "./session.ts";
 import { installSplitters } from "./splitters.ts";
+import { installDock } from "./dock.ts";
+import { installSiteMenu } from "./sitemenu.ts";
+import { installLinks } from "./links.ts";
+import { anchorPopover } from "./popover.ts";
 import {
   Store,
   canRun,
@@ -231,8 +237,24 @@ function planOrigin(): PlanOrigin {
  */
 const CONFIRM_PROMPT = "Type 'YES' to confirm:";
 
+/**
+ * What `schema apply` prints once it has applied, in the native binary's own
+ * words (test/integration/ground-truth/11_apply_v2_stdin_yes.txt). The exit
+ * code cannot say it: a declined confirmation prints "Schema apply canceled."
+ * and exits 0 as well.
+ */
+const APPLIED_LINE = "Schema apply completed successfully.";
+
 /** stdout of the run in flight, kept so the plan pane can read a dry run. */
 let runOutput = "";
+
+/**
+ * schema.sql as the last command read it: the editor's text once flushSave
+ * has written it, taken as the run starts. A successful apply makes it the
+ * editor's baseline, the way a commit does, so the change marks measure what
+ * has not been applied yet rather than everything since the seed.
+ */
+let schemaAtRun: string | null = null;
 
 function terminalHost(): TerminalHost {
   return {
@@ -249,6 +271,7 @@ function terminalHost(): TerminalHost {
       let handle: RunHandle | null = null;
       const start = (): void => {
         runOutput = "";
+        schemaAtRun = editor.text("schema");
         showingQuery = false;
         catalogBefore = catalog;
         // The id is taken from the handle rather than closed over as a mutable
@@ -371,14 +394,30 @@ const probe: StateProbe = {
 function guideHost(): GuideHost {
   return {
     probe,
-    run: (argv) => terminal.run(["ptah", ...argv]),
+    run: (argv) => terminal.run(["ptah", ...argv], { guided: true }),
+    focusPrompt: () => {
+      store.paneSelected("console");
+      terminal.focus();
+    },
     offerSql: (sql) => {
       editor.setText("sql", sql, { baseline: null });
+      editor.offerRun(true);
       editor.activate("sql");
       store.paneSelected("editor");
       editor.focus();
     },
     focusFile: (path) => void openFile(path),
+    patchState: (patch) => applyPatch(editor.text("schema"), patch).state,
+    applyPatch: (patch) => {
+      const result = applyPatch(editor.text("schema"), patch);
+      if (result.state !== "applies") return;
+      const before = editor.text("schema");
+      void openFile("schema.sql");
+      editor.edit("schema", result.text);
+      // Bring the first line it changed on screen; the marks show the rest.
+      const first = diffLines(splitLines(before), splitLines(result.text)).findIndex((op) => op.op !== "same");
+      if (first !== -1) editor.reveal(first);
+    },
     loadScenario: (scenario) => loadScenario(scenario),
     busy: () => !canRun(store.state),
   };
@@ -414,7 +453,52 @@ const editor = new Editor(need<HTMLElement>("#pg-editor"), {
     scheduleSave();
   },
   onSubmit: (sql) => void runSql(sql),
+  onSave: () => void flushSave(),
+  onFullChange: (full) => fullScreen(full),
 });
+
+/** What fullScreen made inert, to give back when the editor leaves. */
+let inerted: HTMLElement[] = [];
+
+/**
+ * The page's side of the editor taking the whole screen (Editor.setFull),
+ * which it offers up to 900px (playground.css).
+ *
+ * Everything else on the page is inert meanwhile, so focus and a screen
+ * reader stay in the editor. The editor is sized to what the phone's
+ * keyboard leaves of the screen, the visual viewport, rather than to the
+ * screen: Save at the top and Run at the bottom stay in reach while typing.
+ */
+function fullScreen(full: boolean): void {
+  const host = need<HTMLElement>("#pg-editor");
+  const viewport = window.visualViewport;
+  for (const node of inerted) node.inert = false;
+  inerted = [];
+  viewport?.removeEventListener("resize", fitFullScreen);
+  viewport?.removeEventListener("scroll", fitFullScreen);
+  host.style.removeProperty("--pg-vv-top");
+  host.style.removeProperty("--pg-vv-h");
+  if (!full) return;
+
+  for (let node = host; node !== document.body && node.parentElement !== null; node = node.parentElement) {
+    for (const sibling of node.parentElement.children) {
+      if (sibling === node || !(sibling instanceof HTMLElement) || sibling.inert) continue;
+      sibling.inert = true;
+      inerted.push(sibling);
+    }
+  }
+  fitFullScreen();
+  viewport?.addEventListener("resize", fitFullScreen);
+  viewport?.addEventListener("scroll", fitFullScreen);
+}
+
+function fitFullScreen(): void {
+  const viewport = window.visualViewport;
+  if (viewport === null) return;
+  const host = need<HTMLElement>("#pg-editor");
+  host.style.setProperty("--pg-vv-top", `${Math.round(viewport.offsetTop)}px`);
+  host.style.setProperty("--pg-vv-h", `${Math.round(viewport.height)}px`);
+}
 
 const panes = new ResultPanes(need<HTMLElement>("#pg-db"), {
   onTabChange: () => paintPanes(),
@@ -425,6 +509,11 @@ const terminal = new Terminal(need<HTMLElement>("#pg-terminal"), {
   host: terminalHost(),
   cwd: WORKSPACE,
   onExit: (argv, code) => void afterRun(argv, code),
+  // Only a run the guide started asks through the strip; see Terminal.run.
+  onAsk: (question) => {
+    if (question !== null) store.paneSelected("console");
+    guide.asking(question);
+  },
 });
 
 const guide = new Guide(guideHost(), SCENARIOS);
@@ -449,6 +538,58 @@ swap("#pg-bar", guide.bar);
 swap("#pg-state", guide.state);
 swap("#pg-steps", guide.steps);
 swap("#pg-next", guide.next);
+
+/*
+ * On a phone the site header has room beside the brand, and the toolbar's
+ * first row held only the page's title and its short status. They move into
+ * the header there, and back when the window widens, so the panes get that
+ * row's height. The elements move rather than being drawn twice: the page
+ * keeps one h1 and the status one element.
+ */
+{
+  const phone = window.matchMedia("(max-width: 900px)");
+  const pageTitle = need<HTMLElement>(".pg-toolbar-title");
+  const shortStatus = need<HTMLElement>("#pg-mini");
+  const brand = document.querySelector<HTMLElement>(".site-header .brand");
+  const place = (): void => {
+    if (brand === null) return;
+    if (phone.matches) brand.after(pageTitle, shortStatus);
+    else document.getElementById("pg-bar")?.before(pageTitle, shortStatus);
+  };
+  place();
+  phone.addEventListener("change", place);
+  // The whole-screen editor is offered only here; wider, the pane is back.
+  phone.addEventListener("change", () => {
+    if (!phone.matches) editor.setFull(false);
+  });
+
+  // Up to the same width the workspace actions are a menu behind the "⋯" at
+  // the end of the scenario's line (see index.html). The row is the menu:
+  // the buttons keep their handlers, and the popover attribute is what folds
+  // them away.
+  const actions = need<HTMLElement>("#pg-actions");
+  const more = need<HTMLElement>("#pg-more");
+  anchorPopover(actions, more);
+  const fold = (): void => {
+    if (phone.matches) {
+      actions.popover = "auto";
+      return;
+    }
+    if (actions.matches(":popover-open")) actions.hidePopover();
+    actions.removeAttribute("popover");
+  };
+  fold();
+  phone.addEventListener("change", fold);
+  // Opening puts focus on the first action, as the site menu does. An action
+  // closes the menu; the ? beside Import opens its note inside it instead.
+  actions.addEventListener("toggle", (event) => {
+    if (event.newState === "open") actions.querySelector<HTMLButtonElement>(".btn")?.focus();
+  });
+  actions.addEventListener("click", (event) => {
+    const action = event.target instanceof Element ? event.target.closest(".btn") : null;
+    if (action !== null && actions.matches(":popover-open")) actions.hidePopover();
+  });
+}
 
 /* ---------- Boot ---------- */
 
@@ -580,6 +721,10 @@ async function seedScenario(scenario: Scenario): Promise<void> {
     "No plan yet. Run schema apply with --dry-run to see the exact SQL before anything runs.",
   );
 
+  // A query the last scenario's guide put in the SQL pane is not this one's,
+  // and nothing in a fresh workspace has been done yet -- Reset comes here too.
+  editor.offerRun(false);
+  guide.forgetParts();
   const schema = scenario.files["schema.sql"] ?? "";
   const revision = store.state.workspace.revision;
   editor.setText("schema", schema, { baseline: schema, syncedAt: revision });
@@ -778,6 +923,8 @@ async function paintData(): Promise<void> {
 }
 
 async function selectTable(name: string): Promise<void> {
+  // Chosen from the phone's Workspace tab: the rows are what was asked for.
+  if (panes.active() === "workspace") panes.show("data");
   showingQuery = false;
   selectedTable = name;
   rail?.selectTable(name);
@@ -871,7 +1018,7 @@ async function writeSchema(): Promise<void> {
   try {
     const revision = await session.writeFile("schema.sql", value);
     store.workspaceChanged({ revision });
-    editor.markSynced("schema", revision, value);
+    editor.markSynced("schema", revision);
     editor.setFooter("schema", "SQL · desired state", `revision r${revision}`);
     await refresh();
     await guide.refresh();
@@ -893,6 +1040,17 @@ async function afterRun(argv: string[], code: number): Promise<void> {
   const real = argv[0] === "ptah" ? argv.slice(1) : argv;
   const now = Date.now();
   runLog.record(real, code, now, now);
+  // Before the refresh below moves the route on: the part this finished
+  // belongs to the step that was on screen when it ran.
+  guide.ran(real);
+
+  // Applied: what the apply read is in the database now, so it is what the
+  // editor's marks measure against. A declined or failed apply changed
+  // nothing, and the marks stay.
+  const applied =
+    real[0] === "schema" && real[1] === "apply" && !real.includes("--dry-run")
+    && code === 0 && runOutput.includes(APPLIED_LINE);
+  if (applied && schemaAtRun !== null) editor.setBaseline("schema", schemaAtRun);
   announce(`Command finished with exit code ${code}.`);
 
   const isPlan =
@@ -921,6 +1079,11 @@ async function afterRun(argv: string[], code: number): Promise<void> {
 /** Runs the SQL tab's buffer against the database the CLI is pointed at. */
 async function runSql(sql: string): Promise<void> {
   if (!canRun(store.state) || sql.trim() === "") return;
+  // What the statement returns is shown outside the editor, so the editor
+  // gives the screen back first.
+  editor.setFull(false);
+  editor.offerRun(false);
+  guide.sqlRan(sql);
   terminal.note(`[SQL pane] ${sql.replace(/\s+/g, " ").trim()}`);
   const started = performance.now();
   try {
@@ -1051,6 +1214,21 @@ async function resetWorkspace(): Promise<void> {
 
 const bootStrip = need<HTMLElement>("#pg-boot-strip");
 const buildVersion = need<HTMLElement>("[data-build-version]");
+const miniVersion = need<HTMLElement>("#pg-mini-version");
+const miniStatus = need<HTMLElement>("#pg-mini-status");
+
+/** The status bar's pill, and its short form in the phone's toolbar. */
+function showStatus(pill: StatusPill): void {
+  guide.setStatus(pill);
+  miniStatus.dataset["tone"] = pill.tone;
+  miniStatus.textContent = `${pill.glyph} ${pill.text}`;
+}
+
+/** The build's version, in the status bar and in the phone's toolbar. */
+function showVersion(version: string): void {
+  text(buildVersion, version);
+  text(miniVersion, version);
+}
 const buildCommit = need<HTMLElement>("[data-build-commit]");
 const buildSqlite = need<HTMLElement>("[data-build-sqlite]");
 const buildNote = need<HTMLElement>("[data-build-note]");
@@ -1065,6 +1243,33 @@ installSplitters({
   db: () => document.getElementById("pg-db"),
   next: () => document.getElementById("pg-next"),
   terminal: () => document.getElementById("pg-terminal"),
+});
+// The Workspace tab exists where the rail is not beside the panes. Widened
+// past that with it chosen, the column would show nothing, so it goes back
+// to Data.
+const beside = window.matchMedia("(min-width: 901px)");
+beside.addEventListener("change", () => {
+  if (beside.matches && panes.active() === "workspace") panes.show("data");
+});
+
+// Where the terminal sits in that layout: between the side panes, or across.
+installDock(grid, need<HTMLElement>("#pg-dock"));
+// And the site's links, which that layout keeps behind the Ptah mark.
+installSiteMenu(need<HTMLElement>("#pg-sitemenu-btn"), need<HTMLElement>("#pg-sitemenu"));
+// After the menu, so its copies of the header's links are marked too.
+installLinks();
+anchorPopover(need<HTMLElement>("#pg-import-help-pop"), need<HTMLElement>("#pg-import-help"));
+
+// About: the introduction, what is running and what this profile cannot do.
+// A dialog, because the full-window layout leaves no page under it to scroll
+// to. Escape closes it natively; so does a click on the backdrop, which is the
+// dialog element itself rather than anything inside it.
+const aboutDialog = need<HTMLDialogElement>("#pg-about");
+need<HTMLButtonElement>("#pg-about-open").addEventListener("click", () => aboutDialog.showModal());
+need<HTMLButtonElement>("#pg-mini").addEventListener("click", () => aboutDialog.showModal());
+need<HTMLButtonElement>("#pg-about-close").addEventListener("click", () => aboutDialog.close());
+aboutDialog.addEventListener("click", (event) => {
+  if (event.target === aboutDialog) aboutDialog.close();
 });
 const importBtn = need<HTMLButtonElement>("#pg-import");
 const exportBtn = need<HTMLButtonElement>("#pg-export");
@@ -1113,7 +1318,7 @@ function recoverStaleCache(): boolean {
 function renderBuild(state: State): void {
   const { ready: info, sqlite, manifest, buildMismatch } = state.runtime;
   if (info !== null && sqlite !== null) {
-    text(buildVersion, info.version);
+    showVersion(info.version);
     text(buildCommit, info.commit.slice(0, 7));
     text(buildSqlite, `SQLite/WASM ${sqlite.version}`);
     text(
@@ -1133,7 +1338,7 @@ function renderBuild(state: State): void {
     return;
   }
   if (manifest !== null) {
-    text(buildVersion, manifest.ptahVersion);
+    showVersion(manifest.ptahVersion);
     text(buildCommit, manifest.ptahCommit.slice(0, 7));
     text(buildNote, "declared by the build manifest; not verified until it runs");
   }
@@ -1143,7 +1348,7 @@ let ticker = 0;
 
 function render(state: State): void {
   const status = statusOf(state);
-  guide.setStatus({ glyph: status.glyph, text: status.text, tone: status.tone });
+  showStatus({ glyph: status.glyph, text: status.text, tone: status.tone });
   guide.setStorage(
     state.workspace.dbBytes === null
       ? "memory-only"
@@ -1168,6 +1373,9 @@ function render(state: State): void {
   resetBtn.disabled = !idle;
 
   grid.dataset["pane"] = state.ui.pane;
+  // Another pane asked for (a command waiting on an answer, a query's rows):
+  // the editor gives up the screen, or that pane would open under it.
+  if (state.ui.pane !== "editor") editor.setFull(false);
   for (const node of all<HTMLButtonElement>(".pg-panetab")) {
     node.setAttribute("aria-selected", node.dataset["pane"] === state.ui.pane ? "true" : "false");
   }
@@ -1178,7 +1386,7 @@ function render(state: State): void {
   if (running && ticker === 0) {
     ticker = window.setInterval(() => {
       const now = statusOf(store.state);
-      guide.setStatus({ glyph: now.glyph, text: now.text, tone: now.tone });
+      showStatus({ glyph: now.glyph, text: now.text, tone: now.tone });
     }, 100);
   } else if (!running && ticker !== 0) {
     window.clearInterval(ticker);
@@ -1191,11 +1399,13 @@ function render(state: State): void {
 /**
  * The theme toggle and the mobile menu, exactly as site.js does them: the
  * preference is stored under the same key so a visitor who chose dark on
- * ptah.run arrives here in dark.
+ * ptah.run arrives here in dark. There are two toggles, the header's and the
+ * toolbar's for the layout that does not draw the header, and they are one
+ * control: both flip the same attribute and both report it.
  */
 function wireChrome(): void {
   const root = document.documentElement;
-  const themeBtn = document.querySelector<HTMLButtonElement>(".theme-btn");
+  const themeBtns = all<HTMLButtonElement>(".theme-btn");
   const colors = { light: "#fbfbfa", dark: "#161311" };
 
   const current = (): "light" | "dark" => {
@@ -1206,7 +1416,7 @@ function wireChrome(): void {
 
   const label = (): void => {
     const theme = current();
-    themeBtn?.setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
+    for (const button of themeBtns) button.setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
     for (const meta of all<HTMLMetaElement>('meta[name="theme-color"]')) {
       meta.removeAttribute("media");
       meta.setAttribute("content", colors[theme]);
@@ -1214,16 +1424,18 @@ function wireChrome(): void {
   };
 
   label();
-  themeBtn?.addEventListener("click", () => {
-    const next = current() === "dark" ? "light" : "dark";
-    root.setAttribute("data-theme", next);
-    try {
-      localStorage.setItem("ptah-theme", next);
-    } catch {
-      // Storage refused; the choice lasts for this page only.
-    }
-    label();
-  });
+  for (const button of themeBtns) {
+    button.addEventListener("click", () => {
+      const next = current() === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      try {
+        localStorage.setItem("ptah-theme", next);
+      } catch {
+        // Storage refused; the choice lasts for this page only.
+      }
+      label();
+    });
+  }
 
   const header = document.querySelector(".site-header");
   const menuBtn = document.querySelector<HTMLButtonElement>(".menu-btn");

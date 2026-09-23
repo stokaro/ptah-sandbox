@@ -129,6 +129,14 @@ async function main() {
     return r.result?.value;
   };
 
+  // Nothing from the browser's cache. The profile persists between runs and
+  // `make serve` sends no caching headers, so Chrome would reuse a bundle it
+  // fetched minutes ago by heuristic and the probe would pass or fail code
+  // that is no longer on disk -- which it did, reporting an old check by its
+  // old name after the file had changed.
+  await send("Network.enable");
+  await send("Network.setCacheDisabled", { cacheDisabled: true });
+
   await send("Page.navigate", { url: `${base}ui-probe.html` });
 
   let result = null;

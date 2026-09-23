@@ -34,20 +34,26 @@
 
 /* ---------- Shared chrome ---------- */
 
+/* The strip over each pane is the application's frame, on --code; the
+   selected tab takes the document's own surface, so it reads as the front of
+   what is under it (see "Colour discipline" at the top of playground.css). */
 .pgc-tabbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  background: var(--code);
   gap: 16px;
   border-bottom: 1px solid var(--line);
   padding-right: 16px;
   min-width: 0;
 }
 
+/* The tabs keep their width; the note beside them gives way first. A tab
+   list allowed to shrink ran its last tab over the note in a narrow pane. */
 .pgc-tablist {
   display: flex;
+  flex: none;
   gap: 2px;
-  min-width: 0;
 }
 
 .pgc-tab {
@@ -69,8 +75,16 @@
   color: var(--fg2);
 }
 
+/* The phone's first tab over the results: the file and table list. The
+   list is the page's rail, shown under this strip when the view is chosen;
+   where the rail is beside the panes, the tab is not drawn. */
+.pgc-tab-workspace {
+  display: none;
+}
+
 .pgc-tab.is-active {
   color: var(--fg);
+  background: var(--bg);
   border-bottom-color: var(--acc);
 }
 
@@ -79,16 +93,88 @@
   outline-offset: -2px;
 }
 
+/* The note beside the tabs -- the database's address, the buffer's state --
+   shows whole or not at all: cut to its first letter it says nothing. It
+   takes the room the tabs leave, and where its text does not fit it wraps,
+   as one piece, onto a second line the note clips. The ::before is the first
+   line: as tall as the bar, and whatever width the text leaves it. */
 .pgc-tabmeta {
+  flex: 1 1 0;
+  align-self: stretch;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
   font: 12px var(--mono);
   color: var(--mute);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.pgc-tabmeta::before {
+  content: "";
+  flex: 1 0 0;
+  height: 100%;
 }
 
 .pgc-tabmeta.is-amber {
   color: var(--amber);
+}
+
+/* The editor's whole-screen button, and schema.sql's Save while it is on.
+   The page decides where the button is drawn (playground.css); it has no
+   place beside a pane that is already large. */
+.pgc-ed-full {
+  display: none;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  margin-right: -10px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  color: var(--fg2);
+  cursor: pointer;
+}
+
+.pgc-ed-full:hover {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.pgc-ed-full:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: -2px;
+}
+
+.pgc-ed-full-close,
+.pgc-ed-full[aria-pressed="true"] .pgc-ed-full-open {
+  display: none;
+}
+
+.pgc-ed-full[aria-pressed="true"] .pgc-ed-full-close {
+  display: block;
+}
+
+.pgc-ed-save {
+  flex: none;
+  padding: 6px 14px;
+  font-size: 13.5px;
+}
+
+.pgc-ed-save[hidden] {
+  display: none;
+}
+
+/* Saved is a state, not an action: it reads as the note beside it. */
+.pgc-ed-save[aria-disabled="true"],
+.pgc-ed-save[aria-disabled="true"]:hover {
+  border-color: transparent;
+  background: none;
+  color: var(--mute);
+  cursor: default;
 }
 
 /* A trailing note: `PK`, `28 KiB`, `not in schema.sql`. */
@@ -190,10 +276,146 @@
   padding: 0 16px;
 }
 
-/* Lines that differ from the file on disk. The full-bleed background is why
-   the horizontal padding lives on the line rather than on the overlay. */
-.pgc-ed-line.is-changed {
-  background: var(--accbg);
+/* Lines that differ from the file as it was seeded, the way an editor marks
+   them against the last commit: added lines green, changed lines blue, each
+   with a bar in the gutter and a tint across the line, and a triangle in the
+   gutter where lines were removed. The tints are the two colours mixed into
+   the page, so they stay quiet under the text in either theme. The
+   full-bleed background is why the horizontal padding lives on the line
+   rather than on the overlay. */
+.pgc-ed-line.is-added {
+  background: color-mix(in oklab, var(--pg-done) 13%, var(--bg));
+}
+
+.pgc-ed-line.is-modified {
+  background: color-mix(in oklab, var(--acc) 11%, var(--bg));
+}
+
+.pgc-ed-num {
+  display: block;
+  position: relative;
+}
+
+/* The bar sits in the gutter's right padding, against its border. */
+.pgc-ed-num.is-added::after,
+.pgc-ed-num.is-modified::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: -10px;
+  bottom: 0;
+  width: 3px;
+  background: var(--pg-done);
+}
+
+.pgc-ed-num.is-modified::after {
+  background: var(--acc);
+}
+
+.pgc-ed-num.has-removed-above::before,
+.pgc-ed-num.has-removed-below::before {
+  content: "";
+  position: absolute;
+  top: -4px;
+  right: -11px;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 6px solid var(--mute);
+}
+
+.pgc-ed-num.has-removed-below::before {
+  top: auto;
+  bottom: -4px;
+}
+
+/* A marked line number opens what the seeded file had there. It stays a line
+   number to look at: only the pointer, the hover colour and a focus ring say
+   it is a button. */
+button.pgc-ed-num {
+  appearance: none;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: right;
+  cursor: pointer;
+}
+
+button.pgc-ed-num:hover {
+  color: var(--fg);
+}
+
+button.pgc-ed-num:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: -1px;
+}
+
+/* The peek: the run against the seeded file, and its revert. The popover
+   helper places it under the mark; the top layer puts it over the code. */
+.pgc-ed-peek {
+  inset: auto;
+  margin: 0;
+  width: max-content;
+  min-width: 280px;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/* Only the display waits for the popover to open. A closing popover is
+   still drawn while it fades, and a gap set only while open went first. */
+.pgc-ed-peek {
+  gap: 10px;
+  justify-items: start;
+}
+
+.pgc-ed-peek:popover-open {
+  display: grid;
+}
+
+.pgc-ed-peek-title {
+  margin: 0;
+  font: 600 13px var(--sans);
+}
+
+.pgc-ed-peek .btn {
+  padding: 5px 12px;
+  font-size: 13px;
+}
+
+/* Lines removed and added, as a unified diff prints them: removed lines
+   grey with a minus, added lines on the tint the editor gives new lines. */
+.pgc-diff {
+  justify-self: stretch;
+  margin: 0;
+  padding: 8px 0;
+  border: 1px solid var(--line2);
+  border-radius: 2px;
+  background: var(--bg);
+  font: 12px/1.6 var(--mono);
+  color: var(--fg2);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.pgc-diff > span {
+  display: block;
+  padding: 0 10px;
+}
+
+.pgc-diff-add {
+  background: color-mix(in oklab, var(--pg-done) 13%, var(--bg));
+  color: var(--fg);
+}
+
+.pgc-diff-del,
+.pgc-diff-gap {
+  color: var(--mute);
 }
 
 .pgc-t-keyword {
@@ -245,6 +467,42 @@
   align-items: center;
   padding: 10px 16px;
   border-top: 1px solid var(--line);
+}
+
+/* The guide put a query here for the visitor to run (Editor.offerRun). The
+   row takes the guide's colour, Run takes the accent and pulses once, so the
+   button the step is waiting on is the one the eye lands on. The guide never
+   presses it. */
+.pgc-ed-run.is-offered {
+  background: var(--pg-guide);
+}
+
+.pgc-ed-run .btn.is-offered {
+  border-color: var(--acc);
+  background: var(--acc);
+  color: var(--bg);
+}
+
+.pgc-ed-run .btn.is-offered:hover {
+  border-color: var(--fg);
+  background: var(--fg);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pgc-ed-run .btn.is-offered {
+    animation: pgc-offer 1.6s ease-out 1;
+  }
+}
+
+@keyframes pgc-offer {
+  from {
+    outline: 2px solid var(--acc);
+    outline-offset: 0;
+  }
+  to {
+    outline: 2px solid transparent;
+    outline-offset: 10px;
+  }
 }
 
 .pgc-ed-notice {
@@ -310,7 +568,7 @@
    between the rail and the editor. */
 .pgc-rail-row.is-current {
   color: var(--fg);
-  background: var(--code);
+  background: var(--accbg);
   box-shadow: inset -2px 0 0 var(--acc);
 }
 

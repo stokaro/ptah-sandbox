@@ -2,7 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  No zoom. The page is laid out to the screen like an application -- panes
+  as tall as the screen, a tab bar at its foot -- and a zoom carries that
+  layout off the screen. It also stops iOS zooming in when the editor, set
+  smaller than 16px, takes focus.
+-->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Playground — Ptah</title>
 <meta name="description" content="Run the real Ptah CLI against a real SQLite database in your browser tab. Edit a schema, read the plan it produces, apply it, and see the rows survive. Nothing is installed and nothing leaves the browser.">
 <link rel="canonical" href="https://play.ptah.run/">
@@ -41,13 +47,10 @@
 
 <header class="site-header">
   <div class="wrap">
-    <a class="brand" href="https://ptah.run/"><img src="assets/logo.svg" alt="" width="22" height="22">Ptah</a>
+    <a class="brand" href="https://ptah.run/"><img src="assets/logo.svg" alt="" width="22" height="22"><span class="brand-name">Ptah</span></a>
     <nav class="nav" aria-label="Site">
       <ul class="nav-links" id="nav-links">
         <li><a href="https://docs.ptah.run/">Docs</a></li>
-        <li><a href="https://ptah.run/install/">Install</a></li>
-        <li><a href="https://ptah.run/in-practice/">In practice</a></li>
-        <li><a href="/" aria-current="page">Playground</a></li>
         <li><a href="https://operator.ptah.run/">Operator</a></li>
         <li><a href="https://blog.ptah.run/">Blog</a></li>
         <li><a href="https://github.com/stokaro/ptah">GitHub&nbsp;↗</a></li>
@@ -66,26 +69,72 @@
 <main class="pg-main" id="main">
 
 <!--
-  The playground is an application, so above 1100px it takes the window under
-  the site header the way an editor would: a toolbar, the guided steps, the
-  three panes, the terminal across the bottom and a status bar. The lines
-  between the panes are dragged to resize them (src/splitters.ts). Below 1100px
-  the same elements flow as a page. What the page says about itself follows
-  the application, below it.
+  The playground is an application, so above 900px it takes the whole window
+  the way an editor would: a toolbar that also carries the site menu, the
+  guided steps and the step's strip, the three panes with the terminal, and a
+  status bar. The lines between the panes are dragged to resize them
+  (src/splitters.ts). Up to 900px the same elements flow as a page under the
+  site header. What the page says about itself is in About.
 -->
 <div class="wrap pg-app" id="pg-app">
   <div class="pg-toolbar">
+    <!--
+      The site's navigation, folded into one control. Above 900px the site
+      header is not drawn, so the application starts at the top of the window,
+      and this opens the same links. src/sitemenu.ts copies them out of the
+      header, so the list is written once.
+    -->
+    <button class="pg-sitemenu-btn" type="button" id="pg-sitemenu-btn" popovertarget="pg-sitemenu" aria-expanded="false" title="Ptah: the other pages of the site">
+      <img src="assets/logo.svg" alt="" width="20" height="20">
+      <svg class="pg-sitemenu-chevron" viewBox="0 0 8 8" width="8" height="8" aria-hidden="true"><path d="M1 2.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>
+      <span class="sr-only">Site menu</span>
+    </button>
+    <nav class="pg-sitemenu" id="pg-sitemenu" aria-label="Site" popover></nav>
     <h1 class="pg-toolbar-title">Playground</h1>
+    <!-- On a phone the status bar is not drawn: this is its short form, the
+         build and the runtime's state, and it opens About for the rest. -->
+    <button class="pg-mini" type="button" id="pg-mini" aria-haspopup="dialog" title="About this playground">
+      <span class="v" id="pg-mini-version">—</span>
+      <span class="pg-mini-status" id="pg-mini-status" data-tone="quiet">starting</span>
+    </button>
     <div class="pg-bar" id="pg-bar">
-      <label class="pg-scenario" for="pg-scenario">
+      <!-- src/guide.ts replaces this with the button that opens the scenario picker. -->
+      <span class="pg-scenario">
         <span class="pg-scenario-label">Scenario</span>
-        <select id="pg-scenario" class="pg-select">
-          <option value="a" selected>A · Change a schema, keep the data</option>
-          <option value="b">B · Detect drift</option>
-        </select>
-      </label>
+        <button class="pg-scenario-btn" type="button" disabled>Change a schema, keep the data</button>
+      </span>
     </div>
-    <div class="actions pg-actions">
+    <!--
+      Up to 900px the workspace actions below are a menu, and this opens it
+      from the end of the scenario's line: they are needed now and then, and
+      as a row they held a line of the screen all the time. src/main.ts makes
+      the row the menu's popover at that width and gives it back above it.
+    -->
+    <button class="pg-more-btn" type="button" id="pg-more" popovertarget="pg-actions" aria-expanded="false" title="Tour, Import, Export, Reset">
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="3" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="13" cy="8" r="1.4" fill="currentColor"/></svg>
+      <span class="sr-only">Workspace actions</span>
+    </button>
+    <!--
+      Where the terminal sits in the full-window layout: between the file list
+      and the database pane, or across the whole width under them. Only that
+      layout has the choice, so the pair is hidden up to 900px; the choice is
+      kept in this browser by src/splitters.ts.
+    -->
+    <div class="pg-dock" id="pg-dock" role="group" aria-label="Terminal width">
+      <button class="pg-dock-btn" type="button" data-dock="between" aria-pressed="true" title="Terminal between the side panes">
+        <svg viewBox="0 0 18 14" width="18" height="14" aria-hidden="true"><rect x="0.5" y="0.5" width="17" height="13" rx="1" fill="none" stroke="currentColor"/><path d="M5.5 1v12M12.5 1v12" stroke="currentColor"/><rect x="6" y="8" width="6" height="5" fill="currentColor"/></svg>
+        <span class="sr-only">Terminal between the side panes</span>
+      </button>
+      <button class="pg-dock-btn" type="button" data-dock="full" aria-pressed="false" title="Terminal across the full width">
+        <svg viewBox="0 0 18 14" width="18" height="14" aria-hidden="true"><rect x="0.5" y="0.5" width="17" height="13" rx="1" fill="none" stroke="currentColor"/><path d="M5.5 1v7M12.5 1v7" stroke="currentColor"/><rect x="1" y="8" width="16" height="5" fill="currentColor"/></svg>
+        <span class="sr-only">Terminal across the full width</span>
+      </button>
+    </div>
+    <!-- The header's theme toggle, for the layout that does not draw the header. -->
+    <button class="icon-btn theme-btn pg-toolbar-theme" type="button" aria-label="Dark theme" aria-pressed="false">
+      <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 0 0 12.5z" fill="currentColor"/></svg>
+    </button>
+    <div class="actions pg-actions" id="pg-actions">
       <!--
         Opens the tour the first visit shows by itself. It is here because a
         one-shot overlay nobody can summon back is a worse deal than none:
@@ -94,6 +143,16 @@
       -->
       <button class="btn btn-ghost" type="button" id="pg-tour-open">Tour</button>
       <button class="btn btn-ghost" type="button" id="pg-import">Import…</button>
+      <!-- What Import does, one click away: it is the one action whose name
+           does not say what it takes. src/main.ts places the popover. -->
+      <button class="pg-help-btn" type="button" id="pg-import-help" popovertarget="pg-import-help-pop"
+              aria-expanded="false" aria-label="What Import does" title="What Import does">?</button>
+      <div class="pg-help-pop" id="pg-import-help-pop" popover>
+        <p class="pg-help-title">Import a SQLite database</p>
+        <p>Import opens a .db file from your computer as this tab's app.db, in place of the one the scenario seeded. Your file is read, never written.</p>
+        <p>Then ask Ptah about it: <code>schema drift</code> compares it with schema.sql, and <code>schema apply --dry-run</code> shows what changing it would take.</p>
+        <p>A database in WAL mode is refused; checkpoint it first. Reset brings back the seeded database.</p>
+      </div>
       <button class="btn btn-ghost" type="button" id="pg-export">Export…</button>
       <button class="btn btn-ghost" type="button" id="pg-reset">Reset</button>
     </div>
@@ -141,9 +200,20 @@
   </nav>
   <!-- Only shown below 720px, where three panes cannot share a screen. -->
   <div class="pg-panetabs" role="tablist" aria-label="Panes">
-    <button class="pg-panetab" type="button" role="tab" data-pane="editor" aria-selected="false" aria-controls="pg-editor">Editor</button>
-    <button class="pg-panetab" type="button" role="tab" data-pane="console" aria-selected="true" aria-controls="pg-terminal">Console</button>
-    <button class="pg-panetab" type="button" role="tab" data-pane="database" aria-selected="false" aria-controls="pg-db">Database</button>
+    <!-- The icons make the bar read as the page's navigation on a phone, where
+         it is fixed to the bottom of the screen; the words carry the names. -->
+    <button class="pg-panetab" type="button" role="tab" data-pane="editor" aria-selected="false" aria-controls="pg-editor">
+      <svg class="pg-panetab-icon" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><path d="M5 2.5h7l3.5 3.5v11.5h-10.5z M12 2.5v3.5h3.5 M7.5 10h5 M7.5 13h5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+      <span>Editor</span>
+    </button>
+    <button class="pg-panetab" type="button" role="tab" data-pane="console" aria-selected="true" aria-controls="pg-terminal">
+      <svg class="pg-panetab-icon" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M6 8l2.5 2-2.5 2 M10.5 12.5h3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Console</span>
+    </button>
+    <button class="pg-panetab" type="button" role="tab" data-pane="database" aria-selected="false" aria-controls="pg-db">
+      <svg class="pg-panetab-icon" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><ellipse cx="10" cy="5" rx="6" ry="2.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M4 5v10c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5V5 M4 10c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
+      <span>Database</span>
+    </button>
   </div>
   <div class="pg-grid">
 
@@ -316,29 +386,39 @@
       </span>
       <span class="pg-storage" id="pg-storage">memory-only</span>
     </div>
+    <button class="pg-about-open" type="button" id="pg-about-open" aria-haspopup="dialog">About</button>
   </div>
 </div>
 
-<div class="wrap pg-below">
-  <section class="pg-about" aria-label="About the playground">
-    <p class="lede">Edit a schema, run real Ptah commands against a SQLite database in this tab, inspect the result. Nothing is installed and nothing leaves the browser.</p>
-  </section>
-  <!--
-    What is actually running, and what this profile cannot do. The first line is
-    read off the module in this tab rather than written down here, so it cannot
-    be optimistic.
-  -->
-  <section class="pg-honesty" aria-label="What is running">
-    <dl class="flags">
-      <dt>Running</dt>
-      <dd id="pg-running">Nothing yet. The build, its commit and the SQLite version appear here once the module in this tab has answered for itself.</dd>
-      <dt>Cannot</dt>
-      <dd>Reach a network database, run Docker, or touch your disk. There is no PostgreSQL, MySQL or MariaDB here — the driver in this build is SQLite, in memory.</dd>
-      <dt>Keeps</dt>
-      <dd>Nothing. The workspace and the database live in this tab: reloading discards them. Export takes a copy with you.</dd>
-    </dl>
-  </section>
-</div>
+<!--
+  About this playground: what it is, what is actually running and what this
+  profile cannot do. It is a dialog rather than a section under the
+  application, because above 900px the application is the whole window and
+  the page does not scroll. The Running line is read off the module in this
+  tab rather than written down here, so it cannot be optimistic.
+-->
+<dialog class="pg-about" id="pg-about" aria-labelledby="pg-about-title">
+  <div class="pg-about-head">
+    <h2 class="pg-about-title" id="pg-about-title">About this playground</h2>
+    <button class="btn btn-ghost pg-about-close" type="button" id="pg-about-close">Close</button>
+  </div>
+  <p class="lede">Edit a schema, run real Ptah commands against a SQLite database in this tab, inspect the result. Nothing is installed and nothing leaves the browser.</p>
+  <dl class="flags">
+    <dt>Running</dt>
+    <dd id="pg-running">Nothing yet. The build, its commit and the SQLite version appear here once the module in this tab has answered for itself.</dd>
+    <dt>Cannot</dt>
+    <dd>Reach a network database, run Docker, or touch your disk. There is no PostgreSQL, MySQL or MariaDB here — the driver in this build is SQLite, in memory.</dd>
+    <dt>Keeps</dt>
+    <dd>Nothing. The workspace and the database live in this tab: reloading discards them. Export takes a copy with you.</dd>
+  </dl>
+  <!-- The site footer is not drawn beside the full-window layout, so its links are here too. -->
+  <ul class="pg-about-links">
+    <li><a href="https://github.com/stokaro/ptah">GitHub</a></li>
+    <li><a href="https://github.com/stokaro/ptah/issues">Issues</a></li>
+    <li><a href="https://github.com/stokaro/ptah/releases">Changelog</a></li>
+    <li><a href="https://github.com/stokaro/ptah/blob/master/LICENSE">License</a></li>
+  </ul>
+</dialog>
 
 </main>
 

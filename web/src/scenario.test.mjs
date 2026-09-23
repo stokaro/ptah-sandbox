@@ -28,6 +28,7 @@ import { test } from "node:test";
 import {
   RunLog,
   SCENARIOS,
+  applyPatch,
   evaluateCheck,
   evaluateRoute,
   parseScenario,
@@ -105,6 +106,7 @@ function runsFrom(...pairs) {
 
 const DB_URL = "sqlite://app.db";
 const DRIFT = ["schema", "drift", "--schema-file", "schema.sql", "--db-url", DB_URL];
+const DRIFT_JSON = [...DRIFT, "--format", "json"];
 const DRY_RUN = ["schema", "apply", "--schema-file", "schema.sql", "--db-url", DB_URL, "--dry-run"];
 const APPLY = ["schema", "apply", "--schema-file", "schema.sql", "--db-url", DB_URL];
 
@@ -228,16 +230,31 @@ test("undoing a change on purpose is part of the route, not a fall from it", asy
   assert.equal(byId(mid, "change").status, "done");
 
   const reverted = await evaluateRoute(B, fakeProbe(seededWorld({
-    runs: runsFrom([DRIFT, 0], [DRIFT, 1], [DRIFT, 0]),
+    runs: runsFrom([DRIFT, 0], [DRIFT, 1], [DRIFT_JSON, 1], [DRIFT, 0]),
   })));
   assert.equal(byId(reverted, "change").status, "done", "reverting the column un-did an earlier step");
   assert.equal(reverted.offScript, null, "finishing the route was reported as going off it");
   assert.equal(reverted.currentIndex, -1, "the route did not finish");
 });
 
+/**
+ * Scenario B with its report step as it was when it could not be checked:
+ * reading, and nothing to observe. No shipped step is like that now, and the
+ * engine's rule for one still has to hold for the next scenario that has it.
+ */
+function withUnverifiableReport() {
+  const raw = JSON.parse(readFileSync(new URL("../scenarios/b.json", import.meta.url), "utf8"));
+  const report = raw.steps.find((s) => s.id === "report");
+  delete report.action;
+  report.check = null;
+  report.unverified = "Whether the report was read is not something this page can observe.";
+  return parseScenario(raw);
+}
+
 test("a step with nothing to check is stepped over once something after it is done", async () => {
+  const unverifiable = withUnverifiableReport();
   const world = seededWorld({ runs: runsFrom([DRIFT, 0], [DRIFT, 1]) });
-  const mid = await evaluateRoute(B, fakeProbe({
+  const mid = await evaluateRoute(unverifiable, fakeProbe({
     ...world,
     tables: { users: ["id", "name", "email", "nickname"], tasks: ["id", "user_id", "title", "done"] },
   }));
@@ -245,7 +262,7 @@ test("a step with nothing to check is stepped over once something after it is do
   assert.equal(mid.steps[mid.currentIndex].step.id, "report");
   assert.equal(byId(mid, "report").status, "unverifiable");
 
-  const finished = await evaluateRoute(B, fakeProbe(seededWorld({
+  const finished = await evaluateRoute(unverifiable, fakeProbe(seededWorld({
     runs: runsFrom([DRIFT, 0], [DRIFT, 1], [DRIFT, 0]),
   })));
   assert.equal(byId(finished, "report").status, "unverifiable", "an unverifiable step was ticked");
@@ -399,9 +416,9 @@ test("a string literal that looks like DDL is not read as DDL", () => {
 // the shipped scenarios
 // ---------------------------------------------------------------------------
 
-test("three scenarios ship, each with five steps", () => {
-  assert.deepEqual(SCENARIOS.map((s) => s.id), ["a", "b", "c"]);
-  for (const s of SCENARIOS) assert.equal(s.steps.length, 5, `${s.id} has ${s.steps.length} steps`);
+test("three guided scenarios ship with five steps each, then free exploration with none", () => {
+  assert.deepEqual(SCENARIOS.map((s) => s.id), ["a", "b", "c", "free"]);
+  assert.deepEqual(SCENARIOS.map((s) => s.steps.length), [5, 5, 5, 0]);
 });
 
 test("every step either has a check or says why it has none", () => {
@@ -456,7 +473,9 @@ test("parseScenario refuses a scenario that smuggles in an approval flag", () =>
 
 test("parseScenario refuses a step with no check and no explanation", () => {
   const evil = JSON.parse(readFileSync(new URL("../scenarios/b.json", import.meta.url), "utf8"));
-  delete evil.steps.find((s) => s.id === "report").unverified;
+  const report = evil.steps.find((s) => s.id === "report");
+  report.check = null;
+  delete report.unverified;
   assert.throws(() => parseScenario(evil), /must say why in `unverified`/);
 });
 
@@ -531,4 +550,97 @@ test("the commands the route suggests are commands this build registers", () => 
       }
     }
   }
+});
+
+// ---------------------------------------------------------------------------
+// the edit step's patch
+// ---------------------------------------------------------------------------
+
+const EDIT = A.steps.find((s) => s.id === "edit");
+const PATCH = EDIT.action.patch;
+
+test("scenario A's patch turns the seeded schema into the one its step checks for", async () => {
+  const result = applyPatch(SCHEMA_V1, PATCH);
+  assert.equal(result.state, "applies");
+  assert.equal(result.text, SCHEMA_V2);
+  const after = await evaluateCheck(EDIT.check, fakeProbe(seededWorld({ files: { "schema.sql": result.text } })));
+  assert.equal(after.ok, true, after.detail);
+  // The control: the seeded file does not pass, so the patch is what made it.
+  const before = await evaluateCheck(EDIT.check, fakeProbe(seededWorld()));
+  assert.equal(before.ok, false, before.detail);
+});
+
+test("a patch already in the file reports applied rather than applying twice", () => {
+  assert.deepEqual(applyPatch(SCHEMA_V2, PATCH), { state: "applied" });
+});
+
+test("a column typed in by hand leaves only the index to apply", () => {
+  const byHand = SCHEMA_V1.replace(PATCH[0].find, PATCH[0].replace);
+  assert.deepEqual(applyPatch(byHand, PATCH), { state: "applies", text: SCHEMA_V2 });
+});
+
+test("a file changed where the patch goes is a conflict, and nothing is applied", () => {
+  const moved = SCHEMA_V1.replace("  email TEXT NOT NULL\n", "  email TEXT\n");
+  assert.deepEqual(applyPatch(moved, PATCH), { state: "conflict", hunk: 0, reason: "missing" });
+});
+
+test("an anchor that appears twice is a conflict, not a guess", () => {
+  const twice = `${SCHEMA_V1}\nCREATE TABLE people (\n  email TEXT NOT NULL\n);\n`;
+  assert.deepEqual(applyPatch(twice, PATCH), { state: "conflict", hunk: 0, reason: "ambiguous" });
+});
+
+test("a patch that cannot be told apart from its result is refused at load", () => {
+  const raw = JSON.parse(readFileSync(new URL("../scenarios/a.json", import.meta.url), "utf8"));
+  const edit = raw.steps.find((s) => s.id === "edit");
+  edit.action.patch = [{ find: "  email TEXT NOT NULL\n);", replace: "email TEXT NOT NULL" }];
+  assert.throws(() => parseScenario(raw), /replacement is inside the text it replaces/);
+});
+
+test("a patch is refused for any file but schema.sql", () => {
+  const raw = JSON.parse(readFileSync(new URL("../scenarios/a.json", import.meta.url), "utf8"));
+  raw.steps.find((s) => s.id === "edit").action.file = "README.md";
+  assert.throws(() => parseScenario(raw), /can only be applied to schema.sql/);
+});
+
+// ---------------------------------------------------------------------------
+// free exploration: a workspace and no route
+// ---------------------------------------------------------------------------
+
+const FREE = scenarioById("free");
+
+test("free exploration has no steps, and starts from scenario A's schema and data", () => {
+  assert.equal(FREE.steps.length, 0);
+  assert.equal(FREE.baseline, undefined);
+  assert.equal(FREE.files["schema.sql"], A.files["schema.sql"]);
+  assert.equal(FREE.seed, A.seed);
+  assert.deepEqual(FREE.database, A.database);
+});
+
+test("a scenario with no steps points at no step and warns of nothing, whatever the workspace holds", async () => {
+  const emptied = await evaluateRoute(FREE, fakeProbe({ tables: {}, files: {} }));
+  assert.equal(emptied.currentIndex, -1);
+  assert.equal(emptied.offScript, null);
+  assert.deepEqual(emptied.steps, []);
+});
+
+test("a scenario with steps must say what state they assume", () => {
+  const raw = JSON.parse(readFileSync(new URL("../scenarios/a.json", import.meta.url), "utf8"));
+  delete raw.baseline;
+  assert.throws(() => parseScenario(raw), /must say what state they assume/);
+});
+
+// ---------------------------------------------------------------------------
+// scenario B's report step: the same drift, read as data
+// ---------------------------------------------------------------------------
+
+test("B's report step is done by reading the drift as JSON while the drift is there", async () => {
+  const drifted = { tables: { users: ["id", "name", "email", "nickname"], tasks: ["id", "user_id", "title", "done"] } };
+  const read = await evaluateRoute(B, fakeProbe(seededWorld({ ...drifted, runs: runsFrom([DRIFT, 0], [DRIFT, 1], [DRIFT_JSON, 1]) })));
+  assert.equal(byId(read, "report").status, "done");
+  // The control: without the JSON run it is the step the route is waiting on.
+  const unread = await evaluateRoute(B, fakeProbe(seededWorld({ ...drifted, runs: runsFrom([DRIFT, 0], [DRIFT, 1]) })));
+  assert.equal(unread.steps[unread.currentIndex].step.id, "report");
+  // A JSON run with nothing to report exits 0 and is not reading the drift.
+  const clean = await evaluateRoute(B, fakeProbe(seededWorld({ ...drifted, runs: runsFrom([DRIFT, 0], [DRIFT, 1], [DRIFT_JSON, 0]) })));
+  assert.notEqual(byId(clean, "report").status, "done");
 });

@@ -13,7 +13,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { EDGE, GAP, choosePlacement } from "./tour.ts";
+import { EDGE, GAP, POINTER_INSET, choosePlacement, pointerAt } from "./tour.ts";
 
 /** A card the size the real one measures at its widest wrap. */
 const CARD = { top: 0, left: 0, width: 368, height: 160 };
@@ -113,4 +113,20 @@ test("a viewport smaller than the card still yields a placement inside it", () =
   const spot = choosePlacement({ top: 0, left: 0, width: 300, height: 140 }, CARD, view, ["below"]);
   assert.ok(spot.top >= EDGE - 0.5 && spot.left >= EDGE - 0.5);
   assert.ok(Number.isFinite(spot.top) && Number.isFinite(spot.left));
+});
+
+test("the pointer sits opposite the middle of the ring", () => {
+  const ring = { top: 800, left: 0, width: 390, height: 45 };
+  const card = { top: 630, left: 12, width: 366, height: 157 };
+  assert.equal(pointerAt(ring, card, "above"), 183);
+});
+
+test("a card pushed aside by the window still points at its ring, off its corners", () => {
+  const card = { top: 100, left: 12, width: 366, height: 157 };
+  // A ring at the far left of the screen: the pointer stops short of the corner.
+  assert.equal(pointerAt({ top: 40, left: 0, width: 20, height: 28 }, card, "below"), POINTER_INSET);
+  // A ring at the far right: the same at the other end.
+  assert.equal(pointerAt({ top: 40, left: 380, width: 10, height: 28 }, card, "below"), 366 - POINTER_INSET);
+  // Beside the card, the pointer is measured down its side.
+  assert.equal(pointerAt({ top: 150, left: 400, width: 100, height: 40 }, card, "left"), 70);
 });

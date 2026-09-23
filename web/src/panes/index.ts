@@ -23,14 +23,24 @@ export type { PaneStatus } from "./dom.ts";
 
 export type ResultTab = "data" | "structure" | "plan";
 
-const TAB_LABELS: Record<ResultTab, string> = {
+/**
+ * What the column shows: one of its panes, or the workspace -- the file and
+ * table list -- which on a phone is this strip's first tab. That tab has no
+ * body here: the list is the page's rail, and the page lays it out under
+ * the strip when the host's `data-view` says "workspace". It is hidden
+ * wherever the rail is on screen beside the panes.
+ */
+export type ResultView = ResultTab | "workspace";
+
+const TAB_LABELS: Record<ResultView, string> = {
+  workspace: "Workspace",
   data: "Data",
   structure: "Structure",
   plan: "Plan",
 };
 
 export interface ResultPanesHandlers {
-  onTabChange?(tab: ResultTab): void;
+  onTabChange?(view: ResultView): void;
 }
 
 export class ResultPanes {
@@ -38,14 +48,16 @@ export class ResultPanes {
   readonly structure: StructurePane;
   readonly plan: PlanPane;
 
-  private tabs: Record<ResultTab, HTMLButtonElement>;
+  private tabs: Record<ResultView, HTMLButtonElement>;
   private bodies: Record<ResultTab, HTMLElement>;
   private source: HTMLElement;
   private handlers: ResultPanesHandlers;
-  private current: ResultTab = "data";
+  private host: HTMLElement;
+  private current: ResultView = "data";
 
   constructor(host: HTMLElement, handlers: ResultPanesHandlers = {}) {
     host.classList.add("pgc-panes");
+    this.host = host;
     this.handlers = handlers;
     host.innerHTML = `
       <div class="pgc-tabbar">
@@ -64,6 +76,7 @@ export class ResultPanes {
       plan: host.querySelector<HTMLElement>('[data-result-pane="plan"]')!,
     };
     this.tabs = {
+      workspace: this.makeTab(list, "workspace"),
       data: this.makeTab(list, "data"),
       structure: this.makeTab(list, "structure"),
       plan: this.makeTab(list, "plan"),
@@ -76,8 +89,8 @@ export class ResultPanes {
     this.show("data");
   }
 
-  private makeTab(list: HTMLElement, tab: ResultTab): HTMLButtonElement {
-    const button = el("button", "pgc-tab", TAB_LABELS[tab]);
+  private makeTab(list: HTMLElement, tab: ResultView): HTMLButtonElement {
+    const button = el("button", tab === "workspace" ? "pgc-tab pgc-tab-workspace" : "pgc-tab", TAB_LABELS[tab]);
     button.type = "button";
     button.setAttribute("role", "tab");
     button.addEventListener("click", () => this.show(tab));
@@ -90,21 +103,22 @@ export class ResultPanes {
     this.source.textContent = text;
   }
 
-  active(): ResultTab {
+  active(): ResultView {
     return this.current;
   }
 
-  show(tab: ResultTab): void {
-    const changed = this.current !== tab;
-    this.current = tab;
-    for (const key of ["data", "structure", "plan"] as const) {
-      const on = key === tab;
+  show(view: ResultView): void {
+    const changed = this.current !== view;
+    this.current = view;
+    this.host.dataset["view"] = view;
+    for (const key of ["workspace", "data", "structure", "plan"] as const) {
+      const on = key === view;
       this.tabs[key].classList.toggle("is-active", on);
       this.tabs[key].setAttribute("aria-selected", on ? "true" : "false");
       // `hidden` rather than display:none so the pane is out of the
       // accessibility tree as well as off the screen.
-      this.bodies[key].hidden = !on;
+      if (key !== "workspace") this.bodies[key].hidden = !on;
     }
-    if (changed) this.handlers.onTabChange?.(tab);
+    if (changed) this.handlers.onTabChange?.(view);
   }
 }

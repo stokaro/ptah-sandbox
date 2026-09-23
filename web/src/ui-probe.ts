@@ -239,7 +239,21 @@ async function run(): Promise<void> {
 
   // The tour is opened now, while the boot strip is still above the panes, and
   // its ring is read again once the strip has gone; see the check after ready.
+  // Its first card is the scenario picker, in the toolbar above the strip,
+  // which the strip leaving does not move; the second is the editor, which
+  // it does, so that is the card left open.
   need<HTMLElement>("#pg-tour-open").click();
+  const firstTourCard = textOf(".pg-tour-title");
+  // The card points at what it describes: its pointer is on the edge facing
+  // the ring and across from the ring's middle.
+  await sleep(50);
+  const tourPointer = q<HTMLElement>(".pg-tour-pointer")?.getBoundingClientRect();
+  const tourRing = q<HTMLElement>(".pg-tour-ring")?.getBoundingClientRect();
+  const tourSide = q<HTMLElement>(".pg-tour-card")?.dataset["side"] ?? "";
+  const pointerAim = tourPointer && tourRing
+    ? Math.round(Math.abs(tourPointer.left + tourPointer.width / 2 - (tourRing.left + tourRing.width / 2)))
+    : -1;
+  q<HTMLButtonElement>(".pg-tour-next")?.click();
 
   /* ---- 2. The loader counts real bytes and reaches ready ---- */
 
@@ -279,6 +293,11 @@ async function run(): Promise<void> {
     Math.abs(ring.height - editor.height),
   );
   check(
+    "the tour starts at the scenario picker, pointing at it",
+    firstTourCard === "Pick a scenario" && tourSide === "below" && pointerAim >= 0 && pointerAim <= 2,
+    `first card "${firstTourCard}", placed ${tourSide || "nowhere"}, pointer ${pointerAim}px off the ring's middle`,
+  );
+  check(
     "a tour opened during boot keeps its ring on the editor after the strip goes",
     bootVisible && off < 2,
     `opened with the strip visible: ${bootVisible}; ring top ${Math.round(ring.top)}, ` +
@@ -288,12 +307,107 @@ async function run(): Promise<void> {
 
   const buildLine = textOf("#pg-running");
   check(
-    "the footer states the build that is actually running",
+    "About states the build that is actually running",
     /commands registered/.test(buildLine) && /SQLite/.test(buildLine),
     buildLine.replace(/\s+/g, " ").trim().slice(0, 180),
   );
 
   await until("the rail to show the catalog it read", () => textOf("#pg-rail").includes("3 rows"));
+
+  /* ---- The full-window layout ---- */
+
+  // The frame is 1440 by 1100, so this is the layout above 1100px: the header
+  // and the application fill the window and there is no page under them.
+  const page = doc.documentElement;
+  check(
+    "the full-window layout fits the window, with no page to scroll",
+    page.scrollHeight <= page.clientHeight,
+    `document ${page.scrollHeight}px tall in a ${page.clientHeight}px window`,
+  );
+
+  // What used to sit under the application is in About now, so About has to
+  // open, show it, and close again.
+  const about = need<HTMLDialogElement>("#pg-about");
+  need<HTMLButtonElement>("#pg-about-open").click();
+  const aboutShown = about.open && need<HTMLElement>("#pg-running").getBoundingClientRect().height > 0;
+  need<HTMLButtonElement>("#pg-about-close").click();
+  check(
+    "About opens from the status bar, shows what is running, and closes",
+    aboutShown && !about.open,
+    `open with the Running line on screen: ${aboutShown}; open after Close: ${about.open}`,
+  );
+
+  // Between the side panes is the default; the toolbar pair moves the
+  // terminal across the width and back. Read straight after each click,
+  // because a layout read is synchronous. It ends on the default.
+  const dockTo = (dock: string): { term: DOMRect; editor: DOMRect; grid: DOMRect } => {
+    need<HTMLButtonElement>(`#pg-dock [data-dock="${dock}"]`).click();
+    return {
+      term: need<HTMLElement>("#pg-terminal").getBoundingClientRect(),
+      editor: need<HTMLElement>("#pg-editor").getBoundingClientRect(),
+      grid: need<HTMLElement>(".pg-grid").getBoundingClientRect(),
+    };
+  };
+  const across = dockTo("full");
+  const between = dockTo("between");
+  check(
+    "the terminal sits under the editor between the side panes, or across the width when asked",
+    Math.abs(between.term.left - between.editor.left) < 2
+      && Math.abs(between.term.width - between.editor.width) < 2
+      && Math.abs(across.term.width - across.grid.width) < 2,
+    `between: terminal at ${Math.round(between.term.left)}, ${Math.round(between.term.width)}px wide, ` +
+      `editor at ${Math.round(between.editor.left)}, ${Math.round(between.editor.width)}px; ` +
+      `across: terminal ${Math.round(across.term.width)}px of a ${Math.round(across.grid.width)}px grid`,
+  );
+
+  // The site header folds into the toolbar above 1100px: the Ptah mark opens
+  // the header's links, the header's own list being the source, and the
+  // toolbar's theme toggle does what the header's did.
+  const siteHeader = need<HTMLElement>(".site-header");
+  const headerLinks = siteHeader.querySelectorAll(".nav-links a").length;
+  need<HTMLButtonElement>("#pg-sitemenu-btn").click();
+  const menu = need<HTMLElement>("#pg-sitemenu");
+  const menuOpen = menu.matches(":popover-open");
+  const menuNames = [...menu.querySelectorAll<HTMLAnchorElement>("a")].map((link) =>
+    (link.textContent ?? "").replace(/\s+/g, " ").trim(),
+  );
+  menu.hidePopover();
+  // Home and the header's links.
+  check(
+    "the site header folds into the toolbar, and the Ptah mark opens the site's main pages",
+    siteHeader.getBoundingClientRect().height === 0 && menuOpen && headerLinks === 4
+      && menuNames.join(" | ") === "Ptah | Docs | Operator | Blog | GitHub ↗",
+    `header ${Math.round(siteHeader.getBoundingClientRect().height)}px tall, ${headerLinks} links; ` +
+      `menu open ${menuOpen}: ${menuNames.join(" | ")}`,
+  );
+
+  const theme = (): string => doc.documentElement.getAttribute("data-theme") ?? "";
+  const themeBefore = theme();
+  need<HTMLButtonElement>(".pg-toolbar-theme").click();
+  const themeFlipped = theme();
+  need<HTMLButtonElement>(".pg-toolbar-theme").click();
+  check(
+    "the toolbar's theme toggle switches the theme and back",
+    themeFlipped !== themeBefore && theme() === themeBefore,
+    `${themeBefore} → ${themeFlipped} → ${theme()}`,
+  );
+
+  // The step's strip is one line; what the step means is behind the hint.
+  const strip = need<HTMLElement>("#pg-next");
+  const stripHeight = Math.round(strip.getBoundingClientRect().height);
+  const hint = need<HTMLButtonElement>("#pg-next .pg-next-info");
+  hint.click();
+  const popover = need<HTMLElement>("#pg-next-detail");
+  const popoverOpen = popover.matches(":popover-open");
+  const gap = Math.round(popover.getBoundingClientRect().top - hint.getBoundingClientRect().bottom);
+  const popoverText = (popover.textContent ?? "").trim();
+  popover.hidePopover();
+  check(
+    "the step's strip is one line, and its hint opens what the step means under it",
+    stripHeight <= 64 && popoverOpen && gap >= 0 && gap < 20 && popoverText.length > 40,
+    `strip ${stripHeight}px tall; popover open ${popoverOpen}, ${gap}px under the hint, ` +
+      `says "${popoverText.slice(0, 80)}"`,
+  );
 
   /* ---- 3. Drift, through the terminal ---- */
 
@@ -316,6 +430,74 @@ async function run(): Promise<void> {
   );
 
   /* ---- 4. Edit, then the dry run fills the Plan pane ---- */
+
+  // Step 02 carries a patch. Apply patch puts it in the editor like typing
+  // would, the editor marks the lines against the seeded file, and the step
+  // ticks because schema.sql now declares the column and the index -- not
+  // because a button was pressed.
+  const applyButton = [...doc.querySelectorAll<HTMLButtonElement>("#pg-next .pg-next-run .btn")].find(
+    (b) => b.textContent === "Apply patch",
+  );
+  applyButton?.click();
+  await until("step 02 to tick after the patch", () => stepStates()[1] === "done", 20_000).catch(
+    () => undefined,
+  );
+  const markedAs = (kind: string): number[] =>
+    [...doc.querySelectorAll<HTMLElement>("#pg-editor .pgc-ed-num")]
+      .map((row, index) => (row.classList.contains(`is-${kind}`) ? index + 1 : 0))
+      .filter((line) => line > 0);
+  const added = markedAs("added");
+  const modified = markedAs("modified");
+  const tintedLines = doc.querySelectorAll("#pg-editor .pgc-ed-line.is-added, #pg-editor .pgc-ed-line.is-modified").length;
+  check(
+    "Apply patch writes step 02's edit into schema.sql, marked line by line against the seeded file",
+    applyButton !== undefined && stepStates()[1] === "done"
+      && added.join(",") === "10,20,21" && modified.join(",") === "9" && tintedLines === 4,
+    `button ${applyButton === undefined ? "missing" : "pressed"}; steps: ${stepStates().join(", ")}; ` +
+      `added lines ${added.join(",") || "none"}, changed ${modified.join(",") || "none"}, ${tintedLines} tinted`,
+  );
+
+  // A mark opens what the seeded file had there, and reverts that run alone:
+  // the users body goes back, the index stays, and step 02 is not done any
+  // more because schema.sql no longer declares the column.
+  doc.querySelector<HTMLButtonElement>('#pg-editor .pgc-ed-num[data-change="0"]')?.click();
+  const peek = q<HTMLElement>("#pg-editor .pgc-ed-peek");
+  const peekOpen = peek?.matches(":popover-open") ?? false;
+  const peekText = peek?.textContent ?? "";
+  [...(peek?.querySelectorAll<HTMLButtonElement>("button") ?? [])]
+    .find((b) => b.textContent === "Revert this change")
+    ?.click();
+  await until("step 02 to be undone by the revert", () => stepStates()[1] !== "done", 20_000).catch(
+    () => undefined,
+  );
+  const reverted = q<HTMLTextAreaElement>("#pg-editor .pgc-ed-input")?.value ?? "";
+  check(
+    "a gutter mark shows the seeded lines, and Revert puts back that run and no other",
+    peekOpen && peekText.includes("-   email TEXT NOT NULL") && peekText.includes("+   active INTEGER")
+      && !reverted.includes("active INTEGER") && reverted.includes("CREATE INDEX idx_users_email")
+      && markedAs("added").join(",") === "19,20" && markedAs("modified").length === 0
+      && stepStates()[1] !== "done",
+    `peek open ${peekOpen}, says "${peekText.replace(/\s+/g, " ").slice(0, 90)}"; after revert added ` +
+      `${markedAs("added").join(",") || "none"}, changed ${markedAs("modified").join(",") || "none"}; ` +
+      `steps: ${stepStates().join(", ")}`,
+  );
+
+  // The revert went through the browser's own editing, so the textarea's
+  // undo -- what Cmd+Z and Ctrl+Z run -- takes it back, marks and all. A
+  // revert that assigned the value would have left nothing to undo.
+  const editorInput = need<HTMLTextAreaElement>("#pg-editor .pgc-ed-input");
+  editorInput.focus();
+  const undoRan = doc.execCommand("undo");
+  await until("the undo to reach the marks", () => markedAs("added").includes(10) || null, 5_000).catch(
+    () => undefined,
+  );
+  check(
+    "undo in the editor takes a revert back",
+    undoRan && editorInput.value.includes("  active INTEGER NOT NULL DEFAULT 1")
+      && markedAs("modified").join(",") === "9" && markedAs("added").join(",") === "10,20,21",
+    `undo ran ${undoRan}; active is ${editorInput.value.includes("active INTEGER") ? "back" : "still gone"}; ` +
+      `added ${markedAs("added").join(",") || "none"}, changed ${markedAs("modified").join(",") || "none"}`,
+  );
 
   typeSchema(EDITED_SCHEMA);
   await until(
@@ -371,24 +553,66 @@ async function run(): Promise<void> {
   /* ---- 6. Apply, confirmed with YES through the terminal ---- */
 
   const usersBefore = textOf("#pg-rail");
+  const asks = (): number => (terminalText().match(/Type 'YES' to confirm/g) ?? []).length;
+  const stripAsking = (): boolean => q<HTMLElement>("#pg-next")?.dataset["state"] === "asking";
+  const rowAsking = (): boolean => q<HTMLElement>(".pg-term")?.hasAttribute("data-asking") ?? false;
+
+  // Typed at the prompt, the apply asks there and nowhere else: whoever typed
+  // it is looking at the row already. Declined, so the database is unchanged.
+  const asksBeforeTyped = asks();
   typeCommand(APPLY);
-  await until(
-    "the apply to ask for confirmation",
-    () => terminalText().includes("Type 'YES' to confirm"),
-    30_000,
-  );
+  await until("the typed apply to ask for confirmation", () => asks() > asksBeforeTyped || null, 30_000);
   check(
     "apply stops and asks, rather than being auto-approved",
     !terminalIdle() && textOf(".pg-status").includes("waiting for confirmation"),
     `status pill: "${textOf(".pg-status").trim()}"`,
   );
+  check(
+    "a typed command that asks leaves the strip and the prompt row alone",
+    !stripAsking() && !rowAsking(),
+    `strip asking ${stripAsking()}, prompt row lit ${rowAsking()}`,
+  );
+  typeCommand("no");
+  await until("the declined apply to end", () => terminalIdle(), 30_000);
+  const marksAfterDeclined = markedAs("added").length + markedAs("modified").length;
+
+  // Started from the strip, the same question is raised where the button
+  // was: the strip quotes it, the prompt row is lit, and focus is waiting
+  // in the prompt for the answer.
+  const applyRow = [...doc.querySelectorAll<HTMLElement>("#pg-next .pg-next-row")].find(
+    (row) => (row.textContent ?? "").includes(APPLY) && !(row.textContent ?? "").includes("--dry-run"),
+  );
+  const asksBeforeGuided = asks();
+  applyRow?.querySelector<HTMLButtonElement>("button.btn")?.click();
+  await until("the guided apply to ask for confirmation", () => asks() > asksBeforeGuided || null, 30_000).catch(
+    () => undefined,
+  );
+  await until("the strip to take the question", () => stripAsking() || null, 5_000).catch(() => undefined);
+  const promptFocused = doc.activeElement?.classList.contains("term-field-input") ?? false;
+  check(
+    "a command started from the strip that asks is raised in the strip and at the prompt",
+    applyRow !== undefined && stripAsking() && rowAsking() && promptFocused
+      && textOf("#pg-next").includes("Type 'YES' to confirm"),
+    `strip row ${applyRow === undefined ? "missing" : "found"}; strip asking ${stripAsking()}, ` +
+      `prompt row lit ${rowAsking()}, prompt focused ${promptFocused}; ` +
+      `strip says "${textOf("#pg-next").replace(/\s+/g, " ").trim().slice(0, 100)}"`,
+  );
 
   typeCommand("YES");
   await until("the apply to finish", () => terminalIdle(), 60_000);
   const applyExit = textOf(".term-exit").trim();
+  // Applied, schema.sql is what the database has, so the editor stops marking
+  // it -- the way a commit clears a gutter. Declined, it had kept its marks.
+  await sleep(100);
+  const marksAfterApplied = markedAs("added").length + markedAs("modified").length;
   check(
-    "YES typed at the prompt completes the apply",
-    applyExit.includes("exit 0"),
+    "a successful apply clears the editor's change marks, and a declined one kept them",
+    marksAfterDeclined > 0 && marksAfterApplied === 0,
+    `marked lines after the declined apply ${marksAfterDeclined}, after the applied one ${marksAfterApplied}`,
+  );
+  check(
+    "YES typed at the prompt completes the apply, and the strip and the row stop asking",
+    applyExit.includes("exit 0") && !stripAsking() && !rowAsking(),
     `bar said "${applyExit}"; before the apply the rail read ` +
       `${usersBefore.replace(/\s+/g, " ").trim().slice(0, 60)}`,
   );
@@ -429,6 +653,53 @@ async function run(): Promise<void> {
     "the new column is marked new, off two catalog reads",
     header.some((h) => h.includes("active") && h.includes("new")),
     `header cells: ${header.join(" | ")}`,
+  );
+
+  /* ---- 7b. Step 05 puts its query in the SQL pane and points at Run ---- */
+
+  // The strip never presses Run; after "Put it in the SQL pane" it says Run
+  // is the next press, Run is lit, and focus is in the query so Cmd+Enter
+  // works. The first run from the pane puts all of that out.
+  const partsNow = (): string =>
+    [...doc.querySelectorAll<HTMLElement>("#pg-next .pg-next-part")]
+      .map((part) => `${part.hasAttribute("aria-current") ? ">" : ""}${(part.textContent ?? "").replace("done", "")}`)
+      .join(" ");
+  const shownCommand = (): string => textOf("#pg-next .pg-next-row .cmd pre").replace(/\s+/g, " ").trim();
+  const partsBeforeRun = partsNow();
+  const commandBeforeRun = shownCommand();
+  const putButton = [...doc.querySelectorAll<HTMLButtonElement>("#pg-next .pg-next-run .btn")].find(
+    (b) => b.textContent === "Put it in the SQL pane →",
+  );
+  putButton?.click();
+  await sleep(100);
+  const stripOffered = q<HTMLElement>("#pg-next")?.dataset["state"] === "offered";
+  const runLit = q(".pgc-ed-run .btn")?.classList.contains("is-offered") ?? false;
+  const queryFocused = doc.activeElement?.classList.contains("pgc-ed-input") ?? false;
+  const offeredQuery = q<HTMLTextAreaElement>(".pgc-ed-input")?.value ?? "";
+  need<HTMLButtonElement>(".pgc-ed-run button").click();
+  await until("the offered query to answer", () => paneHas("data", "query result") || null, 30_000).catch(
+    () => undefined,
+  );
+  const stillOffered =
+    q<HTMLElement>("#pg-next")?.dataset["state"] === "offered"
+    || (q(".pgc-ed-run .btn")?.classList.contains("is-offered") ?? false);
+  // Its two parts are done in order: the query first and nothing else on
+  // show, then, once the query has run, drift in its place and part 1 ticked.
+  const partsAfterRun = partsNow();
+  const commandAfterRun = shownCommand();
+  check(
+    "step 05 shows its query alone, and running it moves the strip on to drift",
+    partsBeforeRun === ">1 2" && commandBeforeRun.startsWith("SELECT")
+      && partsAfterRun === "1✓ >2" && commandAfterRun.startsWith("$ ptah schema drift"),
+    `parts before "${partsBeforeRun}", showing "${commandBeforeRun.slice(0, 40)}"; ` +
+      `after "${partsAfterRun}", showing "${commandAfterRun.slice(0, 40)}"`,
+  );
+  check(
+    "step 05's query goes into the SQL pane with Run lit, and running it puts the pointer out",
+    putButton !== undefined && stripOffered && runLit && queryFocused
+      && offeredQuery.includes("SELECT id, name, active FROM users") && !stillOffered,
+    `put button ${putButton === undefined ? "missing" : "pressed"}; strip offered ${stripOffered}, ` +
+      `Run lit ${runLit}, query focused ${queryFocused}; after Run still pointing ${stillOffered}`,
   );
 
   /* ---- 8. Drift is clean again ---- */
@@ -485,9 +756,32 @@ async function run(): Promise<void> {
 
   /* ---- 11. Another scenario seeds and scores ---- */
 
-  const selector = need<HTMLSelectElement>("#pg-bar select");
-  selector.value = "c";
-  selector.dispatchEvent(new win.Event("change", { bubbles: true }));
+  /** Chooses a scenario the way a visitor does: the picker, then its row. */
+  const chooseScenario = (id: string): void => {
+    need<HTMLButtonElement>(".pg-scenario-btn").click();
+    [...doc.querySelectorAll<HTMLButtonElement>(".pg-picker-option")]
+      .find((row) => row.dataset["scenario"] === id)
+      ?.click();
+  };
+
+  // Scenarios are chosen in a dialog: one row per scenario, each its title,
+  // its step count and what it is about, the loaded one marked current.
+  need<HTMLButtonElement>(".pg-scenario-btn").click();
+  const picker = need<HTMLDialogElement>(".pg-picker");
+  const pickerRows = [...picker.querySelectorAll<HTMLButtonElement>(".pg-picker-option")];
+  const pickerRowsComplete = pickerRows.every(
+    (row) => (row.querySelector(".pg-picker-name")?.textContent ?? "") !== ""
+      && (row.querySelector(".pg-picker-desc")?.textContent ?? "") !== "",
+  );
+  const pickerCurrent = picker.querySelector<HTMLElement>('.pg-picker-option[aria-current="true"]')?.dataset["scenario"];
+  check(
+    "the scenario picker lists every scenario with its title and description, the loaded one current",
+    picker.open && pickerRows.length === 4 && pickerRowsComplete && pickerCurrent === "a",
+    `open ${picker.open}; ${pickerRows.length} rows: ` +
+      pickerRows.map((row) => row.querySelector(".pg-picker-name")?.textContent).join(" | ") +
+      `; current ${pickerCurrent ?? "none"}`,
+  );
+  pickerRows.find((row) => row.dataset["scenario"] === "c")?.click();
   await until(
     "scenario C to be seeded and scored",
     () => {
@@ -549,6 +843,31 @@ async function run(): Promise<void> {
     textOf('[data-result-pane="data"]').replace(/\s+/g, " ").trim().slice(0, 160),
   );
 
+  // Tab indents, because the editor is for code. The textarea tells a
+  // keyboard user that Escape then Tab leaves it, and that has to be true:
+  // nothing else takes focus out of a textarea that keeps Tab. A key that
+  // returns true from dispatchEvent was left to the browser.
+  const press = (key: string): boolean =>
+    queryInput.dispatchEvent(new win.KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+  const typed = queryInput.value;
+  queryInput.focus();
+  queryInput.setSelectionRange(typed.length, typed.length);
+  const indents = !press("Tab") && queryInput.value === `${typed}  `;
+  press("Escape");
+  press("Shift");
+  const leaves = press("Tab");
+  press("Escape");
+  press("ArrowLeft");
+  const indentsAgain = !press("Tab");
+  check(
+    "Tab indents in the editor, and Escape then Tab leaves it",
+    indents && leaves && indentsAgain,
+    `Tab indented ${indents}; after Escape (and Shift) Tab left to the browser ${leaves}; ` +
+      `after Escape and another key Tab indented ${indentsAgain}`,
+  );
+  queryInput.value = typed;
+  queryInput.dispatchEvent(new win.Event("input", { bubbles: true }));
+
   /* ---- 13. Two seedings asked for at once do not tear the page ---- */
 
   // A visitor who picks a scenario and then presses Reset asks twice. The two
@@ -556,12 +875,9 @@ async function run(): Promise<void> {
   // rejected, and a catalog read that started before the drop landed after it,
   // leaving the rail claiming an empty database over a freshly seeded one.
   const before = thrown.length;
-  selector.value = "a";
-  selector.dispatchEvent(new win.Event("change", { bubbles: true }));
-  selector.value = "c";
-  selector.dispatchEvent(new win.Event("change", { bubbles: true }));
-  selector.value = "a";
-  selector.dispatchEvent(new win.Event("change", { bubbles: true }));
+  chooseScenario("a");
+  chooseScenario("c");
+  chooseScenario("a");
   need<HTMLButtonElement>("#pg-reset").click();
   await until(
     "both seedings to settle",
@@ -645,45 +961,100 @@ async function run(): Promise<void> {
   // A grid `auto` track is sized from max-content, and max-content is measured
   // as if nothing wrapped. When a step carried a second command the actions
   // column was therefore measured as both rows side by side, took the whole
-  // width, and left the prose beside it at zero -- one word per line. Measured,
-  // because it is a layout bug no assertion about the DOM tree would catch.
+  // width, and left the prose beside it at zero -- one word per line. A step
+  // of more than one part now shows one part at a time with a switch before
+  // it, so the real shape is measured: the first step with parts, pinned.
   {
+    let found = false;
+    for (const stepButton of doc.querySelectorAll<HTMLButtonElement>(".pg-step")) {
+      stepButton.click();
+      found = q("#pg-next .pg-next-parts") !== null;
+      if (found) break;
+    }
     const strip = need<HTMLElement>("#pg-next");
     const run = strip.querySelector<HTMLElement>(".pg-next-run");
+    const row = strip.querySelector<HTMLElement>(".pg-next-row");
     const title = strip.querySelector<HTMLElement>(".pg-next-copy strong");
-    let copyWidth = 0;
-    let titleHeight = 0;
-    let rows = 0;
-    if (run && title) {
-      // Synthesise the second row exactly as the guide builds it, so the check
-      // does not depend on which step happens to be focused.
-      const row = doc.createElement("div");
-      row.className = "pg-next-also";
-      const box = doc.createElement("div");
-      box.className = "cmd";
-      const pre = doc.createElement("pre");
-      pre.textContent = "$ ptah schema drift --schema-file schema.sql --db-url sqlite://app.db";
-      box.appendChild(pre);
-      row.appendChild(box);
-      const button = doc.createElement("button");
-      button.className = "btn btn-ghost";
-      button.textContent = "Run";
-      row.appendChild(button);
-      run.appendChild(row);
-
-      rows = run.children.length;
-      copyWidth = Math.round(
-        (strip.querySelector<HTMLElement>(".pg-next-copy") as HTMLElement).getBoundingClientRect().width,
-      );
-      titleHeight = Math.round(title.getBoundingClientRect().height);
-      row.remove();
-    }
+    const copyWidth = Math.round(strip.querySelector<HTMLElement>(".pg-next-copy")?.getBoundingClientRect().width ?? 0);
+    const titleHeight = Math.round(title?.getBoundingClientRect().height ?? 0);
+    const rowHeight = Math.round(row?.getBoundingClientRect().height ?? 0);
     check(
-      "a step with two commands still leaves the prose a column to sit in",
-      rows === 2 && copyWidth > 240 && titleHeight < 60,
-      `rows ${rows}, prose column ${copyWidth}px, headline ${titleHeight}px tall`,
+      "a step of two parts shows one, with its switch, and still leaves the prose a column",
+      found && run?.children.length === 1 && rowHeight < 50 && copyWidth > 240 && titleHeight < 60,
+      `step with parts ${found ? "found" : "missing"}; ${run?.children.length ?? 0} row(s), ${rowHeight}px tall; ` +
+        `prose column ${copyWidth}px, headline ${titleHeight}px tall`,
     );
   }
+
+  /* ---- Links ---- */
+
+  // The workspace is in this tab's memory, so every link to another page
+  // opens a new tab. One that leaves the playground asks first -- to
+  // github.com, and to ptah.run's docs just the same -- and Stay keeps the
+  // page.
+  const pageLinks = [...doc.querySelectorAll<HTMLAnchorElement>("a[href]")].filter(
+    (link) => !(link.getAttribute("href") ?? "").startsWith("#") && !link.hasAttribute("download")
+      && link.getAttribute("aria-current") !== "page",
+  );
+  const sameTab = pageLinks.filter((link) => link.target !== "_blank" || !link.rel.includes("noopener"));
+  check(
+    "every link to another page opens a new tab",
+    pageLinks.length >= 10 && sameTab.length === 0,
+    `${pageLinks.length} links, ${sameTab.length} in this tab: ${sameTab.map((link) => link.href).join(" ")}`,
+  );
+  const leave = q<HTMLDialogElement>(".pg-leave");
+  const ask = (selector: string): { asked: boolean; text: string; stayed: boolean } => {
+    need<HTMLAnchorElement>(selector).click();
+    const asked = leave?.open ?? false;
+    const text = textOf(".pg-leave").replace(/\s+/g, " ");
+    [...(leave?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find((b) => b.textContent === "Stay here")?.click();
+    return { asked, text, stayed: !(leave?.open ?? true) };
+  };
+  const toGitHub = ask('.pg-about-links a[href="https://github.com/stokaro/ptah/issues"]');
+  const toDocs = ask('.site-header .nav-links a[href="https://docs.ptah.run/"]');
+  check(
+    "a link that leaves the playground asks first, ptah.run's docs too, and Stay keeps the page",
+    toGitHub.asked && toGitHub.stayed && toGitHub.text.startsWith("Leave Playground?")
+      && toGitHub.text.includes("https://github.com/stokaro/ptah/issues")
+      && toDocs.asked && toDocs.stayed && toDocs.text.includes("docs.ptah.run, outside Playground"),
+    `github: asked ${toGitHub.asked}, "${toGitHub.text.slice(0, 90)}"; `
+      + `docs: asked ${toDocs.asked}, "${toDocs.text.slice(0, 90)}"; stayed ${toGitHub.stayed && toDocs.stayed}`,
+  );
+
+  /* ---- What Import does ---- */
+
+  need<HTMLButtonElement>("#pg-import-help").click();
+  const importHelp = need<HTMLElement>("#pg-import-help-pop");
+  const helpOpen = importHelp.matches(":popover-open");
+  const helpText = (importHelp.textContent ?? "").replace(/\s+/g, " ");
+  importHelp.hidePopover();
+  check(
+    "the ? beside Import says what it opens and what happens to the file",
+    helpOpen && helpText.includes("SQLite") && helpText.includes("app.db") && helpText.includes("never written"),
+    `open ${helpOpen}: "${helpText.slice(0, 120)}"`,
+  );
+
+  /* ---- Free exploration ---- */
+
+  // No steps and no checks: there is no steps row, the strip says there is no
+  // route, and it is not a pixel shorter than on a step with a command.
+  chooseScenario("free");
+  await until(
+    "free exploration to load",
+    () => (textOf(".pg-scenario-btn") === "Free exploration" && textOf("#pg-next").includes("No route here")) || null,
+    60_000,
+  ).catch(() => undefined);
+  const freeStripHeight = Math.round(need<HTMLElement>("#pg-next").getBoundingClientRect().height);
+  const freeSteps = q<HTMLElement>("#pg-steps");
+  check(
+    "free exploration draws no steps row, and its strip says there is no route at the usual height",
+    textOf(".pg-scenario-btn") === "Free exploration" && textOf("#pg-next").includes("No route here")
+      && (freeSteps?.classList.contains("is-empty") ?? false) && stepStates().length === 0
+      && freeStripHeight === stripHeight && Math.round(freeSteps?.getBoundingClientRect().height ?? -1) === 0,
+    `button "${textOf(".pg-scenario-btn")}"; steps ${stepStates().length}, row ` +
+      `${Math.round(freeSteps?.getBoundingClientRect().height ?? 0)}px; strip ${freeStripHeight}px ` +
+      `against ${stripHeight}px on a step with a command`,
+  );
 
   /* ---- Done ---- */
 

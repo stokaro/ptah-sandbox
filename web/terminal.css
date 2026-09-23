@@ -288,6 +288,32 @@
   box-shadow: inset 2px 0 0 var(--termacc);
 }
 
+/* A run the guide started is asking on stdin (see Terminal.run). The prompt
+   row takes the attention colour and pulses once as the question arrives, so
+   an answer wanted at the bottom of the window is not missed by someone who
+   pressed the button at the top of it. A command typed here gets none of
+   this: whoever typed it is already looking at the row. */
+.pg-term[data-asking] .term-prompt {
+  background: color-mix(in oklab, var(--termamber) 12%, var(--term));
+  box-shadow: inset 3px 0 0 var(--termamber);
+}
+
+.pg-term[data-asking] .term-note {
+  color: var(--termamber);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pg-term[data-asking] .term-prompt {
+    animation: pg-term-ask 1.4s ease-out 1;
+  }
+}
+
+@keyframes pg-term-ask {
+  from {
+    background: color-mix(in oklab, var(--termamber) 38%, var(--term));
+  }
+}
+
 /* ---------- Narrow ---------- */
 
 /* Below this the note and the hint cannot both be read, and the note is the

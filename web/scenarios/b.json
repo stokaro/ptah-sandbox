@@ -133,11 +133,35 @@
     {
       "id": "report",
       "title": "Read the report",
-      "caption": "What differs",
-      "headline": "Exit 1 is a negative check result, not a tool failure.",
-      "instruction": "The report names the finding and its severity. A removed column is destructive; an added one is not. The failure threshold decides which severities make the command exit 1.",
-      "check": null,
-      "unverified": "Nothing to check here. Whether you have read the report is not something this page can observe, so this step never marks itself done."
+      "caption": "The findings as data",
+      "headline": "Read the same report as data, the way a pipeline would.",
+      "instruction": "Ask again with --format json. The findings are the same, now as data: each with its severity, and the column by name, nickname in users under columns_removed. It counts as removed because making the database match schema.sql would drop it, and that is why it is destructive.",
+      "action": {
+        "kind": "run",
+        "argv": [
+          "schema",
+          "drift",
+          "--schema-file",
+          "schema.sql",
+          "--db-url",
+          "sqlite://app.db",
+          "--format",
+          "json"
+        ]
+      },
+      "check": {
+        "kind": "ran",
+        "prefix": [
+          "schema",
+          "drift"
+        ],
+        "has": [
+          "--format",
+          "json"
+        ],
+        "exit": 1
+      },
+      "done": "Exit 1 again, with the same finding as data: columns_removed, destructive, users.nickname. That JSON is what a CI job reads."
     },
     {
       "id": "reconcile",

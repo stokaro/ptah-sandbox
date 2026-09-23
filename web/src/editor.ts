@@ -3,8 +3,9 @@
  *
  * A textarea with a highlight overlay behind it, not a code-editor library.
  * The mock asks for three things -- keywords in the site's blue, line
- * numbers, and a mark on lines that differ from what is on disk -- and an
- * overlay does all three in a few hundred bytes of gzipped JavaScript.
+ * numbers, and marks on the lines that differ from the file as it was
+ * seeded -- and an overlay does all three in a few hundred bytes of gzipped
+ * JavaScript.
  * CodeMirror 6 with the SQL grammar is about 110 KB gzipped, which on a page
  * that already asks for a 22 MB WebAssembly download is a poor trade for
  * bracket matching nobody asked for.
@@ -20,6 +21,9 @@
  * a string literal from being coloured, and nothing downstream reads it.
  */
 
+import { diffView } from "./diffview.ts";
+import { hunks, revertHunk, splitLines, type Hunk } from "./linediff.ts";
+import { anchorPopover } from "./popover.ts";
 import { clear, el, fill } from "./panes/dom.ts";
 
 /**
@@ -38,6 +42,10 @@ export interface EditorHandlers {
   onTabChange?(id: EditorTabId): void;
   /** The SQL tab's Run, from the button or from Cmd/Ctrl+Enter. */
   onSubmit?(text: string): void;
+  /** Save, on schema.sql while the editor takes the whole screen. */
+  onSave?(): void;
+  /** The editor took the whole screen, or went back to its pane. */
+  onFullChange?(full: boolean): void;
 }
 
 /**
@@ -49,8 +57,6 @@ export interface EditorHandlers {
  */
 const HIGHLIGHT_LINE_LIMIT = 4000;
 
-/** The same ceiling on the diff, which is O(n*m) and needs a harder one. */
-const DIFF_LINE_LIMIT = 1500;
 
 // --------------------------------------------------------------------------
 // Tokenizer
@@ -200,55 +206,6 @@ export function tokenizeSQL(text: string): Token[][] {
 }
 
 // --------------------------------------------------------------------------
-// Changed lines
-// --------------------------------------------------------------------------
-
-/**
- * Which lines of `current` are not in `baseline`, by longest common
- * subsequence.
- *
- * A line-by-line comparison would mark everything below an inserted line,
- * which is exactly the case this editor exists to show -- adding one column
- * in the middle of a CREATE TABLE. The table is O(n*m); schema files are
- * small, and above DIFF_LINE_LIMIT the answer is "no marks" rather than a
- * frozen tab.
- */
-export function changedLines(baseline: string[], current: string[]): Set<number> {
-  const marks = new Set<number>();
-  if (baseline.length > DIFF_LINE_LIMIT || current.length > DIFF_LINE_LIMIT) return marks;
-
-  const n = baseline.length;
-  const m = current.length;
-  // lcs[i][j] = length of the LCS of baseline[i..] and current[j..].
-  const width = m + 1;
-  const lcs = new Int32Array((n + 1) * width);
-  for (let i = n - 1; i >= 0; i--) {
-    for (let j = m - 1; j >= 0; j--) {
-      lcs[i * width + j] =
-        baseline[i] === current[j]
-          ? lcs[(i + 1) * width + j + 1]! + 1
-          : Math.max(lcs[(i + 1) * width + j]!, lcs[i * width + j + 1]!);
-    }
-  }
-
-  let i = 0;
-  let j = 0;
-  while (i < n && j < m) {
-    if (baseline[i] === current[j]) {
-      i += 1;
-      j += 1;
-    } else if (lcs[(i + 1) * width + j]! >= lcs[i * width + j + 1]!) {
-      i += 1;
-    } else {
-      marks.add(j);
-      j += 1;
-    }
-  }
-  for (; j < m; j++) marks.add(j);
-  return marks;
-}
-
-// --------------------------------------------------------------------------
 // The editor
 // --------------------------------------------------------------------------
 
@@ -257,7 +214,11 @@ interface Buffer {
   label: string;
   text: string;
   /**
-   * The text on disk, which the changed-line marks are measured against.
+   * The text the change marks are measured against: the file as the
+   * workspace was seeded or imported, the way an editor's gutter measures
+   * against the last commit. It is not what was saved last. Every edit is
+   * saved a moment after it is typed, so marks measured against the save
+   * vanished before anyone could read them.
    *
    * null means there is nothing to compare with -- the scratch SQL buffer is
    * not a file, so nothing in it is a change to anything. Marking it all as
@@ -275,9 +236,25 @@ interface Buffer {
   footerRight: string | null;
 }
 
+/** Keys pressed only to change another: they neither arm nor disarm Escape. */
+const MODIFIERS = new Set(["Shift", "Control", "Alt", "Meta"]);
+
 const TAB_LABELS: Record<EditorTabId, string> = { schema: "schema.sql", sql: "SQL", file: "file" };
 
+/** "Lines 9–10 changed", "Line 20 added", "1 line removed above line 16". */
+function describeRun(run: Hunk, lineCount: number): string {
+  const span = (from: number, count: number): string =>
+    count === 1 ? `Line ${from + 1}` : `Lines ${from + 1}–${from + count}`;
+  if (run.added.length === 0) {
+    const removed = run.removed.length === 1 ? "1 line removed" : `${run.removed.length} lines removed`;
+    return run.start < lineCount ? `${removed} above line ${run.start + 1}` : `${removed} at the end`;
+  }
+  const verb = run.removed.length === 0 ? "added" : "changed";
+  return `${span(run.start, run.added.length)} ${verb}`;
+}
+
 export class Editor {
+  private host: HTMLElement;
   private handlers: EditorHandlers;
   private buffers: Record<EditorTabId, Buffer>;
   private current: EditorTabId = "schema";
@@ -294,6 +271,18 @@ export class Editor {
   private stripLeft: HTMLElement;
   private stripRight: HTMLElement;
   private notice: HTMLElement;
+  private saveButton: HTMLButtonElement;
+  private fullButton: HTMLButtonElement;
+  private full = false;
+  /** Escape was the last key: the next Tab leaves instead of indenting. */
+  private leaving = false;
+
+  /** The runs of changes as last painted, which the gutter marks open. */
+  private changes: Hunk[] = [];
+  /** The popover a gutter mark opens: what was there, and a revert. */
+  private peek: HTMLElement;
+  /** The run the peek shows, so a repaint can find its mark again. */
+  private peeking = -1;
 
   private repaintQueued = false;
   private lockedByHost = false;
@@ -303,6 +292,7 @@ export class Editor {
     // The root class carries every metric the overlay depends on, so the
     // component sets it rather than trusting the caller's markup.
     host.classList.add("pgc-editor");
+    this.host = host;
     this.handlers = handlers;
     this.buffers = {
       schema: {
@@ -349,9 +339,14 @@ export class Editor {
       <div class="pgc-tabbar">
         <div class="pgc-tablist" role="tablist" aria-label="Editor"></div>
         <span class="pgc-tabmeta"></span>
+        <button class="btn pgc-ed-save" type="button" hidden>Save</button>
+        <button class="pgc-ed-full" type="button" aria-pressed="false" aria-label="Full screen" title="Full screen">
+          <svg class="pgc-ed-full-open" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M9.5 2.5h4v4M13.5 2.5 9 7M6.5 13.5h-4v-4M2.5 13.5 7 9" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
+          <svg class="pgc-ed-full-close" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M13.5 6.5h-4v-4M9.5 6.5 14 2M2.5 9.5h4v4M6.5 9.5 2 14" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
+        </button>
       </div>
       <div class="pgc-ed">
-        <div class="pgc-ed-gutter" aria-hidden="true"><span class="pgc-ed-nums"></span></div>
+        <div class="pgc-ed-gutter"><span class="pgc-ed-nums"></span></div>
         <div class="pgc-ed-code">
           <pre class="pgc-ed-overlay" aria-hidden="true"></pre>
           <textarea class="pgc-ed-input" spellcheck="false" autocapitalize="off"
@@ -388,12 +383,55 @@ export class Editor {
     this.stripLeft = host.querySelector<HTMLElement>(".pgc-strip-left")!;
     this.stripRight = host.querySelector<HTMLElement>(".pgc-strip-right")!;
     this.notice = host.querySelector<HTMLElement>(".pgc-ed-notice")!;
+    this.saveButton = host.querySelector<HTMLButtonElement>(".pgc-ed-save")!;
+    this.fullButton = host.querySelector<HTMLButtonElement>(".pgc-ed-full")!;
+
+    // One peek for every mark: marks are drawn again on every edit, so the
+    // popover is placed under whichever mark is showing its run now.
+    this.peek = el("div", "pgc-ed-peek");
+    this.peek.popover = "auto";
+    this.peek.setAttribute("role", "dialog");
+    host.appendChild(this.peek);
+    anchorPopover(this.peek, () => this.markFor(this.peeking));
+    this.peek.addEventListener("toggle", (event) => {
+      if (event.newState === "open") return;
+      // Closed with focus inside it -- Escape, or after a revert -- the mark
+      // that opened it takes focus back, if the run is still there.
+      if (this.peek.contains(document.activeElement) || document.activeElement === document.body) {
+        this.markFor(this.peeking)?.focus();
+      }
+      this.peeking = -1;
+    });
+    this.gutter.addEventListener("click", (event) => {
+      const mark = (event.target as Element).closest<HTMLElement>("[data-change]");
+      if (mark !== null) this.openPeek(Number(mark.dataset["change"]));
+    });
 
     this.input.addEventListener("input", () => this.onInput());
     this.input.addEventListener("scroll", () => this.syncScroll());
     this.input.addEventListener("keydown", (e) => this.onKeyDown(e));
+    // Leaving the textarea, or clicking back into it, is going on without
+    // the way out Escape offered.
+    for (const type of ["blur", "pointerdown"] as const) {
+      this.input.addEventListener(type, () => {
+        this.leaving = false;
+      });
+    }
     this.runButton.addEventListener("click", () => {
       this.handlers.onSubmit?.(this.buffers.sql.text);
+    });
+    this.saveButton.addEventListener("click", () => {
+      if (this.saveButton.getAttribute("aria-disabled") !== "true") this.handlers.onSave?.();
+    });
+    this.fullButton.addEventListener("click", () => this.setFull(!this.full));
+    // Escape leaves the whole screen, unless it is closing the peek, which
+    // takes Escape for itself. It is heard on the document: a tap on the
+    // editor's frame leaves focus on the body, and Escape must still work.
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape" || !this.full || this.peek.matches(":popover-open")) return;
+      e.preventDefault();
+      this.setFull(false);
+      this.fullButton.focus();
     });
 
     this.activate("schema");
@@ -467,11 +505,90 @@ export class Editor {
   }
 
   /** The buffer now matches the workspace file at that revision. */
-  markSynced(id: EditorTabId, revision: number, baseline?: string): void {
-    const buffer = this.buffers[id];
-    buffer.syncedAt = revision;
-    if (baseline !== undefined) buffer.baseline = baseline;
+  markSynced(id: EditorTabId, revision: number): void {
+    this.buffers[id].syncedAt = revision;
     if (this.current === id) this.repaint();
+  }
+
+  /**
+   * Replaces a buffer the way typing would: a new revision, unsaved, and
+   * onChange fired, so whatever follows an edit -- the save, the plan marked
+   * stale -- follows this one too.
+   *
+   * On the buffer that is on screen the change goes through the browser's
+   * own editing, so Cmd+Z or Ctrl+Z takes it back like anything typed.
+   * Assigning the textarea's value would work too and would wipe its undo
+   * history. Only the part that differs is replaced, so the undo step is that
+   * part and the caret lands after it. Where the browser will not edit --
+   * another tab on screen, a textarea that could not take focus -- the text
+   * is set directly, and there is no undo for that.
+   */
+  edit(id: EditorTabId, text: string): void {
+    const buffer = this.buffers[id];
+    if (text === buffer.text) return;
+    if (this.current === id && !this.input.readOnly && this.editInPlace(text)) return;
+    buffer.text = text;
+    buffer.revision += 1;
+    buffer.syncedAt = null;
+    if (this.current === id) {
+      this.input.value = text;
+      this.repaint();
+    }
+    this.handlers.onChange?.(id, text, buffer.revision);
+  }
+
+  /**
+   * The browser-edit half of `edit`. The input event it raises is handled by
+   * onInput like a keystroke, which records the new text and reports it.
+   * True when the textarea holds exactly `text` afterwards.
+   */
+  private editInPlace(text: string): boolean {
+    const old = this.input.value;
+    let head = 0;
+    while (head < old.length && head < text.length && old[head] === text[head]) head += 1;
+    let tail = 0;
+    while (
+      tail < old.length - head &&
+      tail < text.length - head &&
+      old[old.length - 1 - tail] === text[text.length - 1 - tail]
+    ) {
+      tail += 1;
+    }
+    this.input.focus({ preventScroll: true });
+    // A command that edits whatever has focus must not run if focus went
+    // somewhere else -- the terminal's prompt, say.
+    if (document.activeElement !== this.input) return false;
+    this.input.setSelectionRange(head, old.length - tail);
+    const inserted = text.slice(head, text.length - tail);
+    // execCommand is deprecated and still the only way into the undo stack.
+    const done = inserted === ""
+      ? document.execCommand("delete", false)
+      : document.execCommand("insertText", false, inserted);
+    return done && this.input.value === text;
+  }
+
+  /**
+   * Marks the SQL tab's Run as the button the guide is waiting on: accent,
+   * one pulse, and the run row in the guide's colour. The guide puts a query
+   * here and the visitor presses Run; this only says which button that is.
+   */
+  offerRun(on: boolean): void {
+    this.runButton.classList.remove("is-offered");
+    this.runRow.classList.toggle("is-offered", on);
+    if (!on) return;
+    // Taken off and put back, so a second offer pulses again.
+    void this.runButton.offsetWidth;
+    this.runButton.classList.add("is-offered");
+  }
+
+  /** Scrolls the textarea so that line (0-based) is on screen, if it is not. */
+  reveal(line: number): void {
+    const height = Number.parseFloat(getComputedStyle(this.input).lineHeight) || 21;
+    const top = line * height;
+    const view = this.input.clientHeight;
+    if (top >= this.input.scrollTop && top + height <= this.input.scrollTop + view) return;
+    this.input.scrollTop = Math.max(0, top - view / 3);
+    this.syncScroll();
   }
 
   setBaseline(id: EditorTabId, text: string | null): void {
@@ -531,6 +648,7 @@ export class Editor {
     this.lockedByHost = on;
     this.lockReason = reason;
     this.applyReadOnly();
+    this.paintChrome();
   }
 
   /**
@@ -555,6 +673,28 @@ export class Editor {
     this.input.focus();
   }
 
+  /**
+   * The editor over the whole screen, or back in its pane.
+   *
+   * The editor draws the chrome for it -- the button that starts and ends
+   * it, and a Save for schema.sql, which is otherwise written a moment after
+   * each edit -- and the page decides where it is offered and what the rest
+   * of the screen does meanwhile (onFullChange). Focus stays on the button.
+   */
+  setFull(on: boolean): void {
+    if (this.full === on) return;
+    this.full = on;
+    this.host.toggleAttribute("data-full", on);
+    this.fullButton.setAttribute("aria-pressed", String(on));
+    this.fullButton.title = on ? "Back to the pane" : "Full screen";
+    this.paintChrome();
+    this.handlers.onFullChange?.(on);
+  }
+
+  isFull(): boolean {
+    return this.full;
+  }
+
   // ---- input -------------------------------------------------------------
 
   private onInput(): void {
@@ -567,6 +707,16 @@ export class Editor {
   }
 
   private onKeyDown(e: KeyboardEvent): void {
+    // Escape arms the way out for the next key, and any other key but a
+    // modifier held for it -- Shift, to leave backwards -- disarms it.
+    if (e.key === "Escape") {
+      this.leaving = true;
+      return;
+    }
+    if (MODIFIERS.has(e.key)) return;
+    const leaving = this.leaving;
+    this.leaving = false;
+
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       if (this.current === "sql") {
         e.preventDefault();
@@ -578,6 +728,7 @@ export class Editor {
       // Tab indents, because this is a code editor. Escape then Tab leaves,
       // which is the escape hatch a keyboard user needs and the reason the
       // textarea carries an aria-describedby saying so.
+      if (leaving) return;
       e.preventDefault();
       this.insertAtCursor("  ");
     }
@@ -615,6 +766,13 @@ export class Editor {
     this.meta.classList.toggle("is-amber", buffer.metaTone === "amber");
     this.stripLeft.textContent = buffer.footerLeft;
     this.stripRight.textContent = buffer.footerRight ?? this.defaultRevisionText(buffer);
+    // Save says what it would do: write the edits, or nothing, because the
+    // file already holds them. aria-disabled rather than disabled: a button
+    // disabled under the finger that pressed it drops focus to the body.
+    const dirty = this.isDirty("schema");
+    this.saveButton.hidden = !this.full || this.current !== "schema";
+    this.saveButton.setAttribute("aria-disabled", String(!dirty || this.lockedByHost));
+    this.saveButton.textContent = dirty ? "Save" : "Saved";
   }
 
   private defaultRevisionText(buffer: Buffer): string {
@@ -627,9 +785,51 @@ export class Editor {
     const buffer = this.buffers[this.current];
     const lines = buffer.text.split("\n");
 
-    const numbers: string[] = [];
-    for (let i = 0; i < lines.length; i++) numbers.push(String(i + 1));
-    this.gutter.textContent = numbers.join("\n");
+    // Lines as a version-control tool counts them, which drops the empty tail
+    // after a final newline; the indexes line up with `lines` all the same.
+    this.changes =
+      buffer.baseline === null || lines.length > HIGHLIGHT_LINE_LIMIT
+        ? []
+        : hunks(splitLines(buffer.baseline), splitLines(buffer.text));
+
+    // Which run each line belongs to, and how: a line a run put in is added
+    // or modified, and a run that only removed is marked on the line below
+    // the gap -- or on the last line, when the gap is at the end.
+    const rowChange = new Map<number, { run: number; kind: string }>();
+    this.changes.forEach((run, index) => {
+      run.added.forEach((_, k) => {
+        rowChange.set(run.start + k, { run: index, kind: k < run.removed.length ? "is-modified" : "is-added" });
+      });
+      if (run.added.length === 0) {
+        const below = run.start < lines.length;
+        rowChange.set(below ? run.start : lines.length - 1, {
+          run: index,
+          kind: below ? "has-removed-above" : "has-removed-below",
+        });
+      }
+    });
+
+    // One row per line. A marked row is a button that opens its run; the
+    // plain numbers are hidden from assistive technology, which reads the
+    // textarea's own lines instead.
+    const numbers = document.createDocumentFragment();
+    for (let i = 0; i < lines.length; i++) {
+      const change = rowChange.get(i);
+      if (change === undefined) {
+        const row = el("span", "pgc-ed-num", String(i + 1));
+        row.setAttribute("aria-hidden", "true");
+        numbers.appendChild(row);
+        continue;
+      }
+      const row = el("button", `pgc-ed-num ${change.kind}`, String(i + 1));
+      row.type = "button";
+      row.dataset["change"] = String(change.run);
+      row.setAttribute("aria-haspopup", "dialog");
+      row.setAttribute("aria-label", `${describeRun(this.changes[change.run]!, lines.length)}: show what the seeded file had`);
+      numbers.appendChild(row);
+    }
+    clear(this.gutter);
+    this.gutter.appendChild(numbers);
 
     clear(this.overlay);
     if (lines.length > HIGHLIGHT_LINE_LIMIT) {
@@ -639,12 +839,12 @@ export class Editor {
       return;
     }
 
-    const marks =
-      buffer.baseline === null ? new Set<number>() : changedLines(buffer.baseline.split("\n"), lines);
     const tokens = tokenizeSQL(buffer.text);
     const frag = document.createDocumentFragment();
     for (let i = 0; i < lines.length; i++) {
-      const row = el("span", marks.has(i) ? "pgc-ed-line is-changed" : "pgc-ed-line");
+      const row = el("span", "pgc-ed-line");
+      const change = rowChange.get(i)?.kind;
+      if (change === "is-added" || change === "is-modified") row.classList.add(change);
       for (const token of tokens[i] ?? []) {
         if (token.kind === "plain") row.appendChild(document.createTextNode(token.text));
         else row.appendChild(el("span", `pgc-t-${token.kind}`, token.text));
@@ -654,6 +854,71 @@ export class Editor {
       frag.appendChild(row);
     }
     fill(this.overlay, frag);
+  }
+
+  /**
+   * The gutter mark of a run's last line, as the gutter is drawn now. The
+   * peek goes under it, so the whole run it describes stays in sight.
+   */
+  private markFor(run: number): HTMLElement | null {
+    if (run < 0) return null;
+    const marks = this.gutter.querySelectorAll<HTMLElement>(`[data-change="${run}"]`);
+    return marks[marks.length - 1] ?? null;
+  }
+
+  /**
+   * Shows one run against the seeded file: the lines it had there and the
+   * lines there are now, and a button that puts that run back and nothing
+   * else.
+   */
+  private openPeek(run: number): void {
+    const change = this.changes[run];
+    if (change === undefined) return;
+    if (this.peek.matches(":popover-open")) this.peek.hidePopover();
+
+    const locked = this.input.readOnly;
+    const revert = el("button", "btn btn-ghost", "Revert this change");
+    revert.type = "button";
+    revert.title = "Cmd+Z or Ctrl+Z in the editor brings it back";
+    revert.disabled = locked;
+    if (locked) revert.title = "The file cannot be edited right now";
+    revert.addEventListener("click", () => this.revert(run, change));
+
+    const ops = [
+      ...change.removed.map((text) => ({ op: "del" as const, text })),
+      ...change.added.map((text) => ({ op: "add" as const, text })),
+    ];
+    const lines = this.buffers[this.current].text.split("\n").length;
+    clear(this.peek);
+    fill(
+      this.peek,
+      el("p", "pgc-ed-peek-title", describeRun(change, lines)),
+      diffView([ops]),
+      revert,
+    );
+    this.peek.setAttribute("aria-label", describeRun(change, lines));
+    this.peeking = run;
+    this.peek.showPopover();
+    revert.focus();
+  }
+
+  /**
+   * Puts one run back as the seeded file had it, as an edit: saved, and
+   * reported like typing, so the plan and the route follow. The run is found
+   * again in the text as it is now, and a run that moved since it was drawn
+   * is left alone rather than reverted somewhere else.
+   */
+  private revert(run: number, shown: Hunk): void {
+    const buffer = this.buffers[this.current];
+    if (buffer.baseline === null || this.input.readOnly) return;
+    const now = hunks(splitLines(buffer.baseline), splitLines(buffer.text))[run];
+    if (now === undefined || JSON.stringify(now) !== JSON.stringify(shown)) return;
+    const lines = revertHunk(splitLines(buffer.text), now);
+    const newline = buffer.text.endsWith("\n") && lines.length > 0 ? "\n" : "";
+    this.peek.hidePopover();
+    this.edit(this.current, lines.join("\n") + newline);
+    this.reveal(now.start);
+    this.input.focus();
   }
 
   /** Keeps the overlay and the gutter under the textarea's own scrolling. */

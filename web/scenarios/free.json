@@ -1,0 +1,19 @@
+{
+  "id": "free",
+  "title": "Free exploration",
+  "description": "No steps and no checks. The first scenario's schema and data, and every command.",
+  "database": {
+    "path": "app.db",
+    "url": "sqlite://app.db"
+  },
+  "files": {
+    "schema.sql": "-- The schema you want the database to have.\n--\n-- Ptah reads this file as the desired state, reads the real catalog out of\n-- app.db, and works out the difference. You never write ALTER statements here.\n\nCREATE TABLE users (\n  id    INTEGER PRIMARY KEY,\n  name  TEXT NOT NULL,\n  email TEXT NOT NULL\n);\n\nCREATE TABLE tasks (\n  id      INTEGER PRIMARY KEY,\n  user_id INTEGER NOT NULL,\n  title   TEXT NOT NULL,\n  done    INTEGER NOT NULL DEFAULT 0,\n  FOREIGN KEY (user_id) REFERENCES users (id)\n);\n",
+    "README.md": "# Workspace\n\n    schema.sql   the schema you want\n    app.db       the SQLite database you have\n    README.md    this file\n\nThere is no route in this scenario and nothing is checked. It starts where\nthe first scenario starts: three users and four tasks, and a schema.sql that\nagrees with them. A few places to begin:\n\n    ptah schema drift --schema-file schema.sql --db-url sqlite://app.db\n    ptah schema apply --schema-file schema.sql --db-url sqlite://app.db --dry-run\n    ptah --help\n\nChange schema.sql, read the dry run's plan, and apply it when it says what you\nmeant. Reset puts the workspace back the way it started.\n"
+  },
+  "seed": "-- Builds app.db for the playground. Synthetic data only.\nPRAGMA foreign_keys = ON;\n\nCREATE TABLE users (\n  id    INTEGER PRIMARY KEY,\n  name  TEXT NOT NULL,\n  email TEXT NOT NULL\n);\n\nCREATE TABLE tasks (\n  id      INTEGER PRIMARY KEY,\n  user_id INTEGER NOT NULL,\n  title   TEXT NOT NULL,\n  done    INTEGER NOT NULL DEFAULT 0,\n  FOREIGN KEY (user_id) REFERENCES users (id)\n);\n\nINSERT INTO users (id, name, email) VALUES\n  (1, 'Ada',   'ada@example.com'),\n  (2, 'Grace', 'grace@example.com'),\n  (3, 'Alan',  'alan@example.com');\n\nINSERT INTO tasks (id, user_id, title, done) VALUES\n  (1, 1, 'Draft the analytical engine notes', 1),\n  (2, 1, 'Review the note G example',         0),\n  (3, 2, 'Write the compiler proposal',       0),\n  (4, 3, 'Prepare the Bombe report',          1);\n",
+  "steps": [],
+  "finished": {
+    "headline": "No route here: change schema.sql and run any command.",
+    "caption": "Nothing is suggested and nothing is checked. The workspace is the one the first scenario starts from; Reset puts it back."
+  }
+}
