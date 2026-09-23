@@ -34,7 +34,7 @@
  */
 
 import { Editor } from "./editor.ts";
-import { Guide, type GuideHost } from "./guide.ts";
+import { Guide, type GuideHost, type StatusPill } from "./guide.ts";
 import { Loader } from "./loader.ts";
 import { Tour } from "./tour.ts";
 import {
@@ -1112,6 +1112,21 @@ async function resetWorkspace(): Promise<void> {
 
 const bootStrip = need<HTMLElement>("#pg-boot-strip");
 const buildVersion = need<HTMLElement>("[data-build-version]");
+const miniVersion = need<HTMLElement>("#pg-mini-version");
+const miniStatus = need<HTMLElement>("#pg-mini-status");
+
+/** The status bar's pill, and its short form in the phone's toolbar. */
+function showStatus(pill: StatusPill): void {
+  guide.setStatus(pill);
+  miniStatus.dataset["tone"] = pill.tone;
+  miniStatus.textContent = `${pill.glyph} ${pill.text}`;
+}
+
+/** The build's version, in the status bar and in the phone's toolbar. */
+function showVersion(version: string): void {
+  text(buildVersion, version);
+  text(miniVersion, version);
+}
 const buildCommit = need<HTMLElement>("[data-build-commit]");
 const buildSqlite = need<HTMLElement>("[data-build-sqlite]");
 const buildNote = need<HTMLElement>("[data-build-note]");
@@ -1141,6 +1156,7 @@ anchorPopover(need<HTMLElement>("#pg-import-help-pop"), need<HTMLElement>("#pg-i
 // dialog element itself rather than anything inside it.
 const aboutDialog = need<HTMLDialogElement>("#pg-about");
 need<HTMLButtonElement>("#pg-about-open").addEventListener("click", () => aboutDialog.showModal());
+need<HTMLButtonElement>("#pg-mini").addEventListener("click", () => aboutDialog.showModal());
 need<HTMLButtonElement>("#pg-about-close").addEventListener("click", () => aboutDialog.close());
 aboutDialog.addEventListener("click", (event) => {
   if (event.target === aboutDialog) aboutDialog.close();
@@ -1192,7 +1208,7 @@ function recoverStaleCache(): boolean {
 function renderBuild(state: State): void {
   const { ready: info, sqlite, manifest, buildMismatch } = state.runtime;
   if (info !== null && sqlite !== null) {
-    text(buildVersion, info.version);
+    showVersion(info.version);
     text(buildCommit, info.commit.slice(0, 7));
     text(buildSqlite, `SQLite/WASM ${sqlite.version}`);
     text(
@@ -1212,7 +1228,7 @@ function renderBuild(state: State): void {
     return;
   }
   if (manifest !== null) {
-    text(buildVersion, manifest.ptahVersion);
+    showVersion(manifest.ptahVersion);
     text(buildCommit, manifest.ptahCommit.slice(0, 7));
     text(buildNote, "declared by the build manifest; not verified until it runs");
   }
@@ -1222,7 +1238,7 @@ let ticker = 0;
 
 function render(state: State): void {
   const status = statusOf(state);
-  guide.setStatus({ glyph: status.glyph, text: status.text, tone: status.tone });
+  showStatus({ glyph: status.glyph, text: status.text, tone: status.tone });
   guide.setStorage(
     state.workspace.dbBytes === null
       ? "memory-only"
@@ -1257,7 +1273,7 @@ function render(state: State): void {
   if (running && ticker === 0) {
     ticker = window.setInterval(() => {
       const now = statusOf(store.state);
-      guide.setStatus({ glyph: now.glyph, text: now.text, tone: now.tone });
+      showStatus({ glyph: now.glyph, text: now.text, tone: now.tone });
     }, 100);
   } else if (!running && ticker !== 0) {
     window.clearInterval(ticker);

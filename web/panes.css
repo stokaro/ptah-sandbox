@@ -48,10 +48,12 @@
   min-width: 0;
 }
 
+/* The tabs keep their width; the note beside them gives way first. A tab
+   list allowed to shrink ran its last tab over the note in a narrow pane. */
 .pgc-tablist {
   display: flex;
+  flex: none;
   gap: 2px;
-  min-width: 0;
 }
 
 .pgc-tab {
@@ -85,6 +87,8 @@
 }
 
 .pgc-tabmeta {
+  flex: 0 1 auto;
+  min-width: 0;
   font: 12px var(--mono);
   color: var(--mute);
   white-space: nowrap;

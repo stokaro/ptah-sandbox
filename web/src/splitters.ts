@@ -1,7 +1,7 @@
 /*
  * The draggable lines between the panes of the full-window layout.
  *
- * Above 1100px the playground lays its panes out like an editor (see "Full
+ * Above 900px the playground lays its panes out like an editor (see "Full
  * window" in playground.css): the file list and the database pane at the
  * sides, the editor and the terminal between them. Three lines can be moved:
  * the file list's right edge, the database pane's left edge, and the top of
@@ -20,7 +20,7 @@ type Name = "rail" | "db" | "term";
 type Sizes = Partial<Record<Name, number>>;
 
 const STORAGE_KEY = "ptah-playground-panes";
-const WIDE = "(min-width: 1101px)";
+const WIDE = "(min-width: 901px)";
 const STEP = 16;
 
 /* The room each pane keeps however the others are dragged. */

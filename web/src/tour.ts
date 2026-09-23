@@ -285,7 +285,7 @@ export class Tour {
    * with no event of its own: the ring stayed 30px above the editor for the
    * whole of the first step, drawn across the step nav. Watching the body and
    * every target covers that, font swaps, and a pane that grows when its
-   * content arrives. The body alone is not enough above 1100px, where the
+   * content arrives. The body alone is not enough above 900px, where the
    * panes fill a window-high frame: the strip leaving moved the editor 91px
    * and left the body exactly as tall as before, so only the panes resized.
    */

@@ -1,7 +1,7 @@
 /*
  * The site menu in the toolbar.
  *
- * Above 1100px the playground takes the whole window and the site header is
+ * Above 900px the playground takes the whole window and the site header is
  * not drawn (see "Full window" in playground.css). Its links are still one
  * click away: the Ptah mark at the left of the toolbar opens them in a
  * popover. They are copied out of the header rather than written a second

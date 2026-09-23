@@ -66,17 +66,17 @@
 <main class="pg-main" id="main">
 
 <!--
-  The playground is an application, so above 1100px it takes the whole window
+  The playground is an application, so above 900px it takes the whole window
   the way an editor would: a toolbar that also carries the site menu, the
   guided steps and the step's strip, the three panes with the terminal, and a
   status bar. The lines between the panes are dragged to resize them
-  (src/splitters.ts). Below 1100px the same elements flow as a page under the
+  (src/splitters.ts). Up to 900px the same elements flow as a page under the
   site header. What the page says about itself is in About.
 -->
 <div class="wrap pg-app" id="pg-app">
   <div class="pg-toolbar">
     <!--
-      The site's navigation, folded into one control. Above 1100px the site
+      The site's navigation, folded into one control. Above 900px the site
       header is not drawn, so the application starts at the top of the window,
       and this opens the same links. src/sitemenu.ts copies them out of the
       header, so the list is written once.
@@ -88,6 +88,12 @@
     </button>
     <nav class="pg-sitemenu" id="pg-sitemenu" aria-label="Site" popover></nav>
     <h1 class="pg-toolbar-title">Playground</h1>
+    <!-- On a phone the status bar is not drawn: this is its short form, the
+         build and the runtime's state, and it opens About for the rest. -->
+    <button class="pg-mini" type="button" id="pg-mini" aria-haspopup="dialog" title="About this playground">
+      <span class="v" id="pg-mini-version">—</span>
+      <span class="pg-mini-status" id="pg-mini-status" data-tone="quiet">starting</span>
+    </button>
     <div class="pg-bar" id="pg-bar">
       <!-- src/guide.ts replaces this with the button that opens the scenario picker. -->
       <span class="pg-scenario">
@@ -98,7 +104,7 @@
     <!--
       Where the terminal sits in the full-window layout: between the file list
       and the database pane, or across the whole width under them. Only that
-      layout has the choice, so the pair is hidden below 1101px; the choice is
+      layout has the choice, so the pair is hidden up to 900px; the choice is
       kept in this browser by src/splitters.ts.
     -->
     <div class="pg-dock" id="pg-dock" role="group" aria-label="Terminal width">
@@ -374,7 +380,7 @@
 <!--
   About this playground: what it is, what is actually running and what this
   profile cannot do. It is a dialog rather than a section under the
-  application, because above 1100px the application is the whole window and
+  application, because above 900px the application is the whole window and
   the page does not scroll. The Running line is read off the module in this
   tab rather than written down here, so it cannot be optimistic.
 -->

@@ -326,6 +326,12 @@
   margin-left: auto;
 }
 
+/* The status bar's short form, for the phone's toolbar (see "Phone and
+ * tablet portrait"). */
+.pg-mini {
+  display: none;
+}
+
 /* Opens the About dialog. Plain text at the status bar's size, underlined on
  * hover the way a link in running text is. */
 .pg-about-open {
@@ -515,7 +521,7 @@
  * terminal to a share of the height; src/splitters.ts replaces each with the
  * size a reader drags it to, in --pg-rail, --pg-db and --pg-term. The rows
  * belong to the layout: "Full window" below arranges the children above
- * 1100px, and the responsive queries lay the same children out as a page.
+ * 900px, and the responsive queries lay the same children out as a page.
  */
 .pg-grid {
   position: relative;
@@ -1324,40 +1330,11 @@
 
 /* ---------- Responsive ----------
  *
- * Three panes and a terminal do not fit a laptop half-screen, and the answer
- * is never to shrink the terminal until it shows two lines. Below 1100px the
- * editor and the database stack beside the rail; below 900px everything is one
- * column; below 720px the three become tabs and only one is on screen.
+ * Two layouts, and nothing between them: above 900px the full-window editor
+ * (see "Full window"), and up to 900px one column, which the phone block
+ * below turns into panes behind a tab bar when the script runs. A width
+ * between the two gets one of them, never a page of its own.
  */
-
-@media (max-width: 1100px) {
-  .pg-grid {
-    grid-template-columns: 210px minmax(0, 1fr);
-    grid-template-rows: minmax(320px, auto) minmax(280px, auto) auto clamp(300px, 28vh, 420px);
-  }
-  .pg-rail {
-    grid-row: 1 / 3;
-  }
-  .pg-next {
-    grid-row: 3;
-  }
-  .pg-editor {
-    grid-column: 2;
-    grid-row: 1;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-  }
-  .pg-db {
-    grid-column: 2;
-    grid-row: 2;
-  }
-  .pg-terminal {
-    grid-row: 4;
-  }
-  .pg-step-hint {
-    display: none;
-  }
-}
 
 @media (max-width: 900px) {
   .pg-grid {
@@ -1374,11 +1351,16 @@
   .pg-editor {
     grid-column: 1;
     grid-row: 2;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
   }
   .pg-db {
     grid-column: 1;
     grid-row: 3;
     border-bottom: 1px solid var(--line);
+  }
+  .pg-step-hint {
+    display: none;
   }
   .pg-next {
     grid-row: 4;
@@ -1571,6 +1553,70 @@
   }
   .pg-terminal {
     height: max(360px, 62dvh);
+    min-height: 0;
+  }
+
+  /* The status bar and the footer are not drawn: the build and the
+   * runtime's state sit beside the title, and the rest -- the commit, SQLite,
+   * what the session keeps, the footer's links -- is in About, which that
+   * short form opens. Without the script there is no About to open, so both
+   * stay. */
+  html.js .pg-statusbar,
+  html.js .site-footer {
+    display: none;
+  }
+  html.js .pg-mini {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    padding: 4px 8px;
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    background: none;
+    font: 12px var(--mono);
+    color: var(--fg2);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .pg-mini-status[data-tone="quiet"] {
+    color: var(--mute);
+  }
+  .pg-mini-status[data-tone="attention"] {
+    color: var(--amber);
+  }
+
+  /* The editor and the console are the page: the page is the screen's
+   * height, and the pane takes what the toolbar, the steps and the strip
+   * leave above the tab bar, so it never scrolls the page away. The database
+   * is a table to read down, and there the page scrolls as before. */
+  html.js body:has(.pg-grid:is([data-pane="editor"], [data-pane="console"])) {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+  }
+  html.js body:has(.pg-grid:is([data-pane="editor"], [data-pane="console"])) .site-header {
+    flex: none;
+  }
+  html.js body:has(.pg-grid:is([data-pane="editor"], [data-pane="console"])) .pg-main,
+  html.js body:has(.pg-grid:is([data-pane="editor"], [data-pane="console"])) .pg-app {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  html.js body:has(.pg-grid:is([data-pane="editor"], [data-pane="console"])) .pg-app > :not(.pg-grid) {
+    flex: none;
+  }
+  html.js .pg-grid:is([data-pane="editor"], [data-pane="console"]) {
+    flex: 1 1 auto;
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  html.js .pg-grid:is([data-pane="editor"], [data-pane="console"]) > .pg-terminal {
+    height: auto;
+  }
+  html.js .pg-grid:is([data-pane="editor"], [data-pane="console"]) > .pg-editor {
     min-height: 0;
   }
   .pg-rail {
@@ -1783,7 +1829,7 @@
 
 /* ---------- Full window ----------
  *
- * Above 1100px the playground is an application rather than a page: it takes
+ * Above 900px the playground is an application rather than a page: it takes
  * the window under the site header, 56px and its rule, and the panes share the
  * height between them instead of each asking for its own. The toolbar and
  * the status bar take --code with the rest of the frame.
@@ -1800,7 +1846,7 @@
  * grid, which src/dock.ts sets from the toolbar, gives the terminal the whole
  * width instead and stops the side panes above it.
  */
-@media (min-width: 1101px) {
+@media (min-width: 901px) {
   body {
     display: flex;
     flex-direction: column;
@@ -1916,6 +1962,30 @@
     min-height: 0;
     grid-template-rows: auto minmax(0, 1fr) var(--pg-term, minmax(240px, 44%));
     border: 0;
+  }
+
+  /* Down to 901px the side panes start narrower, so the editor and the
+   * terminal between them keep a width to work in. A width dragged to is
+   * still the reader's, clamped as it always is. */
+  @media (max-width: 1100px) {
+    .pg-grid {
+      grid-template-columns: var(--pg-rail, 200px) minmax(0, 1fr) var(--pg-db, minmax(280px, 34%));
+    }
+
+    /* The strip's headline gets a column two lines can hold, and the strip
+     * holds two lines' height whatever the step says, so it still does not
+     * move; the command gives way, ending in its ellipsis. */
+    .pg-next {
+      grid-template-columns: minmax(300px, 1fr) fit-content(55%);
+    }
+    .pg-next-copy {
+      min-height: 40px;
+    }
+
+    /* The scenario's name needs the room more than its label does. */
+    .pg-scenario-label {
+      display: none;
+    }
   }
 
   .pg-next {
@@ -2137,7 +2207,7 @@
   display: none;
 }
 
-@media (min-width: 1101px) {
+@media (min-width: 901px) {
   .pg-split {
     display: block;
     position: relative;
