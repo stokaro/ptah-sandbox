@@ -93,15 +93,28 @@
   outline-offset: -2px;
 }
 
+/* The note beside the tabs -- the database's address, the buffer's state --
+   shows whole or not at all: cut to its first letter it says nothing. It
+   takes the room the tabs leave, and where its text does not fit it wraps,
+   as one piece, onto a second line the note clips. The ::before is the first
+   line: as tall as the bar, and whatever width the text leaves it. */
 .pgc-tabmeta {
-  flex: 0 1 auto;
+  flex: 1 1 0;
+  align-self: stretch;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   min-width: 0;
-  margin-left: auto;
+  overflow: hidden;
   font: 12px var(--mono);
   color: var(--mute);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.pgc-tabmeta::before {
+  content: "";
+  flex: 1 0 0;
+  height: 100%;
 }
 
 .pgc-tabmeta.is-amber {
