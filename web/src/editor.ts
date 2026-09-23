@@ -473,9 +473,19 @@ export class Editor {
    * Replaces a buffer the way typing would: a new revision, unsaved, and
    * onChange fired, so whatever follows an edit -- the save, the plan marked
    * stale -- follows this one too.
+   *
+   * On the buffer that is on screen the change goes through the browser's
+   * own editing, so Cmd+Z or Ctrl+Z takes it back like anything typed.
+   * Assigning the textarea's value would work too and would wipe its undo
+   * history. Only the part that differs is replaced, so the undo step is that
+   * part and the caret lands after it. Where the browser will not edit --
+   * another tab on screen, a textarea that could not take focus -- the text
+   * is set directly, and there is no undo for that.
    */
   edit(id: EditorTabId, text: string): void {
     const buffer = this.buffers[id];
+    if (text === buffer.text) return;
+    if (this.current === id && !this.input.readOnly && this.editInPlace(text)) return;
     buffer.text = text;
     buffer.revision += 1;
     buffer.syncedAt = null;
@@ -484,6 +494,36 @@ export class Editor {
       this.repaint();
     }
     this.handlers.onChange?.(id, text, buffer.revision);
+  }
+
+  /**
+   * The browser-edit half of `edit`. The input event it raises is handled by
+   * onInput like a keystroke, which records the new text and reports it.
+   * True when the textarea holds exactly `text` afterwards.
+   */
+  private editInPlace(text: string): boolean {
+    const old = this.input.value;
+    let head = 0;
+    while (head < old.length && head < text.length && old[head] === text[head]) head += 1;
+    let tail = 0;
+    while (
+      tail < old.length - head &&
+      tail < text.length - head &&
+      old[old.length - 1 - tail] === text[text.length - 1 - tail]
+    ) {
+      tail += 1;
+    }
+    this.input.focus({ preventScroll: true });
+    // A command that edits whatever has focus must not run if focus went
+    // somewhere else -- the terminal's prompt, say.
+    if (document.activeElement !== this.input) return false;
+    this.input.setSelectionRange(head, old.length - tail);
+    const inserted = text.slice(head, text.length - tail);
+    // execCommand is deprecated and still the only way into the undo stack.
+    const done = inserted === ""
+      ? document.execCommand("delete", false)
+      : document.execCommand("insertText", false, inserted);
+    return done && this.input.value === text;
   }
 
   /** Scrolls the textarea so that line (0-based) is on screen, if it is not. */
@@ -743,6 +783,7 @@ export class Editor {
     const locked = this.input.readOnly;
     const revert = el("button", "btn btn-ghost", "Revert this change");
     revert.type = "button";
+    revert.title = "Cmd+Z or Ctrl+Z in the editor brings it back";
     revert.disabled = locked;
     if (locked) revert.title = "The file cannot be edited right now";
     revert.addEventListener("click", () => this.revert(run, change));

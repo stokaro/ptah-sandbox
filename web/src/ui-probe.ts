@@ -461,6 +461,23 @@ async function run(): Promise<void> {
       `steps: ${stepStates().join(", ")}`,
   );
 
+  // The revert went through the browser's own editing, so the textarea's
+  // undo -- what Cmd+Z and Ctrl+Z run -- takes it back, marks and all. A
+  // revert that assigned the value would have left nothing to undo.
+  const editorInput = need<HTMLTextAreaElement>("#pg-editor .pgc-ed-input");
+  editorInput.focus();
+  const undoRan = doc.execCommand("undo");
+  await until("the undo to reach the marks", () => markedAs("added").includes(10) || null, 5_000).catch(
+    () => undefined,
+  );
+  check(
+    "undo in the editor takes a revert back",
+    undoRan && editorInput.value.includes("  active INTEGER NOT NULL DEFAULT 1")
+      && markedAs("modified").join(",") === "9" && markedAs("added").join(",") === "10,20,21",
+    `undo ran ${undoRan}; active is ${editorInput.value.includes("active INTEGER") ? "back" : "still gone"}; ` +
+      `added ${markedAs("added").join(",") || "none"}, changed ${markedAs("modified").join(",") || "none"}`,
+  );
+
   typeSchema(EDITED_SCHEMA);
   await until(
     "schema.sql to be written back to the workspace",
