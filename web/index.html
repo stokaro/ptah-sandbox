@@ -2,7 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  No zoom. The page is laid out to the screen like an application -- panes
+  as tall as the screen, a tab bar at its foot -- and a zoom carries that
+  layout off the screen. It also stops iOS zooming in when the editor, set
+  smaller than 16px, takes focus.
+-->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Playground — Ptah</title>
 <meta name="description" content="Run the real Ptah CLI against a real SQLite database in your browser tab. Edit a schema, read the plan it produces, apply it, and see the rows survive. Nothing is installed and nothing leaves the browser.">
 <link rel="canonical" href="https://play.ptah.run/">
