@@ -341,6 +341,36 @@ async function run(): Promise<void> {
       `across: terminal ${Math.round(across.term.width)}px of a ${Math.round(across.grid.width)}px grid`,
   );
 
+  // The site header folds into the toolbar above 1100px: the Ptah mark opens
+  // the header's links, the header's own list being the source, and the
+  // toolbar's theme toggle does what the header's did.
+  const siteHeader = need<HTMLElement>(".site-header");
+  const headerLinks = siteHeader.querySelectorAll(".nav-links a").length;
+  need<HTMLButtonElement>("#pg-sitemenu-btn").click();
+  const menu = need<HTMLElement>("#pg-sitemenu");
+  const menuOpen = menu.matches(":popover-open");
+  const menuLinks = menu.querySelectorAll("a").length;
+  const menuHere = menu.querySelector('a[aria-current="page"]')?.textContent ?? "";
+  menu.hidePopover();
+  check(
+    "the site header folds into the toolbar, and the Ptah mark opens its links",
+    siteHeader.getBoundingClientRect().height === 0 && menuOpen && headerLinks > 0
+      && menuLinks === headerLinks + 1 && menuHere === "Playground",
+    `header ${Math.round(siteHeader.getBoundingClientRect().height)}px tall; menu open ${menuOpen}, ` +
+      `${menuLinks} links for the header's ${headerLinks} and home, current "${menuHere}"`,
+  );
+
+  const theme = (): string => doc.documentElement.getAttribute("data-theme") ?? "";
+  const themeBefore = theme();
+  need<HTMLButtonElement>(".pg-toolbar-theme").click();
+  const themeFlipped = theme();
+  need<HTMLButtonElement>(".pg-toolbar-theme").click();
+  check(
+    "the toolbar's theme toggle switches the theme and back",
+    themeFlipped !== themeBefore && theme() === themeBefore,
+    `${themeBefore} → ${themeFlipped} → ${theme()}`,
+  );
+
   // The step's strip is one line; what the step means is behind the hint.
   const strip = need<HTMLElement>("#pg-next");
   const stripHeight = Math.round(strip.getBoundingClientRect().height);

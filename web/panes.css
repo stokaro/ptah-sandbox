@@ -34,10 +34,14 @@
 
 /* ---------- Shared chrome ---------- */
 
+/* The strip over each pane is the application's frame, on --code; the
+   selected tab takes the document's own surface, so it reads as the front of
+   what is under it (see "Colour discipline" at the top of playground.css). */
 .pgc-tabbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  background: var(--code);
   gap: 16px;
   border-bottom: 1px solid var(--line);
   padding-right: 16px;
@@ -71,6 +75,7 @@
 
 .pgc-tab.is-active {
   color: var(--fg);
+  background: var(--bg);
   border-bottom-color: var(--acc);
 }
 
@@ -310,7 +315,7 @@
    between the rail and the editor. */
 .pgc-rail-row.is-current {
   color: var(--fg);
-  background: var(--code);
+  background: var(--accbg);
   box-shadow: inset -2px 0 0 var(--acc);
 }
 

@@ -17,6 +17,7 @@
  */
 
 import { clear, el, fill } from "./panes/dom.ts";
+import { anchorPopover } from "./popover.ts";
 import {
   SCENARIOS,
   describeArgv,
@@ -404,6 +405,7 @@ function headlineWithHint(headline: string, hint: Hint): HTMLElement {
   button.type = "button";
   button.popoverTargetElement = detail;
   button.setAttribute("aria-expanded", "false");
+  anchorPopover(detail, button);
   if (hint.offScript) {
     button.dataset["tone"] = "attention";
     fill(button, el("span", undefined, "△"), document.createTextNode(" Off the route"));
@@ -413,34 +415,6 @@ function headlineWithHint(headline: string, hint: Hint): HTMLElement {
     button.setAttribute("aria-label", "About this step");
     button.title = "About this step";
   }
-
-  // The popover is in the top layer, so it is placed rather than laid out:
-  // under the hint, kept inside the window. The page does not scroll in the
-  // full-window layout; where it does, a scroll or a resize closes the
-  // popover rather than leaving it behind at the old position.
-  const close = (): void => {
-    if (detail.matches(":popover-open")) detail.hidePopover();
-  };
-  detail.addEventListener("beforetoggle", (event) => {
-    const opening = event.newState === "open";
-    button.setAttribute("aria-expanded", String(opening));
-    if (!opening) {
-      window.removeEventListener("scroll", close);
-      window.removeEventListener("resize", close);
-      return;
-    }
-    const anchor = button.getBoundingClientRect();
-    detail.style.top = `${Math.round(anchor.bottom + 8)}px`;
-    detail.style.left = `${Math.round(anchor.left)}px`;
-    window.addEventListener("scroll", close, { once: true });
-    window.addEventListener("resize", close, { once: true });
-  });
-  detail.addEventListener("toggle", (event) => {
-    if (event.newState !== "open") return;
-    const right = detail.getBoundingClientRect().right;
-    const overflow = right - (window.innerWidth - 16);
-    if (overflow > 0) detail.style.left = `${Math.max(16, Math.round(button.getBoundingClientRect().left - overflow))}px`;
-  });
 
   return fill(el("div", "pg-next-copy"), el("strong", undefined, headline), button, detail);
 }

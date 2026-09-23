@@ -9,10 +9,16 @@
  * No new colours. Every value below is a site.css token, so the dark theme is
  * the site's own token swap and needs no rules of its own.
  *
- * Colour discipline, from the design: blue (--acc) is links, the active tab
- * underline and SQL keywords, and nothing else. Amber (--amber) is the only
- * attention colour, for waiting, drift, recovery and warnings. The primary
- * button is black. There is no green and no red.
+ * Colour discipline. There are two surfaces, so the application can be told
+ * from what it holds: the frame (the toolbar, the steps, the file list, the
+ * tab strips over the panes) takes --code, and the documents (the editor, the
+ * tables, the plan) keep --bg; a selected tab takes the document's surface.
+ * Blue marks what is chosen or what runs. --accbg is the selection surface:
+ * the step on screen together with its strip, and the selected file.
+ * --acc is links, the selected tab and step, SQL keywords, the Run next
+ * button and, in the full-window layout, the status bar. Amber (--amber) is
+ * the only attention colour, for waiting, drift, recovery and warnings. The
+ * site's other buttons stay black. There is no green and no red.
  */
 
 /* The UA's `[hidden] { display: none }` sits at user-agent origin, so any
@@ -209,6 +215,7 @@
 .pg-steps {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
+  background: var(--code);
   border: 1px solid var(--line);
   border-radius: 2px 2px 0 0;
 }
@@ -236,7 +243,7 @@
  * background, and a focus ring. A done step keeps a darker title than one
  * still ahead, so the route reads as travelled up to here. */
 .pg-step:hover {
-  background: var(--code);
+  border-bottom-color: var(--mute);
 }
 
 .pg-step:hover .pg-step-title,
@@ -331,6 +338,7 @@
   grid-column: 1;
   grid-row: 1;
   padding: 16px 0;
+  background: var(--code);
   display: grid;
   gap: 20px;
   align-content: start;
@@ -457,6 +465,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  background: var(--code);
   border-bottom: 1px solid var(--line);
   padding-right: 16px;
 }
@@ -485,6 +494,7 @@
 
 .pg-tab[aria-selected="true"] {
   color: var(--fg);
+  background: var(--bg);
   border-bottom-color: var(--acc);
 }
 
@@ -702,6 +712,25 @@
   align-items: center;
   padding: 8px 16px;
   border-top: 1px solid var(--line);
+  /* The step on screen wears --accbg in the nav, and so does what it asks
+   * for, so the two read as one thing. */
+  background: var(--accbg);
+}
+
+.pg-next .cmd {
+  background: var(--bg);
+}
+
+/* The one button on the page that runs something takes the accent. */
+.pg-next-run .btn:not(.btn-ghost):not(:disabled) {
+  background: var(--acc);
+  border-color: var(--acc);
+  color: var(--bg);
+}
+
+.pg-next-run .btn:not(.btn-ghost):not(:disabled):hover {
+  background: var(--fg);
+  border-color: var(--fg);
 }
 
 /* The headline and the hint beside it. What the step means and what was
@@ -1182,13 +1211,14 @@
  *
  * Above 1100px the playground is an application rather than a page: it takes
  * the window under the site header, 56px and its rule, and the panes share the
- * height between them instead of each asking for its own. The toolbar and the
- * status bar take --code, the site's surface for things around content, so
- * they read as the application's frame and the panes as its documents.
+ * height between them instead of each asking for its own. The toolbar takes
+ * --code with the rest of the frame, and the status bar is the frame's one
+ * saturated band, as in an editor.
  *
- * The page is the window and does not scroll: the header, then the
- * application, and nothing under it. The introduction and "What is running"
- * are in About, and so are the footer's links.
+ * The page is the window and does not scroll: the application and nothing
+ * else. The site header folds into the toolbar -- its links behind the Ptah
+ * mark, its theme toggle with the controls -- and the introduction, "What is
+ * running" and the footer's links are in About.
  *
  * Inside the grid the step's strip runs across the top, under the steps it
  * belongs to. Below it the file list and the database pane take the whole
@@ -1203,6 +1233,20 @@
     flex-direction: column;
     height: 100dvh;
     min-height: 540px;
+  }
+
+  /* With the script running, the header's links and theme toggle are in the
+   * toolbar; without it they stay in the header, which then stays drawn. */
+  html.js .site-header {
+    display: none;
+  }
+
+  html.js .pg-sitemenu-btn {
+    display: inline-flex;
+  }
+
+  html.js .pg-toolbar-theme {
+    display: grid;
   }
 
   .site-header {
@@ -1339,7 +1383,7 @@
     margin-left: auto;
   }
 
-  html.js .pg-dock + .pg-actions {
+  html.js .pg-toolbar .pg-actions {
     margin-left: 0;
   }
 
@@ -1355,6 +1399,131 @@
   .pg-statusbar .meta {
     font-size: 12px;
   }
+
+  /* The status bar is the frame's one saturated band, the way an editor's
+   * is: what is running and in what state, in the page colour on the
+   * accent. Anything that asks for attention becomes a chip in the page
+   * colour, because amber on the accent would not read. */
+  .pg-statusbar {
+    border-top-color: var(--acc);
+    background: var(--acc);
+  }
+
+  .pg-statusbar .meta,
+  .pg-statusbar .v,
+  .pg-statusbar .pg-status,
+  .pg-statusbar .pg-storage,
+  .pg-statusbar .pg-about-open {
+    color: var(--bg);
+  }
+
+  .pg-statusbar code {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+  }
+
+  .pg-statusbar .pg-status[data-tone="attention"],
+  .pg-statusbar .pg-build-warn {
+    padding: 0 6px;
+    border-radius: 2px;
+    background: var(--bg);
+    color: var(--amber);
+  }
+
+  .pg-statusbar .pg-about-open:focus-visible {
+    outline-color: var(--bg);
+  }
+}
+
+/* ---------- Site menu and theme ----------
+ *
+ * The full-window layout does not draw the site header, so the toolbar
+ * carries what it held: the Ptah mark opens the site's links in a popover,
+ * and the theme toggle sits with the other controls. Both are hidden
+ * elsewhere, where the header is on screen. */
+.pg-sitemenu-btn,
+.pg-toolbar-theme {
+  display: none;
+}
+
+.pg-sitemenu-btn {
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  margin: 0 -8px 0 -8px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: none;
+  color: var(--mute);
+  cursor: pointer;
+}
+
+.pg-sitemenu-btn:hover,
+.pg-sitemenu-btn[aria-expanded="true"] {
+  border-color: var(--line);
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.pg-sitemenu-btn:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 1px;
+}
+
+.pg-sitemenu {
+  inset: auto;
+  margin: 0;
+  min-width: 220px;
+  padding: 6px 0;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.pg-sitemenu ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pg-sitemenu li:first-child {
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.pg-sitemenu a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 16px;
+  font: 500 14px var(--sans);
+  color: var(--fg2);
+  text-decoration: none;
+}
+
+.pg-sitemenu a:hover {
+  background: var(--code);
+  color: var(--fg);
+}
+
+.pg-sitemenu a:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: -2px;
+}
+
+.pg-sitemenu a[aria-current="page"] {
+  color: var(--acc);
+  box-shadow: inset 2px 0 0 var(--acc);
+}
+
+.pg-sitemenu a.pg-sitemenu-home {
+  font-weight: 600;
+  color: var(--fg);
 }
 
 /* ---------- Terminal width ---------- */

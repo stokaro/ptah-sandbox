@@ -66,15 +66,27 @@
 <main class="pg-main" id="main">
 
 <!--
-  The playground is an application, so above 1100px it takes the window under
-  the site header the way an editor would: a toolbar, the guided steps, the
-  three panes, the terminal across the bottom and a status bar. The lines
-  between the panes are dragged to resize them (src/splitters.ts). Below 1100px
-  the same elements flow as a page. What the page says about itself follows
-  the application, below it.
+  The playground is an application, so above 1100px it takes the whole window
+  the way an editor would: a toolbar that also carries the site menu, the
+  guided steps and the step's strip, the three panes with the terminal, and a
+  status bar. The lines between the panes are dragged to resize them
+  (src/splitters.ts). Below 1100px the same elements flow as a page under the
+  site header. What the page says about itself is in About.
 -->
 <div class="wrap pg-app" id="pg-app">
   <div class="pg-toolbar">
+    <!--
+      The site's navigation, folded into one control. Above 1100px the site
+      header is not drawn, so the application starts at the top of the window,
+      and this opens the same links. src/sitemenu.ts copies them out of the
+      header, so the list is written once.
+    -->
+    <button class="pg-sitemenu-btn" type="button" id="pg-sitemenu-btn" popovertarget="pg-sitemenu" aria-expanded="false" title="Ptah: the other pages of the site">
+      <img src="assets/logo.svg" alt="" width="20" height="20">
+      <svg class="pg-sitemenu-chevron" viewBox="0 0 8 8" width="8" height="8" aria-hidden="true"><path d="M1 2.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>
+      <span class="sr-only">Site menu</span>
+    </button>
+    <nav class="pg-sitemenu" id="pg-sitemenu" aria-label="Site" popover></nav>
     <h1 class="pg-toolbar-title">Playground</h1>
     <div class="pg-bar" id="pg-bar">
       <label class="pg-scenario" for="pg-scenario">
@@ -101,6 +113,10 @@
         <span class="sr-only">Terminal across the full width</span>
       </button>
     </div>
+    <!-- The header's theme toggle, for the layout that does not draw the header. -->
+    <button class="icon-btn theme-btn pg-toolbar-theme" type="button" aria-label="Dark theme" aria-pressed="false">
+      <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 0 0 12.5z" fill="currentColor"/></svg>
+    </button>
     <div class="actions pg-actions">
       <!--
         Opens the tour the first visit shows by itself. It is here because a

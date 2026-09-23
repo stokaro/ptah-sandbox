@@ -61,6 +61,7 @@ import type { FileEntry } from "./protocol.ts";
 import { Session, SessionError, type RunHandle } from "./session.ts";
 import { installSplitters } from "./splitters.ts";
 import { installDock } from "./dock.ts";
+import { installSiteMenu } from "./sitemenu.ts";
 import {
   Store,
   canRun,
@@ -1069,6 +1070,8 @@ installSplitters({
 });
 // Where the terminal sits in that layout: between the side panes, or across.
 installDock(grid, need<HTMLElement>("#pg-dock"));
+// And the site's links, which that layout keeps behind the Ptah mark.
+installSiteMenu(need<HTMLElement>("#pg-sitemenu-btn"), need<HTMLElement>("#pg-sitemenu"));
 
 // About: the introduction, what is running and what this profile cannot do.
 // A dialog, because the full-window layout leaves no page under it to scroll
@@ -1205,11 +1208,13 @@ function render(state: State): void {
 /**
  * The theme toggle and the mobile menu, exactly as site.js does them: the
  * preference is stored under the same key so a visitor who chose dark on
- * ptah.run arrives here in dark.
+ * ptah.run arrives here in dark. There are two toggles, the header's and the
+ * toolbar's for the layout that does not draw the header, and they are one
+ * control: both flip the same attribute and both report it.
  */
 function wireChrome(): void {
   const root = document.documentElement;
-  const themeBtn = document.querySelector<HTMLButtonElement>(".theme-btn");
+  const themeBtns = all<HTMLButtonElement>(".theme-btn");
   const colors = { light: "#fbfbfa", dark: "#161311" };
 
   const current = (): "light" | "dark" => {
@@ -1220,7 +1225,7 @@ function wireChrome(): void {
 
   const label = (): void => {
     const theme = current();
-    themeBtn?.setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
+    for (const button of themeBtns) button.setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
     for (const meta of all<HTMLMetaElement>('meta[name="theme-color"]')) {
       meta.removeAttribute("media");
       meta.setAttribute("content", colors[theme]);
@@ -1228,16 +1233,18 @@ function wireChrome(): void {
   };
 
   label();
-  themeBtn?.addEventListener("click", () => {
-    const next = current() === "dark" ? "light" : "dark";
-    root.setAttribute("data-theme", next);
-    try {
-      localStorage.setItem("ptah-theme", next);
-    } catch {
-      // Storage refused; the choice lasts for this page only.
-    }
-    label();
-  });
+  for (const button of themeBtns) {
+    button.addEventListener("click", () => {
+      const next = current() === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      try {
+        localStorage.setItem("ptah-theme", next);
+      } catch {
+        // Storage refused; the choice lasts for this page only.
+      }
+      label();
+    });
+  }
 
   const header = document.querySelector(".site-header");
   const menuBtn = document.querySelector<HTMLButtonElement>(".menu-btn");
