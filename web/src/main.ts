@@ -502,7 +502,7 @@ swap("#pg-next", guide.next);
  * keeps one h1 and the status one element.
  */
 {
-  const phone = window.matchMedia("(max-width: 720px)");
+  const phone = window.matchMedia("(max-width: 900px)");
   const pageTitle = need<HTMLElement>(".pg-toolbar-title");
   const shortStatus = need<HTMLElement>("#pg-mini");
   const brand = document.querySelector<HTMLElement>(".site-header .brand");

@@ -1321,24 +1321,62 @@
 
 /* ---------- The phone's header ----------
  *
- * Up to 720px, where the site header is the brand, the theme toggle and the
- * menu button, src/main.ts moves the page's title and its short status into
- * it, and the toolbar starts at the scenario. The brand keeps its mark and
- * drops its name from view -- a screen reader still reads it -- so the row
- * holds all of it. */
-@media (max-width: 720px) {
+ * Up to 900px the playground is the phone layout, and its header is the
+ * phone's: the brand, the theme toggle and the menu button, with the page's
+ * title and its short status moved in beside the brand by src/main.ts, so
+ * the toolbar starts at the scenario. site.css switches its header at 720px.
+ * Between 721 and 900px the links do not fit a row beside the title and the
+ * status, and ran the brand into "Docs", so this page takes the drawer up to
+ * 900px, restating site.css's rules for that range. */
+@media (min-width: 721px) and (max-width: 900px) {
+  html.js .site-header .wrap {
+    height: 52px;
+  }
+  html.js .site-header .nav {
+    gap: 0;
+    margin-right: -12px;
+  }
+  html.js .site-header .icon-btn {
+    width: 44px;
+    height: 44px;
+    border: 0;
+  }
+  html.js .site-header .menu-btn {
+    display: grid;
+  }
+  html.js .site-header .menu-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+  html.js .site-header .nav-links {
+    display: none;
+    position: absolute;
+    right: 0;
+    left: 0;
+    top: 100%;
+    z-index: 20;
+    padding: 8px 48px 16px;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg);
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    font-size: 16px;
+  }
+  html.js .site-header.is-open .nav-links {
+    display: flex;
+  }
+  html.js .site-header .nav-links a {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 900px) {
   html.js .site-header .wrap {
     justify-content: flex-start;
     gap: 10px;
-  }
-
-  html.js .site-header .brand-name {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
   }
 
   html.js .site-header .pg-toolbar-title {
@@ -1360,6 +1398,20 @@
 
   html.js .site-header .nav {
     flex: none;
+  }
+}
+
+/* Where the brand's name, the title and the short status do not share a
+ * row, the brand keeps its mark and drops its name from view; a screen
+ * reader still reads it. */
+@media (max-width: 440px) {
+  html.js .site-header .brand-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }
 

@@ -372,11 +372,10 @@ async function run(): Promise<void> {
     (link.textContent ?? "").replace(/\s+/g, " ").trim(),
   );
   menu.hidePopover();
-  // Home and the header's links, less the one to this page and the two the
-  // header marks as reached from home.
+  // Home and the header's links.
   check(
     "the site header folds into the toolbar, and the Ptah mark opens the site's main pages",
-    siteHeader.getBoundingClientRect().height === 0 && menuOpen && headerLinks === 7
+    siteHeader.getBoundingClientRect().height === 0 && menuOpen && headerLinks === 4
       && menuNames.join(" | ") === "Ptah | Docs | Operator | Blog | GitHub ↗",
     `header ${Math.round(siteHeader.getBoundingClientRect().height)}px tall, ${headerLinks} links; ` +
       `menu open ${menuOpen}: ${menuNames.join(" | ")}`,

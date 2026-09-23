@@ -29,11 +29,6 @@ export function installSiteMenu(control: HTMLElement, menu: HTMLElement): void {
   }
 
   for (const link of document.querySelectorAll<HTMLAnchorElement>(".site-header .nav-links a")) {
-    // Not the page this menu is on: a link from the playground to itself goes
-    // nowhere. The header keeps it, where it marks the section you are in.
-    if (link.getAttribute("aria-current") === "page") continue;
-    // Nor a link the header marks as the site's own, reached from its home.
-    if (link.dataset["sitemenu"] === "omit") continue;
     const copy = document.createElement("a");
     copy.href = link.getAttribute("href") ?? link.href;
     copy.textContent = link.textContent;
