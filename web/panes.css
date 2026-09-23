@@ -75,6 +75,13 @@
   color: var(--fg2);
 }
 
+/* The phone's first tab over the results: the file and table list. The
+   list is the page's rail, shown under this strip when the view is chosen;
+   where the rail is beside the panes, the tab is not drawn. */
+.pgc-tab-workspace {
+  display: none;
+}
+
 .pgc-tab.is-active {
   color: var(--fg);
   background: var(--bg);

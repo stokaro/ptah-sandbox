@@ -826,6 +826,8 @@ async function paintData(): Promise<void> {
 }
 
 async function selectTable(name: string): Promise<void> {
+  // Chosen from the phone's Workspace tab: the rows are what was asked for.
+  if (panes.active() === "workspace") panes.show("data");
   showingQuery = false;
   selectedTable = name;
   rail?.selectTable(name);
@@ -1142,6 +1144,14 @@ installSplitters({
   next: () => document.getElementById("pg-next"),
   terminal: () => document.getElementById("pg-terminal"),
 });
+// The Workspace tab exists where the rail is not beside the panes. Widened
+// past that with it chosen, the column would show nothing, so it goes back
+// to Data.
+const beside = window.matchMedia("(min-width: 901px)");
+beside.addEventListener("change", () => {
+  if (beside.matches && panes.active() === "workspace") panes.show("data");
+});
+
 // Where the terminal sits in that layout: between the side panes, or across.
 installDock(grid, need<HTMLElement>("#pg-dock"));
 // And the site's links, which that layout keeps behind the Ptah mark.

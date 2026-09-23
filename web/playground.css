@@ -1536,8 +1536,18 @@
   html.js .pg-grid[data-pane="console"] > .pg-editor,
   html.js .pg-grid[data-pane="console"] > .pg-db,
   html.js .pg-grid[data-pane="database"] > .pg-editor,
-  html.js .pg-grid[data-pane="database"] > .pg-terminal {
+  html.js .pg-grid[data-pane="database"] > .pg-terminal,
+  html.js .pg-grid[data-pane="database"] > .pg-rail {
     display: none;
+  }
+  /* The Database tab's own strip leads with Workspace, and that list is the
+   * rail, under the strip. */
+  html.js .pgc-tab-workspace {
+    display: flex;
+  }
+  html.js .pg-grid[data-pane="database"]:has(> .pg-db[data-view="workspace"]) > .pg-rail {
+    display: grid;
+    order: 1;
   }
   html.js .pg-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -1586,37 +1596,42 @@
     color: var(--amber);
   }
 
-  /* The editor and the console are the page: the page is the screen's
-   * height, and the pane takes what the toolbar, the steps and the strip
-   * leave above the tab bar, so it never scrolls the page away. The database
-   * is a table to read down, and there the page scrolls as before. */
-  html.js body:has(.pg-grid:is([data-pane="editor"], [data-pane="console"])) {
+  /* Each pane is the page: the page is the screen's height, and the pane
+   * takes what the toolbar, the steps and the strip leave above the tab
+   * bar, scrolling inside itself, so the page never scrolls away. */
+  html.js body:has(.pg-grid[data-pane]) {
     display: flex;
     flex-direction: column;
     height: 100dvh;
   }
-  html.js body:has(.pg-grid:is([data-pane="editor"], [data-pane="console"])) .site-header {
+  html.js body:has(.pg-grid[data-pane]) .site-header {
     flex: none;
   }
-  html.js body:has(.pg-grid:is([data-pane="editor"], [data-pane="console"])) .pg-main,
-  html.js body:has(.pg-grid:is([data-pane="editor"], [data-pane="console"])) .pg-app {
+  html.js body:has(.pg-grid[data-pane]) .pg-main,
+  html.js body:has(.pg-grid[data-pane]) .pg-app {
     flex: 1 1 auto;
     min-height: 0;
     display: flex;
     flex-direction: column;
   }
-  html.js body:has(.pg-grid:is([data-pane="editor"], [data-pane="console"])) .pg-app > :not(.pg-grid) {
+  html.js body:has(.pg-grid[data-pane]) .pg-app > :not(.pg-grid) {
     flex: none;
   }
-  html.js .pg-grid:is([data-pane="editor"], [data-pane="console"]) {
+  html.js .pg-grid[data-pane] {
     flex: 1 1 auto;
     min-height: 0;
     grid-template-rows: auto minmax(0, 1fr);
   }
-  html.js .pg-grid:is([data-pane="editor"], [data-pane="console"]) > .pg-terminal {
+  /* Workspace: the strip, the results' tab row, and the list under it. */
+  html.js .pg-grid[data-pane="database"]:has(> .pg-db[data-view="workspace"]) {
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+  html.js .pg-grid[data-pane] > .pg-terminal {
     height: auto;
   }
-  html.js .pg-grid:is([data-pane="editor"], [data-pane="console"]) > .pg-editor {
+  html.js .pg-grid[data-pane] > .pg-editor,
+  html.js .pg-grid[data-pane] > .pg-db,
+  html.js .pg-grid[data-pane] > .pg-rail {
     min-height: 0;
   }
   .pg-rail {
