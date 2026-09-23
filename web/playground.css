@@ -1193,20 +1193,36 @@
   cursor: pointer;
 }
 
-/* Where the steps are one row they read as a route, the way breadcrumbs do:
- * each ends in a chevron pointing at the next, and the chevrons stand
- * between the steps rather than on them. A chevron is a hairline drawn
- * inside the step it ends, tip on the boundary. The step on screen and a
- * hovered step are marked by a rectangle that stops short of that chevron,
- * with the underline drawn in it rather than as the step's border. Both
- * earlier shapes put the mark and the chevron on top of each other: a filled
- * chevron cut a notch out of the step on screen, and a full-width tint held
- * its own chevron inside it with the underline running on beneath. */
+/* Where the steps are one row they read as a route. Each step ends in a
+ * chevron pointing at the next, and the step on screen is filled as an arrow
+ * along those chevrons: notched where the step before it points in, pointed
+ * where its own chevron is, with the underline along the arrow's lower edge.
+ * A hovered step gets the same arrow as an underline only.
+ *
+ * The arrow and the chevron have to meet exactly, and clip-path cannot take
+ * a length from the element's height, so the step's height is fixed here
+ * and the chevron's depth is half of it. The chevron is a square turned 45
+ * degrees whose diagonal is that height, drawn inside the step it ends with
+ * its tip on the boundary; the arrow reaches back by the same depth into the
+ * step before it. Beside the step on screen the fill itself is the edge, so
+ * the two chevron lines that touch it are not drawn. */
 @media (min-width: 901px) {
+  .pg-steps {
+    --pg-step-h: 44px;
+  }
+
   .pg-step {
+    --pg-chev: calc(var(--pg-step-h) / 2);
     position: relative;
     isolation: isolate;
+    height: var(--pg-step-h);
+    min-height: 0;
     border-right: 0;
+    border-bottom: 0;
+  }
+
+  .pg-step + .pg-step {
+    padding-left: 24px;
   }
 
   .pg-step:not(:last-child) {
@@ -1215,12 +1231,9 @@
 
   .pg-step:hover,
   .pg-step[aria-current="step"] {
-    border-bottom-color: transparent;
     background: transparent;
   }
 
-  /* Under the text, down over the 2px the underline had, and clear of the
-   * chevron, which reaches at most 21px back from the boundary. */
   .pg-step:hover::before,
   .pg-step[aria-current="step"]::before {
     content: "";
@@ -1228,8 +1241,16 @@
     z-index: -1;
     top: 0;
     right: 0;
-    bottom: -2px;
-    left: 0;
+    bottom: 0;
+    left: calc(-1 * var(--pg-chev));
+    clip-path: polygon(
+      0 0,
+      calc(100% - var(--pg-chev)) 0,
+      100% 50%,
+      calc(100% - var(--pg-chev)) 100%,
+      0 100%,
+      var(--pg-chev) 50%
+    );
     background: linear-gradient(to top, var(--mute) 2px, transparent 2px);
   }
 
@@ -1237,9 +1258,22 @@
     background: linear-gradient(to top, var(--acc) 2px, var(--accbg) 2px);
   }
 
-  .pg-step:not(:last-child):hover::before,
-  .pg-step:not(:last-child)[aria-current="step"]::before {
-    right: 26px;
+  /* The first step has no chevron before it, and the last none after it. */
+  .pg-step:first-child:hover::before,
+  .pg-step:first-child[aria-current="step"]::before {
+    left: 0;
+    clip-path: polygon(
+      0 0,
+      calc(100% - var(--pg-chev)) 0,
+      100% 50%,
+      calc(100% - var(--pg-chev)) 100%,
+      0 100%
+    );
+  }
+
+  .pg-step:last-child:hover::before,
+  .pg-step:last-child[aria-current="step"]::before {
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, var(--pg-chev) 50%);
   }
 
   .pg-step:not(:last-child)::after {
@@ -1248,14 +1282,19 @@
     top: 50%;
     right: 0;
     z-index: 1;
-    height: 70.7%;
-    aspect-ratio: 1;
+    width: calc(var(--pg-step-h) * 0.7071);
+    height: calc(var(--pg-step-h) * 0.7071);
     border-top: 1px solid var(--line);
     border-right: 1px solid var(--line);
     /* The tip of a square turned 45 degrees lies half its diagonal from the
      * centre: 20.7% of its side beyond the right edge it had unturned. */
     transform: translate(-20.7%, -50%) rotate(45deg);
     pointer-events: none;
+  }
+
+  .pg-step[aria-current="step"]::after,
+  .pg-step:has(+ .pg-step[aria-current="step"])::after {
+    border-color: transparent;
   }
 }
 
@@ -1384,6 +1423,10 @@
     border: 0;
     border-bottom: 1px solid var(--line);
     border-radius: 0;
+  }
+
+  .pg-steps {
+    --pg-step-h: 38px;
   }
 
   .pg-step {
