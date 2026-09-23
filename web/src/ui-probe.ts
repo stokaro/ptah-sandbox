@@ -976,6 +976,19 @@ async function run(): Promise<void> {
     `asked ${asked}: "${askedText.replace(/\s+/g, " ").slice(0, 120)}"; open after Stay ${leave?.open}`,
   );
 
+  /* ---- What Import does ---- */
+
+  need<HTMLButtonElement>("#pg-import-help").click();
+  const importHelp = need<HTMLElement>("#pg-import-help-pop");
+  const helpOpen = importHelp.matches(":popover-open");
+  const helpText = (importHelp.textContent ?? "").replace(/\s+/g, " ");
+  importHelp.hidePopover();
+  check(
+    "the ? beside Import says what it opens and what happens to the file",
+    helpOpen && helpText.includes("SQLite") && helpText.includes("app.db") && helpText.includes("never written"),
+    `open ${helpOpen}: "${helpText.slice(0, 120)}"`,
+  );
+
   /* ---- Free exploration ---- */
 
   // No steps and no checks: the steps row stays and says so, the strip says

@@ -965,8 +965,10 @@
 }
 
 /* The popover. The top layer draws it over the panes without taking a line
- * from them; src/guide.ts places it under the hint when it opens. */
-.pg-next-detail {
+ * from them; src/guide.ts places it under the hint when it opens. The help
+ * beside Import is the same kind of popover. */
+.pg-next-detail,
+.pg-help-pop {
   inset: auto;
   margin: 0;
   width: max-content;
@@ -979,14 +981,50 @@
   font: 13.5px/1.55 var(--sans);
 }
 
-.pg-next-detail:popover-open {
+.pg-next-detail:popover-open,
+.pg-help-pop:popover-open {
   display: grid;
   gap: 8px;
 }
 
-.pg-next-detail p {
+.pg-next-detail p,
+.pg-help-pop p {
   margin: 0;
   text-wrap: pretty;
+}
+
+.pg-help-pop .pg-help-title {
+  font-weight: 600;
+  color: var(--fg);
+}
+
+/* The round help button beside Import: the strip's hint, with a question. */
+.pg-help-btn {
+  flex: none;
+  align-self: center;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-left: -4px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: transparent;
+  font: 600 11px var(--mono);
+  color: var(--fg2);
+  cursor: pointer;
+}
+
+.pg-help-btn:hover,
+.pg-help-btn[aria-expanded="true"] {
+  border-color: var(--fg2);
+  color: var(--fg);
+}
+
+.pg-help-btn:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
 }
 
 /* A run the strip started is asking on stdin. Amber, the attention colour,

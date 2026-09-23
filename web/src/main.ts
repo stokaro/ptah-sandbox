@@ -65,6 +65,7 @@ import { installSplitters } from "./splitters.ts";
 import { installDock } from "./dock.ts";
 import { installSiteMenu } from "./sitemenu.ts";
 import { installLinks } from "./links.ts";
+import { anchorPopover } from "./popover.ts";
 import {
   Store,
   canRun,
@@ -1132,6 +1133,7 @@ installDock(grid, need<HTMLElement>("#pg-dock"));
 installSiteMenu(need<HTMLElement>("#pg-sitemenu-btn"), need<HTMLElement>("#pg-sitemenu"));
 // After the menu, so its copies of the header's links are marked too.
 installLinks();
+anchorPopover(need<HTMLElement>("#pg-import-help-pop"), need<HTMLElement>("#pg-import-help"));
 
 // About: the introduction, what is running and what this profile cannot do.
 // A dialog, because the full-window layout leaves no page under it to scroll

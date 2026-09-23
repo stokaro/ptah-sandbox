@@ -124,6 +124,16 @@
       -->
       <button class="btn btn-ghost" type="button" id="pg-tour-open">Tour</button>
       <button class="btn btn-ghost" type="button" id="pg-import">Import…</button>
+      <!-- What Import does, one click away: it is the one action whose name
+           does not say what it takes. src/main.ts places the popover. -->
+      <button class="pg-help-btn" type="button" id="pg-import-help" popovertarget="pg-import-help-pop"
+              aria-expanded="false" aria-label="What Import does" title="What Import does">?</button>
+      <div class="pg-help-pop" id="pg-import-help-pop" popover>
+        <p class="pg-help-title">Import a SQLite database</p>
+        <p>Import opens a .db file from your computer as this tab's app.db, in place of the one the scenario seeded. Your file is read, never written.</p>
+        <p>Then ask Ptah about it: <code>schema drift</code> compares it with schema.sql, and <code>schema apply --dry-run</code> shows what changing it would take.</p>
+        <p>A database in WAL mode is refused; checkpoint it first. Reset brings back the seeded database.</p>
+      </div>
       <button class="btn btn-ghost" type="button" id="pg-export">Export…</button>
       <button class="btn btn-ghost" type="button" id="pg-reset">Reset</button>
     </div>
