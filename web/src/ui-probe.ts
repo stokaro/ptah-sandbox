@@ -629,6 +629,13 @@ async function run(): Promise<void> {
   // The strip never presses Run; after "Put it in the SQL pane" it says Run
   // is the next press, Run is lit, and focus is in the query so Cmd+Enter
   // works. The first run from the pane puts all of that out.
+  const partsNow = (): string =>
+    [...doc.querySelectorAll<HTMLElement>("#pg-next .pg-next-part")]
+      .map((part) => `${part.hasAttribute("aria-current") ? ">" : ""}${(part.textContent ?? "").replace("done", "")}`)
+      .join(" ");
+  const shownCommand = (): string => textOf("#pg-next .pg-next-row .cmd pre").replace(/\s+/g, " ").trim();
+  const partsBeforeRun = partsNow();
+  const commandBeforeRun = shownCommand();
   const putButton = [...doc.querySelectorAll<HTMLButtonElement>("#pg-next .pg-next-run .btn")].find(
     (b) => b.textContent === "Put it in the SQL pane →",
   );
@@ -645,6 +652,17 @@ async function run(): Promise<void> {
   const stillOffered =
     q<HTMLElement>("#pg-next")?.dataset["state"] === "offered"
     || (q(".pgc-ed-run .btn")?.classList.contains("is-offered") ?? false);
+  // Its two parts are done in order: the query first and nothing else on
+  // show, then, once the query has run, drift in its place and part 1 ticked.
+  const partsAfterRun = partsNow();
+  const commandAfterRun = shownCommand();
+  check(
+    "step 05 shows its query alone, and running it moves the strip on to drift",
+    partsBeforeRun === ">1 2" && commandBeforeRun.startsWith("SELECT")
+      && partsAfterRun === "1✓ >2" && commandAfterRun.startsWith("$ ptah schema drift"),
+    `parts before "${partsBeforeRun}", showing "${commandBeforeRun.slice(0, 40)}"; ` +
+      `after "${partsAfterRun}", showing "${commandAfterRun.slice(0, 40)}"`,
+  );
   check(
     "step 05's query goes into the SQL pane with Run lit, and running it puts the pointer out",
     putButton !== undefined && stripOffered && runLit && queryFocused
@@ -867,43 +885,28 @@ async function run(): Promise<void> {
   // A grid `auto` track is sized from max-content, and max-content is measured
   // as if nothing wrapped. When a step carried a second command the actions
   // column was therefore measured as both rows side by side, took the whole
-  // width, and left the prose beside it at zero -- one word per line. Measured,
-  // because it is a layout bug no assertion about the DOM tree would catch.
+  // width, and left the prose beside it at zero -- one word per line. A step
+  // of more than one part now shows one part at a time with a switch before
+  // it, so the real shape is measured: the first step with parts, pinned.
   {
+    let found = false;
+    for (const stepButton of doc.querySelectorAll<HTMLButtonElement>(".pg-step")) {
+      stepButton.click();
+      found = q("#pg-next .pg-next-parts") !== null;
+      if (found) break;
+    }
     const strip = need<HTMLElement>("#pg-next");
     const run = strip.querySelector<HTMLElement>(".pg-next-run");
+    const row = strip.querySelector<HTMLElement>(".pg-next-row");
     const title = strip.querySelector<HTMLElement>(".pg-next-copy strong");
-    let copyWidth = 0;
-    let titleHeight = 0;
-    let rows = 0;
-    if (run && title) {
-      // Synthesise the second row exactly as the guide builds it, so the check
-      // does not depend on which step happens to be focused.
-      const row = doc.createElement("div");
-      row.className = "pg-next-also";
-      const box = doc.createElement("div");
-      box.className = "cmd";
-      const pre = doc.createElement("pre");
-      pre.textContent = "$ ptah schema drift --schema-file schema.sql --db-url sqlite://app.db";
-      box.appendChild(pre);
-      row.appendChild(box);
-      const button = doc.createElement("button");
-      button.className = "btn btn-ghost";
-      button.textContent = "Run";
-      row.appendChild(button);
-      run.appendChild(row);
-
-      rows = run.children.length;
-      copyWidth = Math.round(
-        (strip.querySelector<HTMLElement>(".pg-next-copy") as HTMLElement).getBoundingClientRect().width,
-      );
-      titleHeight = Math.round(title.getBoundingClientRect().height);
-      row.remove();
-    }
+    const copyWidth = Math.round(strip.querySelector<HTMLElement>(".pg-next-copy")?.getBoundingClientRect().width ?? 0);
+    const titleHeight = Math.round(title?.getBoundingClientRect().height ?? 0);
+    const rowHeight = Math.round(row?.getBoundingClientRect().height ?? 0);
     check(
-      "a step with two commands still leaves the prose a column to sit in",
-      rows === 2 && copyWidth > 240 && titleHeight < 60,
-      `rows ${rows}, prose column ${copyWidth}px, headline ${titleHeight}px tall`,
+      "a step of two parts shows one, with its switch, and still leaves the prose a column",
+      found && run?.children.length === 1 && rowHeight < 50 && copyWidth > 240 && titleHeight < 60,
+      `step with parts ${found ? "found" : "missing"}; ${run?.children.length ?? 0} row(s), ${rowHeight}px tall; ` +
+        `prose column ${copyWidth}px, headline ${titleHeight}px tall`,
     );
   }
 

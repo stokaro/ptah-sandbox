@@ -605,8 +605,10 @@ async function seedScenario(scenario: Scenario): Promise<void> {
     "No plan yet. Run schema apply with --dry-run to see the exact SQL before anything runs.",
   );
 
-  // A query the last scenario's guide put in the SQL pane is not this one's.
+  // A query the last scenario's guide put in the SQL pane is not this one's,
+  // and nothing in a fresh workspace has been done yet -- Reset comes here too.
   editor.offerRun(false);
+  guide.forgetParts();
   const schema = scenario.files["schema.sql"] ?? "";
   const revision = store.state.workspace.revision;
   editor.setText("schema", schema, { baseline: schema, syncedAt: revision });
@@ -920,6 +922,9 @@ async function afterRun(argv: string[], code: number): Promise<void> {
   const real = argv[0] === "ptah" ? argv.slice(1) : argv;
   const now = Date.now();
   runLog.record(real, code, now, now);
+  // Before the refresh below moves the route on: the part this finished
+  // belongs to the step that was on screen when it ran.
+  guide.ran(real);
   announce(`Command finished with exit code ${code}.`);
 
   const isPlan =
@@ -949,7 +954,7 @@ async function afterRun(argv: string[], code: number): Promise<void> {
 async function runSql(sql: string): Promise<void> {
   if (!canRun(store.state) || sql.trim() === "") return;
   editor.offerRun(false);
-  guide.sqlRan();
+  guide.sqlRan(sql);
   terminal.note(`[SQL pane] ${sql.replace(/\s+/g, " ").trim()}`);
   const started = performance.now();
   try {

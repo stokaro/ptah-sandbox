@@ -26,7 +26,16 @@ import {
   evaluateRoute,
   pad,
 } from "./scenario.ts";
-import type { PatchHunk, PatchResult, RouteState, Scenario, StateProbe, StepState } from "./scenario.ts";
+import type {
+  Action,
+  PatchHunk,
+  PatchResult,
+  RouteState,
+  Scenario,
+  StateProbe,
+  Step,
+  StepState,
+} from "./scenario.ts";
 
 /** What the guide needs from the rest of the page. */
 export interface GuideHost {
@@ -68,7 +77,11 @@ const IDLE: StatusPill = { glyph: "…", text: "starting", tone: "quiet" };
  * tick would still read as a quieter kind of success.
  */
 function doneMark(state: StepState): HTMLElement | null {
-  if (state.status !== "done") return null;
+  return state.status === "done" ? doneTick() : null;
+}
+
+/** The green tick, with the word for screen readers. */
+function doneTick(): HTMLElement {
   const mark = el("span", "pg-step-done");
   const tick = el("span", undefined, "✓");
   tick.setAttribute("aria-hidden", "true");
@@ -115,6 +128,10 @@ export class Guide {
   private question: string | null = null;
   /** SQL the strip put in the SQL pane that nobody has run since; null when none. */
   private offered: string | null = null;
+  /** Per step, the part the strip shows, for a step of more than one. */
+  private partAt = new Map<number, number>();
+  /** Per step, the parts this page has seen done. */
+  private partsDone = new Map<number, Set<number>>();
   /** The step the strip is showing, or null to follow the route. */
   private pinned: number | null = null;
   /** Serializes refreshes so two overlapping passes cannot paint out of order. */
@@ -174,7 +191,7 @@ export class Guide {
     this.select.value = id;
     this.pinned = null;
     this.route = null;
-    this.offered = null;
+    this.forgetParts();
     this.render();
     await this.host.loadScenario(scenario);
     await this.refresh();
@@ -228,12 +245,30 @@ export class Guide {
 
   /**
    * Something ran from the SQL pane. Whatever the strip put there has done
-   * its job, so the strip stops pointing at Run.
+   * its job, so the strip stops pointing at Run, and the step's SQL part is
+   * done if this was its query -- or any query, when the strip had just put
+   * its own there and the visitor edited it before running.
    */
-  sqlRan(): void {
-    if (this.offered === null) return;
+  sqlRan(sql: string): void {
+    const offered = this.offered;
     this.offered = null;
+    this.markParts((part) => part.kind === "sql" && (part.sql === offered || sameSql(part.sql, sql)));
     this.renderNext();
+  }
+
+  /**
+   * A command finished in the terminal, typed there or started from the
+   * strip. A part of the step on screen that is that command is done.
+   */
+  ran(argv: readonly string[]): void {
+    this.markParts((part) => part.kind === "run" && sameArgv(part.argv, argv));
+  }
+
+  /** A new workspace: nothing in it has been done yet. */
+  forgetParts(): void {
+    this.partAt.clear();
+    this.partsDone.clear();
+    this.offered = null;
   }
 
   focusStep(index: number): void {
@@ -357,12 +392,15 @@ export class Guide {
     }
 
     const step = focused.step;
+    const parts = actionsOf(step);
+    const at = this.partShown(focused.index, parts.length);
+    const action = parts[at];
     // The strip put this step's SQL in the pane and nobody has run it yet:
     // the headline says where the next press is. The guide never presses it.
-    const offered = step.action?.kind === "sql" && this.offered === step.action.sql;
+    const offered = action?.kind === "sql" && this.offered === action.sql;
     if (offered) this.next.dataset["state"] = "offered";
-    this.appendActions(actions, focused);
-    const patch = step.action?.kind === "edit" ? step.action.patch : undefined;
+    this.appendActions(actions, focused, parts, at);
+    const patch = action?.kind === "edit" ? action.patch : undefined;
     const conflict = patch !== undefined && this.host.patchState(patch) === "conflict";
     fill(
       this.next,
@@ -380,20 +418,32 @@ export class Guide {
     );
   }
 
-  private appendActions(container: HTMLElement, state: StepState): void {
-    const step = state.step;
-    const action = step.action;
+  /**
+   * The part of the step the strip shows, and, for a step of more than one,
+   * the switch between its parts. .pg-next-run is a column of rows, and a
+   * box and its button belong on one line inside a row rather than as
+   * siblings of it.
+   */
+  private appendActions(
+    container: HTMLElement,
+    state: StepState,
+    parts: readonly Action[],
+    at: number,
+  ): void {
+    const action = parts[at];
     const waiting = this.host.busy();
+    const done = this.partsDone.get(state.index) ?? new Set<number>();
 
-    // The primary action gets its own row for the same reason the secondary
-    // ones do: .pg-next-run is a column of rows, and a box and its button
-    // belong on one line inside a row rather than as siblings of it.
     const actions = el("div", "pg-next-row");
     if (action) container.appendChild(actions);
+    if (parts.length > 1) actions.appendChild(this.partSwitch(state.index, parts, at, done));
 
     if (action?.kind === "run") {
       actions.appendChild(commandBox(action.argv));
-      const button = el("button", "btn", buttonLabel(state, waiting));
+      // Again, once this part has been seen done -- or the whole step has,
+      // and this is its last part.
+      const again = done.has(at) || (state.status === "done" && at === parts.length - 1);
+      const button = el("button", "btn", runLabel(again, waiting));
       button.type = "button";
       button.disabled = waiting;
       button.addEventListener("click", () => {
@@ -453,26 +503,96 @@ export class Guide {
       actions.appendChild(button);
     }
 
-    for (const argv of step.also ?? []) {
-      const row = el("div", "pg-next-also");
-      row.appendChild(commandBox(argv));
-      const button = el("button", "btn btn-ghost", "Run");
+  }
+
+  /**
+   * One numbered button per part, the part on screen marked current and a
+   * part seen done carrying the step's tick. Any of them can be chosen; a
+   * part seen done moves the strip on to the next by itself.
+   */
+  private partSwitch(step: number, parts: readonly Action[], at: number, done: ReadonlySet<number>): HTMLElement {
+    const group = el("div", "pg-next-parts");
+    group.setAttribute("role", "group");
+    group.setAttribute("aria-label", "Parts of this step");
+    parts.forEach((part, index) => {
+      const button = el("button", "pg-next-part");
       button.type = "button";
-      button.disabled = waiting;
+      const finished = done.has(index);
+      fill(button, el("span", undefined, String(index + 1)), finished ? doneTick() : null);
+      button.title = `${index + 1} of ${parts.length}: ${partLabel(part)}${finished ? ", done" : ""}`;
+      button.setAttribute("aria-label", button.title);
+      if (index === at) button.setAttribute("aria-current", "step");
       button.addEventListener("click", () => {
-        if (this.host.busy()) return;
-        this.host.run(argv);
+        this.partAt.set(step, index);
+        this.renderNext();
       });
-      row.appendChild(button);
-      container.appendChild(row);
+      group.appendChild(button);
+    });
+    return group;
+  }
+
+  /** Which part of a step the strip shows. */
+  private partShown(step: number, count: number): number {
+    return Math.min(this.partAt.get(step) ?? 0, Math.max(0, count - 1));
+  }
+
+  /**
+   * Records that parts of the step on screen were done, and when the part
+   * shown is one of them, moves on to the next part not done yet. Only the
+   * step on screen is credited: a part is guidance about where the visitor
+   * is, and the route's own checks decide whether a step is done.
+   */
+  private markParts(matches: (part: Action) => boolean): void {
+    const focused = this.focused();
+    if (focused === null) return;
+    const parts = actionsOf(focused.step);
+    const done = this.partsDone.get(focused.index) ?? new Set<number>();
+    const before = done.size;
+    parts.forEach((part, index) => {
+      if (matches(part)) done.add(index);
+    });
+    if (done.size === before) return;
+    this.partsDone.set(focused.index, done);
+    const at = this.partShown(focused.index, parts.length);
+    if (done.has(at)) {
+      const next = parts.findIndex((_, index) => index > at && !done.has(index));
+      if (next !== -1) this.partAt.set(focused.index, next);
     }
+    this.renderNext();
   }
 }
 
-/** The primary button's words, which have to be honest about waiting. */
-function buttonLabel(state: StepState, waiting: boolean): string {
+/** The run button's words, which have to be honest about waiting. */
+function runLabel(again: boolean, waiting: boolean): string {
   if (waiting) return "Waiting…";
-  return state.status === "done" ? "Run again →" : "Run next →";
+  return again ? "Run again →" : "Run next →";
+}
+
+/**
+ * A step's actions in the order they are meant to be done: its action, then
+ * each of its further commands. The strip shows one at a time.
+ */
+function actionsOf(step: Step): Action[] {
+  const parts: Action[] = step.action ? [step.action] : [];
+  for (const argv of step.also ?? []) parts.push({ kind: "run", argv });
+  return parts;
+}
+
+/** What a part is, for the switch's labels. */
+function partLabel(part: Action): string {
+  if (part.kind === "run") return `ptah ${part.argv.filter((token) => !token.startsWith("-")).slice(0, 2).join(" ")}`;
+  if (part.kind === "sql") return "the query in the SQL pane";
+  return `the edit to ${part.file}`;
+}
+
+function sameArgv(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((token, index) => token === b[index]);
+}
+
+/** Whitespace and a final semicolon do not make two queries different. */
+function sameSql(a: string, b: string): boolean {
+  const norm = (sql: string): string => sql.replace(/\s+/g, " ").trim().replace(/;$/, "").trim();
+  return norm(a) === norm(b);
 }
 
 /**

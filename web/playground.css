@@ -903,13 +903,64 @@
   min-width: 0;
 }
 
-.pg-next-row,
-.pg-next-also {
+.pg-next-row {
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
   max-width: 100%;
+}
+
+/* The parts of a step of more than one: numbered buttons that read as one
+ * control, like the terminal-width pair. The part on screen wears the
+ * selection colours, and a part seen done carries the step's green tick. */
+.pg-next-parts {
+  display: flex;
+  flex: none;
+}
+
+.pg-next-part {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  font: 500 12.5px var(--mono);
+  color: var(--mute);
+  cursor: pointer;
+}
+
+.pg-next-part:first-child {
+  border-radius: 2px 0 0 2px;
+}
+
+.pg-next-part:last-child {
+  border-radius: 0 2px 2px 0;
+}
+
+.pg-next-part + .pg-next-part {
+  margin-left: -1px;
+}
+
+.pg-next-part:hover {
+  color: var(--fg);
+}
+
+.pg-next-part[aria-current="step"] {
+  position: relative;
+  border-color: var(--acc);
+  background: var(--accbg);
+  color: var(--acc);
+}
+
+.pg-next-part:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--acc);
+  outline-offset: 1px;
 }
 
 .pg-next-run .cmd {
