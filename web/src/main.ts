@@ -382,6 +382,7 @@ function guideHost(): GuideHost {
     },
     offerSql: (sql) => {
       editor.setText("sql", sql, { baseline: null });
+      editor.offerRun(true);
       editor.activate("sql");
       store.paneSelected("editor");
       editor.focus();
@@ -604,6 +605,8 @@ async function seedScenario(scenario: Scenario): Promise<void> {
     "No plan yet. Run schema apply with --dry-run to see the exact SQL before anything runs.",
   );
 
+  // A query the last scenario's guide put in the SQL pane is not this one's.
+  editor.offerRun(false);
   const schema = scenario.files["schema.sql"] ?? "";
   const revision = store.state.workspace.revision;
   editor.setText("schema", schema, { baseline: schema, syncedAt: revision });
@@ -945,6 +948,8 @@ async function afterRun(argv: string[], code: number): Promise<void> {
 /** Runs the SQL tab's buffer against the database the CLI is pointed at. */
 async function runSql(sql: string): Promise<void> {
   if (!canRun(store.state) || sql.trim() === "") return;
+  editor.offerRun(false);
+  guide.sqlRan();
   terminal.note(`[SQL pane] ${sql.replace(/\s+/g, " ").trim()}`);
   const started = performance.now();
   try {

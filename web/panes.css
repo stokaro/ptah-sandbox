@@ -383,6 +383,42 @@ button.pgc-ed-num:focus-visible {
   border-top: 1px solid var(--line);
 }
 
+/* The guide put a query here for the visitor to run (Editor.offerRun). The
+   row takes the guide's colour, Run takes the accent and pulses once, so the
+   button the step is waiting on is the one the eye lands on. The guide never
+   presses it. */
+.pgc-ed-run.is-offered {
+  background: var(--pg-guide);
+}
+
+.pgc-ed-run .btn.is-offered {
+  border-color: var(--acc);
+  background: var(--acc);
+  color: var(--bg);
+}
+
+.pgc-ed-run .btn.is-offered:hover {
+  border-color: var(--fg);
+  background: var(--fg);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pgc-ed-run .btn.is-offered {
+    animation: pgc-offer 1.6s ease-out 1;
+  }
+}
+
+@keyframes pgc-offer {
+  from {
+    outline: 2px solid var(--acc);
+    outline-offset: 0;
+  }
+  to {
+    outline: 2px solid transparent;
+    outline-offset: 10px;
+  }
+}
+
 .pgc-ed-notice {
   padding: 8px 16px;
   border-top: 1px solid var(--line);

@@ -870,6 +870,20 @@
   font-weight: 600;
 }
 
+/* The strip put its SQL in the pane: where the button that runs it is, in
+ * place of the one that put it there. */
+.pg-next-offer {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  border: 1px solid var(--acc);
+  border-radius: 2px;
+  background: var(--bg);
+  font: 500 13px var(--sans);
+  color: var(--acc);
+  white-space: nowrap;
+}
+
 /* What the route checked, in the words of the check. */
 .pg-next-check {
   font: 12px/1.5 var(--mono);

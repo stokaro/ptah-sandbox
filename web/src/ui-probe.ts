@@ -624,6 +624,35 @@ async function run(): Promise<void> {
     `header cells: ${header.join(" | ")}`,
   );
 
+  /* ---- 7b. Step 05 puts its query in the SQL pane and points at Run ---- */
+
+  // The strip never presses Run; after "Put it in the SQL pane" it says Run
+  // is the next press, Run is lit, and focus is in the query so Cmd+Enter
+  // works. The first run from the pane puts all of that out.
+  const putButton = [...doc.querySelectorAll<HTMLButtonElement>("#pg-next .pg-next-run .btn")].find(
+    (b) => b.textContent === "Put it in the SQL pane →",
+  );
+  putButton?.click();
+  await sleep(100);
+  const stripOffered = q<HTMLElement>("#pg-next")?.dataset["state"] === "offered";
+  const runLit = q(".pgc-ed-run .btn")?.classList.contains("is-offered") ?? false;
+  const queryFocused = doc.activeElement?.classList.contains("pgc-ed-input") ?? false;
+  const offeredQuery = q<HTMLTextAreaElement>(".pgc-ed-input")?.value ?? "";
+  need<HTMLButtonElement>(".pgc-ed-run button").click();
+  await until("the offered query to answer", () => paneHas("data", "query result") || null, 30_000).catch(
+    () => undefined,
+  );
+  const stillOffered =
+    q<HTMLElement>("#pg-next")?.dataset["state"] === "offered"
+    || (q(".pgc-ed-run .btn")?.classList.contains("is-offered") ?? false);
+  check(
+    "step 05's query goes into the SQL pane with Run lit, and running it puts the pointer out",
+    putButton !== undefined && stripOffered && runLit && queryFocused
+      && offeredQuery.includes("SELECT id, name, active FROM users") && !stillOffered,
+    `put button ${putButton === undefined ? "missing" : "pressed"}; strip offered ${stripOffered}, ` +
+      `Run lit ${runLit}, query focused ${queryFocused}; after Run still pointing ${stillOffered}`,
+  );
+
   /* ---- 8. Drift is clean again ---- */
 
   const after = await runCommand(DRIFT);

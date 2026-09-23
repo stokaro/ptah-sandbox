@@ -526,6 +526,20 @@ export class Editor {
     return done && this.input.value === text;
   }
 
+  /**
+   * Marks the SQL tab's Run as the button the guide is waiting on: accent,
+   * one pulse, and the run row in the guide's colour. The guide puts a query
+   * here and the visitor presses Run; this only says which button that is.
+   */
+  offerRun(on: boolean): void {
+    this.runButton.classList.remove("is-offered");
+    this.runRow.classList.toggle("is-offered", on);
+    if (!on) return;
+    // Taken off and put back, so a second offer pulses again.
+    void this.runButton.offsetWidth;
+    this.runButton.classList.add("is-offered");
+  }
+
   /** Scrolls the textarea so that line (0-based) is on screen, if it is not. */
   reveal(line: number): void {
     const height = Number.parseFloat(getComputedStyle(this.input).lineHeight) || 21;

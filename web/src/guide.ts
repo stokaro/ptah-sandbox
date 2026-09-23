@@ -113,6 +113,8 @@ export class Guide {
   private route: RouteState | null = null;
   /** What a run the strip started is asking on stdin; null when it is not. */
   private question: string | null = null;
+  /** SQL the strip put in the SQL pane that nobody has run since; null when none. */
+  private offered: string | null = null;
   /** The step the strip is showing, or null to follow the route. */
   private pinned: number | null = null;
   /** Serializes refreshes so two overlapping passes cannot paint out of order. */
@@ -172,6 +174,7 @@ export class Guide {
     this.select.value = id;
     this.pinned = null;
     this.route = null;
+    this.offered = null;
     this.render();
     await this.host.loadScenario(scenario);
     await this.refresh();
@@ -220,6 +223,16 @@ export class Guide {
    */
   asking(question: string | null): void {
     this.question = question;
+    this.renderNext();
+  }
+
+  /**
+   * Something ran from the SQL pane. Whatever the strip put there has done
+   * its job, so the strip stops pointing at Run.
+   */
+  sqlRan(): void {
+    if (this.offered === null) return;
+    this.offered = null;
     this.renderNext();
   }
 
@@ -344,12 +357,16 @@ export class Guide {
     }
 
     const step = focused.step;
+    // The strip put this step's SQL in the pane and nobody has run it yet:
+    // the headline says where the next press is. The guide never presses it.
+    const offered = step.action?.kind === "sql" && this.offered === step.action.sql;
+    if (offered) this.next.dataset["state"] = "offered";
     this.appendActions(actions, focused);
     const patch = step.action?.kind === "edit" ? step.action.patch : undefined;
     const conflict = patch !== undefined && this.host.patchState(patch) === "conflict";
     fill(
       this.next,
-      headlineWithHint(step.headline, {
+      headlineWithHint(offered ? "The query is in the SQL pane. Press Run there to read the rows back." : step.headline, {
         paragraphs: [focused.status === "done" ? step.done ?? step.instruction : step.instruction],
         patch,
         note: conflict
@@ -392,10 +409,20 @@ export class Guide {
       copy.addEventListener("click", () => { void navigator.clipboard?.writeText(action.sql); });
       actions.appendChild(fill(box, pre, copy));
 
-      const button = el("button", "btn", "Put it in the SQL pane →");
-      button.type = "button";
-      button.addEventListener("click", () => this.host.offerSql(action.sql));
-      actions.appendChild(button);
+      if (this.offered === action.sql) {
+        // Put there already: in place of a button that would put it there
+        // again, where the one that runs it is.
+        actions.appendChild(el("span", "pg-next-offer", "Run is under the query · ⌘↵ or Ctrl+↵"));
+      } else {
+        const button = el("button", "btn", "Put it in the SQL pane →");
+        button.type = "button";
+        button.addEventListener("click", () => {
+          this.host.offerSql(action.sql);
+          this.offered = action.sql;
+          this.renderNext();
+        });
+        actions.appendChild(button);
+      }
     } else if (action?.kind === "edit" && action.patch) {
       // The patch is applied to the editor's buffer and saved like typing, so
       // the lines it changed are marked there and the step ticks from the
