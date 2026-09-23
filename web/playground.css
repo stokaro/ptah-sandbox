@@ -1204,17 +1204,23 @@
  * and the chevron's depth is half of it. The chevron is a square turned 45
  * degrees whose diagonal is that height, drawn inside the step it ends with
  * its tip on the boundary; the arrow reaches back by the same depth into the
- * step before it. Beside the step on screen the fill itself is the edge, so
- * the two chevron lines that touch it are not drawn. */
+ * step before it.
+ *
+ * The chevrons stay drawn over the fill, so the arrow has an edge rather than
+ * a colour that stops. That is a matter of layers: the row is the one
+ * stacking context, the fill sits at 0 under the step's text, and every
+ * chevron at 1 over both -- including the one belonging to the step before,
+ * whose line is the arrow's notch. */
 @media (min-width: 901px) {
   .pg-steps {
     --pg-step-h: 44px;
+    position: relative;
+    isolation: isolate;
   }
 
   .pg-step {
     --pg-chev: calc(var(--pg-step-h) / 2);
     position: relative;
-    isolation: isolate;
     height: var(--pg-step-h);
     min-height: 0;
     border-right: 0;
@@ -1234,11 +1240,16 @@
     background: transparent;
   }
 
+  /* Positioned, so the text paints after the fill in tree order. */
+  .pg-step > * {
+    position: relative;
+  }
+
   .pg-step:hover::before,
   .pg-step[aria-current="step"]::before {
     content: "";
     position: absolute;
-    z-index: -1;
+    z-index: 0;
     top: 0;
     right: 0;
     bottom: 0;
@@ -1292,10 +1303,6 @@
     pointer-events: none;
   }
 
-  .pg-step[aria-current="step"]::after,
-  .pg-step:has(+ .pg-step[aria-current="step"])::after {
-    border-color: transparent;
-  }
 }
 
 /* A step whose state the page cannot observe keeps its number and says why on
