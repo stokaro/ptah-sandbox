@@ -106,6 +106,7 @@ function runsFrom(...pairs) {
 
 const DB_URL = "sqlite://app.db";
 const DRIFT = ["schema", "drift", "--schema-file", "schema.sql", "--db-url", DB_URL];
+const DRIFT_JSON = [...DRIFT, "--format", "json"];
 const DRY_RUN = ["schema", "apply", "--schema-file", "schema.sql", "--db-url", DB_URL, "--dry-run"];
 const APPLY = ["schema", "apply", "--schema-file", "schema.sql", "--db-url", DB_URL];
 
@@ -229,16 +230,31 @@ test("undoing a change on purpose is part of the route, not a fall from it", asy
   assert.equal(byId(mid, "change").status, "done");
 
   const reverted = await evaluateRoute(B, fakeProbe(seededWorld({
-    runs: runsFrom([DRIFT, 0], [DRIFT, 1], [DRIFT, 0]),
+    runs: runsFrom([DRIFT, 0], [DRIFT, 1], [DRIFT_JSON, 1], [DRIFT, 0]),
   })));
   assert.equal(byId(reverted, "change").status, "done", "reverting the column un-did an earlier step");
   assert.equal(reverted.offScript, null, "finishing the route was reported as going off it");
   assert.equal(reverted.currentIndex, -1, "the route did not finish");
 });
 
+/**
+ * Scenario B with its report step as it was when it could not be checked:
+ * reading, and nothing to observe. No shipped step is like that now, and the
+ * engine's rule for one still has to hold for the next scenario that has it.
+ */
+function withUnverifiableReport() {
+  const raw = JSON.parse(readFileSync(new URL("../scenarios/b.json", import.meta.url), "utf8"));
+  const report = raw.steps.find((s) => s.id === "report");
+  delete report.action;
+  report.check = null;
+  report.unverified = "Whether the report was read is not something this page can observe.";
+  return parseScenario(raw);
+}
+
 test("a step with nothing to check is stepped over once something after it is done", async () => {
+  const unverifiable = withUnverifiableReport();
   const world = seededWorld({ runs: runsFrom([DRIFT, 0], [DRIFT, 1]) });
-  const mid = await evaluateRoute(B, fakeProbe({
+  const mid = await evaluateRoute(unverifiable, fakeProbe({
     ...world,
     tables: { users: ["id", "name", "email", "nickname"], tasks: ["id", "user_id", "title", "done"] },
   }));
@@ -246,7 +262,7 @@ test("a step with nothing to check is stepped over once something after it is do
   assert.equal(mid.steps[mid.currentIndex].step.id, "report");
   assert.equal(byId(mid, "report").status, "unverifiable");
 
-  const finished = await evaluateRoute(B, fakeProbe(seededWorld({
+  const finished = await evaluateRoute(unverifiable, fakeProbe(seededWorld({
     runs: runsFrom([DRIFT, 0], [DRIFT, 1], [DRIFT, 0]),
   })));
   assert.equal(byId(finished, "report").status, "unverifiable", "an unverifiable step was ticked");
@@ -457,7 +473,9 @@ test("parseScenario refuses a scenario that smuggles in an approval flag", () =>
 
 test("parseScenario refuses a step with no check and no explanation", () => {
   const evil = JSON.parse(readFileSync(new URL("../scenarios/b.json", import.meta.url), "utf8"));
-  delete evil.steps.find((s) => s.id === "report").unverified;
+  const report = evil.steps.find((s) => s.id === "report");
+  report.check = null;
+  delete report.unverified;
   assert.throws(() => parseScenario(evil), /must say why in `unverified`/);
 });
 
@@ -609,4 +627,20 @@ test("a scenario with steps must say what state they assume", () => {
   const raw = JSON.parse(readFileSync(new URL("../scenarios/a.json", import.meta.url), "utf8"));
   delete raw.baseline;
   assert.throws(() => parseScenario(raw), /must say what state they assume/);
+});
+
+// ---------------------------------------------------------------------------
+// scenario B's report step: the same drift, read as data
+// ---------------------------------------------------------------------------
+
+test("B's report step is done by reading the drift as JSON while the drift is there", async () => {
+  const drifted = { tables: { users: ["id", "name", "email", "nickname"], tasks: ["id", "user_id", "title", "done"] } };
+  const read = await evaluateRoute(B, fakeProbe(seededWorld({ ...drifted, runs: runsFrom([DRIFT, 0], [DRIFT, 1], [DRIFT_JSON, 1]) })));
+  assert.equal(byId(read, "report").status, "done");
+  // The control: without the JSON run it is the step the route is waiting on.
+  const unread = await evaluateRoute(B, fakeProbe(seededWorld({ ...drifted, runs: runsFrom([DRIFT, 0], [DRIFT, 1]) })));
+  assert.equal(unread.steps[unread.currentIndex].step.id, "report");
+  // A JSON run with nothing to report exits 0 and is not reading the drift.
+  const clean = await evaluateRoute(B, fakeProbe(seededWorld({ ...drifted, runs: runsFrom([DRIFT, 0], [DRIFT, 1], [DRIFT_JSON, 0]) })));
+  assert.notEqual(byId(clean, "report").status, "done");
 });

@@ -5,6 +5,9 @@
 #   PTAH_BIN=/tmp/ptah test/integration/ground-truth/capture.sh
 #
 # Pinned against ptah commit 112a72244a81db149899df0ce43afc704a152bc4.
+# 08_drift_v2_json.txt was captured later, by this script unchanged, from
+# 061fac0c6b2607f9442b440168fb45c3dfe5ba39 (v0.8.0), the commit third_party/ptah.pin
+# names; scenario B's report step suggests that command.
 # Requires: sqlite3 (only to seed rows; ptah itself never needs it).
 set -u
 PTAH_BIN=${PTAH_BIN:-ptah}
