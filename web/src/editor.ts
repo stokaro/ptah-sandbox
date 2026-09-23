@@ -720,10 +720,14 @@ export class Editor {
     fill(this.overlay, frag);
   }
 
-  /** The gutter mark that opens a run, as the gutter is drawn now. */
+  /**
+   * The gutter mark of a run's last line, as the gutter is drawn now. The
+   * peek goes under it, so the whole run it describes stays in sight.
+   */
   private markFor(run: number): HTMLElement | null {
     if (run < 0) return null;
-    return this.gutter.querySelector<HTMLElement>(`[data-change="${run}"]`);
+    const marks = this.gutter.querySelectorAll<HTMLElement>(`[data-change="${run}"]`);
+    return marks[marks.length - 1] ?? null;
   }
 
   /**
