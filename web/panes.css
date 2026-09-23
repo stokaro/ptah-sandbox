@@ -195,10 +195,56 @@
   padding: 0 16px;
 }
 
-/* Lines that differ from the file on disk. The full-bleed background is why
-   the horizontal padding lives on the line rather than on the overlay. */
-.pgc-ed-line.is-changed {
-  background: var(--accbg);
+/* Lines that differ from the file as it was seeded, the way an editor marks
+   them against the last commit: added lines green, changed lines blue, each
+   with a bar in the gutter and a tint across the line, and a triangle in the
+   gutter where lines were removed. The tints are the two colours mixed into
+   the page, so they stay quiet under the text in either theme. The
+   full-bleed background is why the horizontal padding lives on the line
+   rather than on the overlay. */
+.pgc-ed-line.is-added {
+  background: color-mix(in oklab, var(--pg-done) 13%, var(--bg));
+}
+
+.pgc-ed-line.is-modified {
+  background: color-mix(in oklab, var(--acc) 11%, var(--bg));
+}
+
+.pgc-ed-num {
+  display: block;
+  position: relative;
+}
+
+/* The bar sits in the gutter's right padding, against its border. */
+.pgc-ed-num.is-added::after,
+.pgc-ed-num.is-modified::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: -10px;
+  bottom: 0;
+  width: 3px;
+  background: var(--pg-done);
+}
+
+.pgc-ed-num.is-modified::after {
+  background: var(--acc);
+}
+
+.pgc-ed-num.has-removed-above::before,
+.pgc-ed-num.has-removed-below::before {
+  content: "";
+  position: absolute;
+  top: -4px;
+  right: -11px;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 6px solid var(--mute);
+}
+
+.pgc-ed-num.has-removed-below::before {
+  top: auto;
+  bottom: -4px;
 }
 
 .pgc-t-keyword {

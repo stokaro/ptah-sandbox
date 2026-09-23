@@ -62,12 +62,22 @@
       "title": "Edit schema",
       "caption": "Add a column and an index",
       "headline": "You describe the schema you want, not the steps to get there.",
-      "instruction": "Add the column to users in schema.sql, and the index below the tables. You are describing the schema you want; you never write ALTER here.",
+      "instruction": "Apply the patch, or type the change in yourself: a column in users and an index below the tables. You are describing the schema you want; you never write ALTER here.",
       "action": {
         "kind": "edit",
         "file": "schema.sql",
         "snippet": "  active INTEGER NOT NULL DEFAULT 1\n\nCREATE INDEX idx_users_email ON users (email);",
-        "hint": "The column goes inside the users body, after email. The index goes on its own, below both tables."
+        "hint": "The column goes inside the users body, after email. The index goes on its own, below both tables.",
+        "patch": [
+          {
+            "find": "  email TEXT NOT NULL\n);",
+            "replace": "  email TEXT NOT NULL,\n  active INTEGER NOT NULL DEFAULT 1\n);"
+          },
+          {
+            "find": "  FOREIGN KEY (user_id) REFERENCES users (id)\n);",
+            "replace": "  FOREIGN KEY (user_id) REFERENCES users (id)\n);\n\nCREATE INDEX idx_users_email ON users (email);"
+          }
+        ]
       },
       "check": {
         "kind": "all",

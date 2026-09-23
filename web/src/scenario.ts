@@ -29,8 +29,60 @@ export type Action =
   | { kind: "run"; argv: string[] }
   /** SQL put into the SQL pane. The user presses Run there; the guide does not. */
   | { kind: "sql"; sql: string }
-  /** An edit the user makes. Shown as a snippet to copy; nothing is inserted. */
-  | { kind: "edit"; file: string; snippet: string; hint: string };
+  /**
+   * An edit to schema.sql. With a patch, the strip offers to apply it and the
+   * editor marks the lines it changed; without one, it shows the snippet to
+   * copy. Either way the step ticks from the file's content, not the click.
+   */
+  | { kind: "edit"; file: string; snippet: string; hint: string; patch?: readonly PatchHunk[] };
+
+/**
+ * One change a patch makes: text that has to be in the file exactly once,
+ * and what it becomes. Anchored on text rather than line numbers, so a patch
+ * still applies to a file someone has edited elsewhere, and refuses when the
+ * lines it changes are not the ones it was written against.
+ */
+export interface PatchHunk {
+  find: string;
+  replace: string;
+}
+
+/**
+ * What applying a patch to a text would do.
+ *
+ * `applies` carries the patched text. `applied` means every hunk's result is
+ * already in the text, so there is nothing to do. `conflict` names the first
+ * hunk whose text is missing or appears more than once; nothing is changed
+ * then, because half a patch is a file nobody wrote.
+ */
+export type PatchResult =
+  | { state: "applies"; text: string }
+  | { state: "applied" }
+  | { state: "conflict"; hunk: number; reason: "missing" | "ambiguous" };
+
+function occurrences(text: string, part: string): number {
+  let count = 0;
+  for (let at = text.indexOf(part); at !== -1; at = text.indexOf(part, at + 1)) count += 1;
+  return count;
+}
+
+/**
+ * Applies the hunks in order. A hunk whose result is already present is
+ * skipped rather than applied twice: a replacement can contain the text it
+ * replaces, which adding a block after an anchor does.
+ */
+export function applyPatch(text: string, hunks: readonly PatchHunk[]): PatchResult {
+  let out = text;
+  let changed = false;
+  for (const [index, hunk] of hunks.entries()) {
+    if (out.includes(hunk.replace)) continue;
+    const found = occurrences(out, hunk.find);
+    if (found !== 1) return { state: "conflict", hunk: index, reason: found === 0 ? "missing" : "ambiguous" };
+    out = out.replace(hunk.find, () => hunk.replace);
+    changed = true;
+  }
+  return changed ? { state: "applies", text: out } : { state: "applied" };
+}
 
 /**
  * A description of state that is true once a step is done.
@@ -851,6 +903,26 @@ function assertNoHiddenApproval(argv: readonly string[], where: string): void {
   }
 }
 
+/**
+ * A patch is checked at load, because a hunk that cannot be told apart from
+ * its result would report "applied" on a file it never touched.
+ */
+function parsePatch(action: Extract<Action, { kind: "edit" }>, where: string): void {
+  // The editor edits one file, and the patch is applied to its buffer.
+  if (action.file !== "schema.sql") fail(`${where}.file`, "a patch can only be applied to schema.sql");
+  const patch: unknown = action.patch;
+  if (!Array.isArray(patch) || patch.length === 0) fail(`${where}.patch`, "expected a non-empty array");
+  patch.forEach((raw, i) => {
+    const hunk = asRecord(raw, `${where}.patch[${i}]`);
+    const find = asString(hunk["find"], `${where}.patch[${i}].find`);
+    const replace = asString(hunk["replace"], `${where}.patch[${i}].replace`);
+    if (find === "") fail(`${where}.patch[${i}].find`, "expected text to anchor on");
+    if (find.includes(replace)) {
+      fail(`${where}.patch[${i}]`, "the replacement is inside the text it replaces, so an applied patch would look unapplied");
+    }
+  });
+}
+
 function parseStep(value: unknown, where: string): Step {
   const raw = asRecord(value, where);
   const check = raw["check"] === null || raw["check"] === undefined
@@ -868,6 +940,9 @@ function parseStep(value: unknown, where: string): Step {
     check,
   };
   if (raw["action"] !== undefined) step.action = raw["action"] as Action;
+  if (step.action?.kind === "edit" && (step.action as { patch?: unknown }).patch !== undefined) {
+    parsePatch(step.action, `${where}.action`);
+  }
   if (raw["also"] !== undefined) step.also = raw["also"] as string[][];
   if (raw["unverified"] !== undefined) step.unverified = asString(raw["unverified"], `${where}.unverified`);
   if (raw["done"] !== undefined) step.done = asString(raw["done"], `${where}.done`);

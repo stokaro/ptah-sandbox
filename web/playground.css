@@ -19,7 +19,9 @@
  * and step, SQL keywords and the Run next button. Amber (--amber) is the only
  * attention colour, for waiting, drift, recovery and warnings. The site's
  * other buttons stay black. Green (--pg-done, below) is the tick on a step
- * the route has checked as done, and nothing else. There is no red.
+ * the route has checked as done and a line that is new against the seeded
+ * file, in the editor and in a patch's preview; a changed line is blue.
+ * There is no red: a removed line is a grey triangle, or a grey minus.
  * --pg-guide (below) is the strip that says what the step on screen asks
  * for: a lighter step of the selection tint, so it belongs to the step
  * without competing with it.
@@ -840,6 +842,35 @@
 .pg-next-detail p {
   margin: 0;
   text-wrap: pretty;
+}
+
+/* A patch before it applies: removed lines grey, added lines on the tint the
+ * editor gives them once they are in the file. */
+.pg-next-diff {
+  margin: 0;
+  padding: 8px 0;
+  border: 1px solid var(--line2);
+  border-radius: 2px;
+  background: var(--bg);
+  font: 12px/1.6 var(--mono);
+  color: var(--fg2);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.pg-next-diff > span {
+  display: block;
+  padding: 0 10px;
+}
+
+.pg-next-diff-add {
+  background: color-mix(in oklab, var(--pg-done) 13%, var(--bg));
+  color: var(--fg);
+}
+
+.pg-next-diff-del,
+.pg-next-diff-gap {
+  color: var(--mute);
 }
 
 /* What the route checked, in the words of the check. */

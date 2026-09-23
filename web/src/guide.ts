@@ -17,6 +17,7 @@
  */
 
 import { clear, el, fill } from "./panes/dom.ts";
+import { diffLines, splitLines } from "./linediff.ts";
 import { anchorPopover } from "./popover.ts";
 import {
   SCENARIOS,
@@ -24,7 +25,7 @@ import {
   evaluateRoute,
   pad,
 } from "./scenario.ts";
-import type { RouteState, Scenario, StateProbe, StepState } from "./scenario.ts";
+import type { PatchHunk, PatchResult, RouteState, Scenario, StateProbe, StepState } from "./scenario.ts";
 
 /** What the guide needs from the rest of the page. */
 export interface GuideHost {
@@ -36,6 +37,10 @@ export interface GuideHost {
   offerSql(sql: string): void;
   /** Brings a file up in the editor. */
   focusFile(path: string): void;
+  /** What applying a patch to schema.sql as the editor holds it would do. */
+  patchState(patch: readonly PatchHunk[]): PatchResult["state"];
+  /** Applies a patch to schema.sql in the editor, as an edit the visitor could undo by hand. */
+  applyPatch(patch: readonly PatchHunk[]): void;
   /** Seeds the workspace and the database for a scenario. */
   loadScenario(scenario: Scenario): Promise<void>;
   /** True while a command is in flight, so the strip can wait rather than queue. */
@@ -297,10 +302,17 @@ export class Guide {
 
     const step = focused.step;
     this.appendActions(actions, focused);
+    const patch = step.action?.kind === "edit" ? step.action.patch : undefined;
+    const conflict = patch !== undefined && this.host.patchState(patch) === "conflict";
     fill(
       this.next,
       headlineWithHint(step.headline, {
         paragraphs: [focused.status === "done" ? step.done ?? step.instruction : step.instruction],
+        patch,
+        note: conflict
+          ? "schema.sql has changed where this patch goes, so it is not applied. Type the change in "
+            + "yourself, or Reset to start again from the seeded file."
+          : undefined,
         check: detailLine(focused),
         offScript: route.offScript,
       }),
@@ -341,6 +353,19 @@ export class Guide {
       button.type = "button";
       button.addEventListener("click", () => this.host.offerSql(action.sql));
       actions.appendChild(button);
+    } else if (action?.kind === "edit" && action.patch) {
+      // The patch is applied to the editor's buffer and saved like typing, so
+      // the lines it changed are marked there and the step ticks from the
+      // file's content rather than from this click. Its label says what a
+      // click would do now: apply, nothing left to apply, or cannot.
+      const patch = action.patch;
+      const state = this.host.patchState(patch);
+      const label = state === "applies" ? "Apply patch" : state === "applied" ? "Patch applied" : "Patch does not apply";
+      const button = el("button", "btn", label);
+      button.type = "button";
+      button.disabled = state !== "applies";
+      button.addEventListener("click", () => this.host.applyPatch(patch));
+      actions.appendChild(button);
     } else if (action?.kind === "edit") {
       const box = el("div", "cmd");
       box.appendChild(el("pre", undefined, action.snippet));
@@ -380,10 +405,31 @@ function buttonLabel(state: StepState, waiting: boolean): string {
   return state.status === "done" ? "Run again →" : "Run next →";
 }
 
+/**
+ * A patch as a unified diff would print it: the lines it keeps, removes and
+ * adds, hunk after hunk. It uses the comparison the editor's marks use, so
+ * the lines shown here as added are the lines marked added once it applies.
+ */
+function patchPreview(patch: readonly PatchHunk[]): HTMLElement {
+  const pre = el("pre", "pg-next-diff");
+  patch.forEach((hunk, index) => {
+    if (index > 0) pre.appendChild(el("span", "pg-next-diff-gap", "⋯"));
+    for (const op of diffLines(splitLines(hunk.find), splitLines(hunk.replace))) {
+      const sign = op.op === "add" ? "+" : op.op === "del" ? "-" : " ";
+      pre.appendChild(el("span", `pg-next-diff-${op.op}`, `${sign} ${op.text}`));
+    }
+  });
+  return pre;
+}
+
 /** What the hint beside a headline opens. */
 interface Hint {
   /** What the step asks for, or what it established once done. */
   paragraphs: readonly string[];
+  /** A patch the step offers, shown as the lines it removes and adds. */
+  patch?: readonly PatchHunk[] | undefined;
+  /** Something to read before acting, in amber. */
+  note?: string | undefined;
   /** What the route checked, in the check's own words. */
   check?: string;
   /** Set when the workspace has left the suggested route. */
@@ -405,6 +451,8 @@ function headlineWithHint(headline: string, hint: Hint): HTMLElement {
   detail.id = "pg-next-detail";
   detail.popover = "auto";
   for (const text of hint.paragraphs) detail.appendChild(el("p", undefined, text));
+  if (hint.patch) detail.appendChild(patchPreview(hint.patch));
+  if (hint.note) detail.appendChild(el("p", "pg-next-note", `△ ${hint.note}`));
   if (hint.check) detail.appendChild(el("p", "pg-next-check", hint.check));
   if (hint.offScript) detail.appendChild(el("p", "pg-next-note", `△ ${hint.offScript}`));
 

@@ -53,10 +53,12 @@ import { Rail } from "./panes/rail.ts";
 import {
   RunLog,
   SCENARIOS,
+  applyPatch,
   type RunRecord,
   type Scenario,
   type StateProbe,
 } from "./scenario.ts";
+import { diffLines, splitLines } from "./linediff.ts";
 import type { FileEntry } from "./protocol.ts";
 import { Session, SessionError, type RunHandle } from "./session.ts";
 import { installSplitters } from "./splitters.ts";
@@ -381,6 +383,17 @@ function guideHost(): GuideHost {
       editor.focus();
     },
     focusFile: (path) => void openFile(path),
+    patchState: (patch) => applyPatch(editor.text("schema"), patch).state,
+    applyPatch: (patch) => {
+      const result = applyPatch(editor.text("schema"), patch);
+      if (result.state !== "applies") return;
+      const before = editor.text("schema");
+      void openFile("schema.sql");
+      editor.edit("schema", result.text);
+      // Bring the first line it changed on screen; the marks show the rest.
+      const first = diffLines(splitLines(before), splitLines(result.text)).findIndex((op) => op.op !== "same");
+      if (first !== -1) editor.reveal(first);
+    },
     loadScenario: (scenario) => loadScenario(scenario),
     busy: () => !canRun(store.state),
   };
@@ -873,7 +886,7 @@ async function writeSchema(): Promise<void> {
   try {
     const revision = await session.writeFile("schema.sql", value);
     store.workspaceChanged({ revision });
-    editor.markSynced("schema", revision, value);
+    editor.markSynced("schema", revision);
     editor.setFooter("schema", "SQL · desired state", `revision r${revision}`);
     await refresh();
     await guide.refresh();

@@ -410,6 +410,32 @@ async function run(): Promise<void> {
 
   /* ---- 4. Edit, then the dry run fills the Plan pane ---- */
 
+  // Step 02 carries a patch. Apply patch puts it in the editor like typing
+  // would, the editor marks the lines against the seeded file, and the step
+  // ticks because schema.sql now declares the column and the index -- not
+  // because a button was pressed.
+  const applyButton = [...doc.querySelectorAll<HTMLButtonElement>("#pg-next .pg-next-run .btn")].find(
+    (b) => b.textContent === "Apply patch",
+  );
+  applyButton?.click();
+  await until("step 02 to tick after the patch", () => stepStates()[1] === "done", 20_000).catch(
+    () => undefined,
+  );
+  const markedAs = (kind: string): number[] =>
+    [...doc.querySelectorAll<HTMLElement>("#pg-editor .pgc-ed-num")]
+      .map((row, index) => (row.classList.contains(`is-${kind}`) ? index + 1 : 0))
+      .filter((line) => line > 0);
+  const added = markedAs("added");
+  const modified = markedAs("modified");
+  const tintedLines = doc.querySelectorAll("#pg-editor .pgc-ed-line.is-added, #pg-editor .pgc-ed-line.is-modified").length;
+  check(
+    "Apply patch writes step 02's edit into schema.sql, marked line by line against the seeded file",
+    applyButton !== undefined && stepStates()[1] === "done"
+      && added.join(",") === "10,20,21" && modified.join(",") === "9" && tintedLines === 4,
+    `button ${applyButton === undefined ? "missing" : "pressed"}; steps: ${stepStates().join(", ")}; ` +
+      `added lines ${added.join(",") || "none"}, changed ${modified.join(",") || "none"}, ${tintedLines} tinted`,
+  );
+
   typeSchema(EDITED_SCHEMA);
   await until(
     "schema.sql to be written back to the workspace",

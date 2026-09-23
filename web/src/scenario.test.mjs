@@ -28,6 +28,7 @@ import { test } from "node:test";
 import {
   RunLog,
   SCENARIOS,
+  applyPatch,
   evaluateCheck,
   evaluateRoute,
   parseScenario,
@@ -531,4 +532,54 @@ test("the commands the route suggests are commands this build registers", () => 
       }
     }
   }
+});
+
+// ---------------------------------------------------------------------------
+// the edit step's patch
+// ---------------------------------------------------------------------------
+
+const EDIT = A.steps.find((s) => s.id === "edit");
+const PATCH = EDIT.action.patch;
+
+test("scenario A's patch turns the seeded schema into the one its step checks for", async () => {
+  const result = applyPatch(SCHEMA_V1, PATCH);
+  assert.equal(result.state, "applies");
+  assert.equal(result.text, SCHEMA_V2);
+  const after = await evaluateCheck(EDIT.check, fakeProbe(seededWorld({ files: { "schema.sql": result.text } })));
+  assert.equal(after.ok, true, after.detail);
+  // The control: the seeded file does not pass, so the patch is what made it.
+  const before = await evaluateCheck(EDIT.check, fakeProbe(seededWorld()));
+  assert.equal(before.ok, false, before.detail);
+});
+
+test("a patch already in the file reports applied rather than applying twice", () => {
+  assert.deepEqual(applyPatch(SCHEMA_V2, PATCH), { state: "applied" });
+});
+
+test("a column typed in by hand leaves only the index to apply", () => {
+  const byHand = SCHEMA_V1.replace(PATCH[0].find, PATCH[0].replace);
+  assert.deepEqual(applyPatch(byHand, PATCH), { state: "applies", text: SCHEMA_V2 });
+});
+
+test("a file changed where the patch goes is a conflict, and nothing is applied", () => {
+  const moved = SCHEMA_V1.replace("  email TEXT NOT NULL\n", "  email TEXT\n");
+  assert.deepEqual(applyPatch(moved, PATCH), { state: "conflict", hunk: 0, reason: "missing" });
+});
+
+test("an anchor that appears twice is a conflict, not a guess", () => {
+  const twice = `${SCHEMA_V1}\nCREATE TABLE people (\n  email TEXT NOT NULL\n);\n`;
+  assert.deepEqual(applyPatch(twice, PATCH), { state: "conflict", hunk: 0, reason: "ambiguous" });
+});
+
+test("a patch that cannot be told apart from its result is refused at load", () => {
+  const raw = JSON.parse(readFileSync(new URL("../scenarios/a.json", import.meta.url), "utf8"));
+  const edit = raw.steps.find((s) => s.id === "edit");
+  edit.action.patch = [{ find: "  email TEXT NOT NULL\n);", replace: "email TEXT NOT NULL" }];
+  assert.throws(() => parseScenario(raw), /replacement is inside the text it replaces/);
+});
+
+test("a patch is refused for any file but schema.sql", () => {
+  const raw = JSON.parse(readFileSync(new URL("../scenarios/a.json", import.meta.url), "utf8"));
+  raw.steps.find((s) => s.id === "edit").action.file = "README.md";
+  assert.throws(() => parseScenario(raw), /can only be applied to schema.sql/);
 });

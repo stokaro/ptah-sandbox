@@ -3,8 +3,9 @@
  *
  * A textarea with a highlight overlay behind it, not a code-editor library.
  * The mock asks for three things -- keywords in the site's blue, line
- * numbers, and a mark on lines that differ from what is on disk -- and an
- * overlay does all three in a few hundred bytes of gzipped JavaScript.
+ * numbers, and marks on the lines that differ from the file as it was
+ * seeded -- and an overlay does all three in a few hundred bytes of gzipped
+ * JavaScript.
  * CodeMirror 6 with the SQL grammar is about 110 KB gzipped, which on a page
  * that already asks for a 22 MB WebAssembly download is a poor trade for
  * bracket matching nobody asked for.
@@ -20,6 +21,7 @@
  * a string literal from being coloured, and nothing downstream reads it.
  */
 
+import { lineMarks, splitLines } from "./linediff.ts";
 import { clear, el, fill } from "./panes/dom.ts";
 
 /**
@@ -49,8 +51,6 @@ export interface EditorHandlers {
  */
 const HIGHLIGHT_LINE_LIMIT = 4000;
 
-/** The same ceiling on the diff, which is O(n*m) and needs a harder one. */
-const DIFF_LINE_LIMIT = 1500;
 
 // --------------------------------------------------------------------------
 // Tokenizer
@@ -200,55 +200,6 @@ export function tokenizeSQL(text: string): Token[][] {
 }
 
 // --------------------------------------------------------------------------
-// Changed lines
-// --------------------------------------------------------------------------
-
-/**
- * Which lines of `current` are not in `baseline`, by longest common
- * subsequence.
- *
- * A line-by-line comparison would mark everything below an inserted line,
- * which is exactly the case this editor exists to show -- adding one column
- * in the middle of a CREATE TABLE. The table is O(n*m); schema files are
- * small, and above DIFF_LINE_LIMIT the answer is "no marks" rather than a
- * frozen tab.
- */
-export function changedLines(baseline: string[], current: string[]): Set<number> {
-  const marks = new Set<number>();
-  if (baseline.length > DIFF_LINE_LIMIT || current.length > DIFF_LINE_LIMIT) return marks;
-
-  const n = baseline.length;
-  const m = current.length;
-  // lcs[i][j] = length of the LCS of baseline[i..] and current[j..].
-  const width = m + 1;
-  const lcs = new Int32Array((n + 1) * width);
-  for (let i = n - 1; i >= 0; i--) {
-    for (let j = m - 1; j >= 0; j--) {
-      lcs[i * width + j] =
-        baseline[i] === current[j]
-          ? lcs[(i + 1) * width + j + 1]! + 1
-          : Math.max(lcs[(i + 1) * width + j]!, lcs[i * width + j + 1]!);
-    }
-  }
-
-  let i = 0;
-  let j = 0;
-  while (i < n && j < m) {
-    if (baseline[i] === current[j]) {
-      i += 1;
-      j += 1;
-    } else if (lcs[(i + 1) * width + j]! >= lcs[i * width + j + 1]!) {
-      i += 1;
-    } else {
-      marks.add(j);
-      j += 1;
-    }
-  }
-  for (; j < m; j++) marks.add(j);
-  return marks;
-}
-
-// --------------------------------------------------------------------------
 // The editor
 // --------------------------------------------------------------------------
 
@@ -257,7 +208,11 @@ interface Buffer {
   label: string;
   text: string;
   /**
-   * The text on disk, which the changed-line marks are measured against.
+   * The text the change marks are measured against: the file as the
+   * workspace was seeded or imported, the way an editor's gutter measures
+   * against the last commit. It is not what was saved last. Every edit is
+   * saved a moment after it is typed, so marks measured against the save
+   * vanished before anyone could read them.
    *
    * null means there is nothing to compare with -- the scratch SQL buffer is
    * not a file, so nothing in it is a change to anything. Marking it all as
@@ -467,11 +422,36 @@ export class Editor {
   }
 
   /** The buffer now matches the workspace file at that revision. */
-  markSynced(id: EditorTabId, revision: number, baseline?: string): void {
-    const buffer = this.buffers[id];
-    buffer.syncedAt = revision;
-    if (baseline !== undefined) buffer.baseline = baseline;
+  markSynced(id: EditorTabId, revision: number): void {
+    this.buffers[id].syncedAt = revision;
     if (this.current === id) this.repaint();
+  }
+
+  /**
+   * Replaces a buffer the way typing would: a new revision, unsaved, and
+   * onChange fired, so whatever follows an edit -- the save, the plan marked
+   * stale -- follows this one too.
+   */
+  edit(id: EditorTabId, text: string): void {
+    const buffer = this.buffers[id];
+    buffer.text = text;
+    buffer.revision += 1;
+    buffer.syncedAt = null;
+    if (this.current === id) {
+      this.input.value = text;
+      this.repaint();
+    }
+    this.handlers.onChange?.(id, text, buffer.revision);
+  }
+
+  /** Scrolls the textarea so that line (0-based) is on screen, if it is not. */
+  reveal(line: number): void {
+    const height = Number.parseFloat(getComputedStyle(this.input).lineHeight) || 21;
+    const top = line * height;
+    const view = this.input.clientHeight;
+    if (top >= this.input.scrollTop && top + height <= this.input.scrollTop + view) return;
+    this.input.scrollTop = Math.max(0, top - view / 3);
+    this.syncScroll();
   }
 
   setBaseline(id: EditorTabId, text: string | null): void {
@@ -627,9 +607,26 @@ export class Editor {
     const buffer = this.buffers[this.current];
     const lines = buffer.text.split("\n");
 
-    const numbers: string[] = [];
-    for (let i = 0; i < lines.length; i++) numbers.push(String(i + 1));
-    this.gutter.textContent = numbers.join("\n");
+    // Lines as a version-control tool counts them, which drops the empty tail
+    // after a final newline; the indexes line up with `lines` all the same.
+    const marks =
+      buffer.baseline === null || lines.length > HIGHLIGHT_LINE_LIMIT
+        ? null
+        : lineMarks(splitLines(buffer.baseline), splitLines(buffer.text));
+
+    // One row per line, so a line can carry its mark in the gutter too.
+    const numbers = document.createDocumentFragment();
+    for (let i = 0; i < lines.length; i++) {
+      const row = el("span", "pgc-ed-num", String(i + 1));
+      const change = marks?.changed.get(i);
+      if (change) row.classList.add(`is-${change}`);
+      if (marks?.removedAbove.has(i)) row.classList.add("has-removed-above");
+      numbers.appendChild(row);
+    }
+    // Lines removed from the very end sit below the last line there is.
+    if (marks?.removedAbove.has(lines.length)) numbers.lastElementChild?.classList.add("has-removed-below");
+    clear(this.gutter);
+    this.gutter.appendChild(numbers);
 
     clear(this.overlay);
     if (lines.length > HIGHLIGHT_LINE_LIMIT) {
@@ -639,12 +636,12 @@ export class Editor {
       return;
     }
 
-    const marks =
-      buffer.baseline === null ? new Set<number>() : changedLines(buffer.baseline.split("\n"), lines);
     const tokens = tokenizeSQL(buffer.text);
     const frag = document.createDocumentFragment();
     for (let i = 0; i < lines.length; i++) {
-      const row = el("span", marks.has(i) ? "pgc-ed-line is-changed" : "pgc-ed-line");
+      const row = el("span", "pgc-ed-line");
+      const change = marks?.changed.get(i);
+      if (change) row.classList.add(`is-${change}`);
       for (const token of tokens[i] ?? []) {
         if (token.kind === "plain") row.appendChild(document.createTextNode(token.text));
         else row.appendChild(el("span", `pgc-t-${token.kind}`, token.text));

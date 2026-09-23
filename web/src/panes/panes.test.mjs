@@ -37,7 +37,7 @@ import { capRows, compareCells, formatCell, rowQuery, sortRows, CELL_LIMIT } fro
 import { parsePlanJSON, parsePlanOutput, planStaleReason } from "./plan.ts";
 import { columnNote, formatRowCount, formatSize } from "./rail.ts";
 import { structureMark } from "./structure.ts";
-import { changedLines, tokenizeSQL } from "../editor.ts";
+import { tokenizeSQL } from "../editor.ts";
 
 // --------------------------------------------------------------------------
 // Building a catalog out of the six row sets
@@ -670,24 +670,3 @@ test("tokenizing is lossless for a real schema file", () => {
   assert.equal(joined, text);
 });
 
-test("an inserted line is the only line marked", () => {
-  const baseline = ["CREATE TABLE users (", "  id INTEGER,", "  name TEXT", ");"];
-  const current = ["CREATE TABLE users (", "  id INTEGER,", "  name TEXT,", "  active INTEGER", ");"];
-  // Line 2 gained a comma and line 3 is new; the closing paren is unchanged.
-  assert.deepEqual([...changedLines(baseline, current)].sort((a, b) => a - b), [2, 3]);
-});
-
-test("adding a block at the end marks only the block", () => {
-  const baseline = ["a", "b"];
-  const current = ["a", "b", "", "CREATE INDEX i ON t (c);"];
-  assert.deepEqual([...changedLines(baseline, current)].sort((a, b) => a - b), [2, 3]);
-});
-
-test("an unchanged file has no marks, and an empty baseline marks everything", () => {
-  assert.equal(changedLines(["a", "b"], ["a", "b"]).size, 0);
-  assert.deepEqual([...changedLines([""], ["a", "b"])].sort((a, b) => a - b), [0, 1]);
-});
-
-test("deleting a line marks nothing, because nothing in the buffer is new", () => {
-  assert.equal(changedLines(["a", "b", "c"], ["a", "c"]).size, 0);
-});
