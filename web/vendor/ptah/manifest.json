@@ -1,9 +1,9 @@
 {
-  "ptahVersion": "v0.7.0",
-  "ptahCommit": "127aa247772027f9ac8f5b16107552a7e1b541ed",
-  "ptahCommitDate": "2026-09-17T17:19:23+02:00",
+  "ptahVersion": "v0.8.0",
+  "ptahCommit": "061fac0c6b2607f9442b440168fb45c3dfe5ba39",
+  "ptahCommitDate": "2026-09-22T19:33:37+02:00",
   "goVersion": "go1.27.1",
-  "builtAt": "2026-09-18T06:45:05Z",
+  "builtAt": "2026-09-23T12:39:50Z",
   "wasmExec": {
     "file": "wasm_exec.js",
     "sha256": "0c949f4996f9a89698e4b5c586de32249c3b69b7baadb64d220073cc04acba14",
@@ -11,9 +11,9 @@
   },
   "wasm": {
     "file": "ptah.wasm",
-    "sha256": "f7935cc10a0e1cc955ab0e6676b0e38c5d2e48feb5359bcb070e6f75d099c7dc",
-    "bytes": 125327495,
-    "gzipBytes": 23099581
+    "sha256": "9cca2311e9666fa3ab1e8f853a4f1604f829cdd39f54929641e1dc61ccc1396c",
+    "bytes": 125787588,
+    "gzipBytes": 23201421
   },
   "commands": [
     "completion",
@@ -25,6 +25,7 @@
     "db capabilities",
     "db drop-all",
     "db read",
+    "db verify",
     "help",
     "introspect",
     "migrations",
@@ -38,6 +39,7 @@
     "migrations hash",
     "migrations import",
     "migrations lint",
+    "migrations log",
     "migrations ls",
     "migrations plan",
     "migrations pull",
