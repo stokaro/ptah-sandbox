@@ -89,13 +89,11 @@
     <nav class="pg-sitemenu" id="pg-sitemenu" aria-label="Site" popover></nav>
     <h1 class="pg-toolbar-title">Playground</h1>
     <div class="pg-bar" id="pg-bar">
-      <label class="pg-scenario" for="pg-scenario">
+      <!-- src/guide.ts replaces this with the button that opens the scenario picker. -->
+      <span class="pg-scenario">
         <span class="pg-scenario-label">Scenario</span>
-        <select id="pg-scenario" class="pg-select">
-          <option value="a" selected>A · Change a schema, keep the data</option>
-          <option value="b">B · Detect drift</option>
-        </select>
-      </label>
+        <button class="pg-scenario-btn" type="button" disabled>Change a schema, keep the data</button>
+      </span>
     </div>
     <!--
       Where the terminal sits in the full-window layout: between the file list

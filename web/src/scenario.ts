@@ -18,6 +18,7 @@
 import scenarioA from "../scenarios/a.json" with { type: "json" };
 import scenarioB from "../scenarios/b.json" with { type: "json" };
 import scenarioC from "../scenarios/c.json" with { type: "json" };
+import scenarioFree from "../scenarios/free.json" with { type: "json" };
 
 // ---------------------------------------------------------------------------
 // the data shape
@@ -150,10 +151,16 @@ export interface Scenario {
   /**
    * The state the route assumes. When it fails, the strip says so and the
    * steps stop claiming to describe the workspace. Nothing stops working.
+   * Absent only on a scenario with no steps, which assumes nothing: there is
+   * no route to fall off.
    */
-  baseline: { check: Check; message: string };
+  baseline?: { check: Check; message: string };
+  /** Empty for free exploration: a workspace to try things in, and no route. */
   steps: Step[];
-  /** Shown once every checkable step has passed. The door out, not a trophy. */
+  /**
+   * Shown once every checkable step has passed -- the door out, not a trophy.
+   * On a scenario with no steps it is what the strip says all along.
+   */
   finished: { headline: string; caption: string };
 }
 
@@ -795,7 +802,7 @@ export async function evaluateRoute(scenario: Scenario, probe: StateProbe): Prom
     const result = await score(step.check);
     results.push({ ok: result.ok, detail: result.detail, checked: true });
   }
-  const baseline = await score(scenario.baseline.check);
+  const baseline = scenario.baseline === undefined ? { ok: true, detail: "" } : await score(scenario.baseline.check);
 
   const done = results.map((r) => r.checked && r.ok && unavailable === null);
   const lastDone = done.lastIndexOf(true);
@@ -825,7 +832,7 @@ export async function evaluateRoute(scenario: Scenario, probe: StateProbe): Prom
   let offScript: string | null = null;
   if (unavailable === null) {
     if (!baseline.ok) {
-      offScript = `${scenario.baseline.message} (${baseline.detail})`;
+      offScript = `${scenario.baseline?.message ?? ""} (${baseline.detail})`;
     } else {
       // Off the route means the done steps are not a prefix: something later
       // is done while something earlier is not. The gap is named by its first
@@ -964,10 +971,14 @@ export function parseScenario(value: unknown): Scenario {
   const id = asString(raw["id"], "id");
   const where = `"${id}"`;
   const steps = raw["steps"];
-  if (!Array.isArray(steps) || steps.length === 0) fail(`${where}.steps`, "expected a non-empty array");
+  // No steps is free exploration. A route, though, assumes a starting state
+  // and has to say what it is, or falling off it could never be reported.
+  if (!Array.isArray(steps)) fail(`${where}.steps`, "expected an array");
+  if (steps.length > 0 && raw["baseline"] === undefined) {
+    fail(`${where}.baseline`, "a scenario with steps must say what state they assume");
+  }
 
   const database = asRecord(raw["database"], `${where}.database`);
-  const baseline = asRecord(raw["baseline"], `${where}.baseline`);
   const finished = asRecord(raw["finished"], `${where}.finished`);
 
   const scenario: Scenario = {
@@ -980,10 +991,6 @@ export function parseScenario(value: unknown): Scenario {
     },
     files: asRecord(raw["files"], `${where}.files`) as Record<string, string>,
     seed: asString(raw["seed"], `${where}.seed`),
-    baseline: {
-      check: parseCheck(baseline["check"], `${where}.baseline.check`),
-      message: asString(baseline["message"], `${where}.baseline.message`),
-    },
     steps: steps.map((s, i) => parseStep(s, `${where}.steps[${i}]`)),
     finished: {
       headline: asString(finished["headline"], `${where}.finished.headline`),
@@ -991,11 +998,18 @@ export function parseScenario(value: unknown): Scenario {
     },
   };
   if (raw["note"] !== undefined) scenario.note = asString(raw["note"], `${where}.note`);
+  if (raw["baseline"] !== undefined) {
+    const baseline = asRecord(raw["baseline"], `${where}.baseline`);
+    scenario.baseline = {
+      check: parseCheck(baseline["check"], `${where}.baseline.check`),
+      message: asString(baseline["message"], `${where}.baseline.message`),
+    };
+  }
   return scenario;
 }
 
 /** The scenarios this build ships, parsed at load so a bad one is loud. */
-export const SCENARIOS: readonly Scenario[] = [scenarioA, scenarioB, scenarioC].map(parseScenario);
+export const SCENARIOS: readonly Scenario[] = [scenarioA, scenarioB, scenarioC, scenarioFree].map(parseScenario);
 
 export function scenarioById(id: string): Scenario | undefined {
   return SCENARIOS.find((s) => s.id === id);

@@ -55,6 +55,15 @@ interface StepSpec {
  */
 const STEPS: readonly StepSpec[] = [
   {
+    // First, because it decides what everything after it is about.
+    targets: [".pg-scenario-btn"],
+    title: "Pick a scenario",
+    body:
+      "Each scenario is a short route through one thing Ptah does, in a workspace of its own, " +
+      "and Free exploration is a workspace with no route. Start with the one loaded here.",
+    prefer: ["below", "right"],
+  },
+  {
     targets: ["#pg-editor"],
     title: "The schema you want",
     body:
@@ -95,7 +104,8 @@ const STEPS: readonly StepSpec[] = [
     prefer: ["above", "below"],
   },
   {
-    targets: ["#pg-steps"],
+    // Not the row a scenario with no steps keeps: there is no route to name.
+    targets: ["#pg-steps:not(.is-empty)"],
     title: "Five steps, if you want them",
     body:
       "A step ticks when the state actually changed — the column is in the catalog — " +

@@ -400,9 +400,9 @@ test("a string literal that looks like DDL is not read as DDL", () => {
 // the shipped scenarios
 // ---------------------------------------------------------------------------
 
-test("three scenarios ship, each with five steps", () => {
-  assert.deepEqual(SCENARIOS.map((s) => s.id), ["a", "b", "c"]);
-  for (const s of SCENARIOS) assert.equal(s.steps.length, 5, `${s.id} has ${s.steps.length} steps`);
+test("three guided scenarios ship with five steps each, then free exploration with none", () => {
+  assert.deepEqual(SCENARIOS.map((s) => s.id), ["a", "b", "c", "free"]);
+  assert.deepEqual(SCENARIOS.map((s) => s.steps.length), [5, 5, 5, 0]);
 });
 
 test("every step either has a check or says why it has none", () => {
@@ -582,4 +582,31 @@ test("a patch is refused for any file but schema.sql", () => {
   const raw = JSON.parse(readFileSync(new URL("../scenarios/a.json", import.meta.url), "utf8"));
   raw.steps.find((s) => s.id === "edit").action.file = "README.md";
   assert.throws(() => parseScenario(raw), /can only be applied to schema.sql/);
+});
+
+// ---------------------------------------------------------------------------
+// free exploration: a workspace and no route
+// ---------------------------------------------------------------------------
+
+const FREE = scenarioById("free");
+
+test("free exploration has no steps, and starts from scenario A's schema and data", () => {
+  assert.equal(FREE.steps.length, 0);
+  assert.equal(FREE.baseline, undefined);
+  assert.equal(FREE.files["schema.sql"], A.files["schema.sql"]);
+  assert.equal(FREE.seed, A.seed);
+  assert.deepEqual(FREE.database, A.database);
+});
+
+test("a scenario with no steps points at no step and warns of nothing, whatever the workspace holds", async () => {
+  const emptied = await evaluateRoute(FREE, fakeProbe({ tables: {}, files: {} }));
+  assert.equal(emptied.currentIndex, -1);
+  assert.equal(emptied.offScript, null);
+  assert.deepEqual(emptied.steps, []);
+});
+
+test("a scenario with steps must say what state they assume", () => {
+  const raw = JSON.parse(readFileSync(new URL("../scenarios/a.json", import.meta.url), "utf8"));
+  delete raw.baseline;
+  assert.throws(() => parseScenario(raw), /must say what state they assume/);
 });

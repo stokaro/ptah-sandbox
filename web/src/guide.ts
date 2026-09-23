@@ -93,6 +93,9 @@ function commandBox(argv: readonly string[]): HTMLElement {
   const pre = el("pre");
   pre.appendChild(el("span", "p", "$"));
   pre.appendChild(document.createTextNode(` ${describeArgv(argv)}`));
+  // The full-window strip keeps a command to one line; the whole of it is
+  // here, as well as in what Copy takes and what the terminal echoes.
+  pre.title = describeArgv(argv);
   const copy = el("button", "copy", "Copy");
   copy.type = "button";
   copy.addEventListener("click", () => {
@@ -118,7 +121,10 @@ export class Guide {
 
   private readonly host: GuideHost;
   private readonly catalog: readonly Scenario[];
-  private readonly select: HTMLSelectElement;
+  /** Opens the scenario picker; it names the scenario that is loaded. */
+  private readonly pick: HTMLButtonElement;
+  /** The picker: every scenario by its title and what it is about. */
+  private readonly picker: HTMLDialogElement;
   private readonly status: HTMLElement;
   private readonly storage: HTMLElement;
 
@@ -143,16 +149,13 @@ export class Guide {
     this.catalog = catalog;
     this.current = catalog[0] as Scenario;
 
-    this.select = el("select", "pg-select");
-    this.select.setAttribute("aria-label", "Scenario");
-    for (const scenario of catalog) {
-      const option = el("option", undefined, `${scenario.id.toUpperCase()} · ${scenario.title}`);
-      option.value = scenario.id;
-      this.select.appendChild(option);
-    }
-    this.select.addEventListener("change", () => {
-      void this.load(this.select.value);
-    });
+    // A dialog rather than a select: a scenario is chosen by what it is
+    // about, which takes a sentence, and the list is meant to grow.
+    this.pick = el("button", "pg-scenario-btn");
+    this.pick.type = "button";
+    this.pick.setAttribute("aria-haspopup", "dialog");
+    this.picker = this.buildPicker();
+    this.pick.addEventListener("click", () => this.openPicker());
 
     this.status = el("span", "pg-status");
     this.status.setAttribute("role", "status");
@@ -160,7 +163,8 @@ export class Guide {
 
     this.bar = fill(
       el("div", "pg-bar"),
-      fill(el("span", "pg-scenario"), el("span", "pg-scenario-label", "Scenario"), this.select),
+      fill(el("span", "pg-scenario"), el("span", "pg-scenario-label", "Scenario"), this.pick),
+      this.picker,
     );
     this.state = fill(el("div", "pg-state"), this.status, this.storage);
     this.setStatus(IDLE);
@@ -188,7 +192,6 @@ export class Guide {
     const scenario = this.catalog.find((s) => s.id === id);
     if (!scenario) throw new Error(`guide: no scenario "${id}"`);
     this.current = scenario;
-    this.select.value = id;
     this.pinned = null;
     this.route = null;
     this.forgetParts();
@@ -231,6 +234,78 @@ export class Guide {
   }
 
   /** Points the strip at one step. Clicking a step in the nav does this. */
+  /**
+   * The scenario picker. One row per scenario in catalog order, each its
+   * title, its description and how many steps it has, so a scenario added to
+   * the catalog is in the list with nothing else to change.
+   */
+  private buildPicker(): HTMLDialogElement {
+    const dialog = el("dialog", "pg-picker");
+    dialog.setAttribute("aria-labelledby", "pg-picker-title");
+    const close = el("button", "btn btn-ghost pg-picker-close", "Close");
+    close.type = "button";
+    close.addEventListener("click", () => dialog.close());
+    const title = el("h2", "pg-picker-title", "Choose a scenario");
+    title.id = "pg-picker-title";
+
+    const list = el("ul", "pg-picker-list");
+    for (const scenario of this.catalog) {
+      const option = el("button", "pg-picker-option");
+      option.type = "button";
+      option.dataset["scenario"] = scenario.id;
+      const count = scenario.steps.length;
+      fill(
+        option,
+        el("span", "pg-picker-name", scenario.title),
+        el("span", "pg-picker-meta", count === 0 ? "no steps" : count === 1 ? "1 step" : `${count} steps`),
+        el("span", "pg-picker-desc", scenario.description),
+      );
+      option.addEventListener("click", () => {
+        dialog.close();
+        if (scenario.id !== this.current.id) void this.load(scenario.id);
+      });
+      list.appendChild(fill(el("li"), option));
+    }
+    // Up and down move between the rows, as they would in a list box.
+    list.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      const options = [...list.querySelectorAll<HTMLButtonElement>(".pg-picker-option")];
+      const at = options.indexOf(document.activeElement as HTMLButtonElement);
+      const next = options[at + (event.key === "ArrowDown" ? 1 : -1)];
+      if (next === undefined) return;
+      event.preventDefault();
+      next.focus();
+    });
+    // A click on the backdrop is a click on the dialog itself.
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+
+    fill(
+      dialog,
+      fill(el("div", "pg-picker-head"), title, close),
+      el(
+        "p",
+        "pg-picker-note",
+        "Each scenario seeds its own workspace. Choosing one replaces the files and the database in "
+          + "this tab, so Export first if you want to keep them.",
+      ),
+      list,
+    );
+    return dialog;
+  }
+
+  /** Opens the picker on the scenario that is loaded. */
+  private openPicker(): void {
+    for (const option of this.picker.querySelectorAll<HTMLButtonElement>(".pg-picker-option")) {
+      const here = option.dataset["scenario"] === this.current.id;
+      if (here) option.setAttribute("aria-current", "true");
+      else option.removeAttribute("aria-current");
+    }
+    this.picker.showModal();
+    this.picker.querySelector<HTMLButtonElement>('.pg-picker-option[aria-current="true"]')?.focus();
+  }
+
   /**
    * A run the strip started is asking a question on stdin, or has its answer
    * (null). While it asks, the strip says so and quotes the question: the
@@ -289,6 +364,8 @@ export class Guide {
   }
 
   private render(): void {
+    this.pick.textContent = this.current.title;
+    this.pick.title = "Choose another scenario";
     this.renderSteps();
     this.renderNext();
   }
@@ -297,6 +374,14 @@ export class Guide {
     clear(this.steps);
     const route = this.route;
     const focused = this.focused();
+
+    // A scenario with no steps keeps the row, saying so, so switching to it
+    // does not pull everything under the row up by its height.
+    this.steps.classList.toggle("is-empty", this.current.steps.length === 0);
+    if (this.current.steps.length === 0) {
+      this.steps.appendChild(el("p", "pg-steps-empty", "No steps in this scenario: nothing is suggested and nothing is checked."));
+      return;
+    }
 
     this.current.steps.forEach((step, index) => {
       const state: StepState = route?.steps[index]
@@ -454,6 +539,7 @@ export class Guide {
     } else if (action?.kind === "sql") {
       const box = el("div", "cmd");
       const pre = el("pre", undefined, action.sql);
+      pre.title = action.sql;
       const copy = el("button", "copy", "Copy");
       copy.type = "button";
       copy.addEventListener("click", () => { void navigator.clipboard?.writeText(action.sql); });

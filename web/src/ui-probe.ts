@@ -239,7 +239,12 @@ async function run(): Promise<void> {
 
   // The tour is opened now, while the boot strip is still above the panes, and
   // its ring is read again once the strip has gone; see the check after ready.
+  // Its first card is the scenario picker, in the toolbar above the strip,
+  // which the strip leaving does not move; the second is the editor, which
+  // it does, so that is the card left open.
   need<HTMLElement>("#pg-tour-open").click();
+  const firstTourCard = textOf(".pg-tour-title");
+  q<HTMLButtonElement>(".pg-tour-next")?.click();
 
   /* ---- 2. The loader counts real bytes and reaches ready ---- */
 
@@ -277,6 +282,11 @@ async function run(): Promise<void> {
     Math.abs(ring.top - editor.top),
     Math.abs(ring.left - editor.left),
     Math.abs(ring.height - editor.height),
+  );
+  check(
+    "the tour starts at the scenario picker",
+    firstTourCard === "Pick a scenario",
+    `first card "${firstTourCard}"`,
   );
   check(
     "a tour opened during boot keeps its ring on the editor after the strip goes",
@@ -735,9 +745,32 @@ async function run(): Promise<void> {
 
   /* ---- 11. Another scenario seeds and scores ---- */
 
-  const selector = need<HTMLSelectElement>("#pg-bar select");
-  selector.value = "c";
-  selector.dispatchEvent(new win.Event("change", { bubbles: true }));
+  /** Chooses a scenario the way a visitor does: the picker, then its row. */
+  const chooseScenario = (id: string): void => {
+    need<HTMLButtonElement>(".pg-scenario-btn").click();
+    [...doc.querySelectorAll<HTMLButtonElement>(".pg-picker-option")]
+      .find((row) => row.dataset["scenario"] === id)
+      ?.click();
+  };
+
+  // Scenarios are chosen in a dialog: one row per scenario, each its title,
+  // its step count and what it is about, the loaded one marked current.
+  need<HTMLButtonElement>(".pg-scenario-btn").click();
+  const picker = need<HTMLDialogElement>(".pg-picker");
+  const pickerRows = [...picker.querySelectorAll<HTMLButtonElement>(".pg-picker-option")];
+  const pickerRowsComplete = pickerRows.every(
+    (row) => (row.querySelector(".pg-picker-name")?.textContent ?? "") !== ""
+      && (row.querySelector(".pg-picker-desc")?.textContent ?? "") !== "",
+  );
+  const pickerCurrent = picker.querySelector<HTMLElement>('.pg-picker-option[aria-current="true"]')?.dataset["scenario"];
+  check(
+    "the scenario picker lists every scenario with its title and description, the loaded one current",
+    picker.open && pickerRows.length === 4 && pickerRowsComplete && pickerCurrent === "a",
+    `open ${picker.open}; ${pickerRows.length} rows: ` +
+      pickerRows.map((row) => row.querySelector(".pg-picker-name")?.textContent).join(" | ") +
+      `; current ${pickerCurrent ?? "none"}`,
+  );
+  pickerRows.find((row) => row.dataset["scenario"] === "c")?.click();
   await until(
     "scenario C to be seeded and scored",
     () => {
@@ -806,12 +839,9 @@ async function run(): Promise<void> {
   // rejected, and a catalog read that started before the drop landed after it,
   // leaving the rail claiming an empty database over a freshly seeded one.
   const before = thrown.length;
-  selector.value = "a";
-  selector.dispatchEvent(new win.Event("change", { bubbles: true }));
-  selector.value = "c";
-  selector.dispatchEvent(new win.Event("change", { bubbles: true }));
-  selector.value = "a";
-  selector.dispatchEvent(new win.Event("change", { bubbles: true }));
+  chooseScenario("a");
+  chooseScenario("c");
+  chooseScenario("a");
   need<HTMLButtonElement>("#pg-reset").click();
   await until(
     "both seedings to settle",
@@ -919,6 +949,29 @@ async function run(): Promise<void> {
         `prose column ${copyWidth}px, headline ${titleHeight}px tall`,
     );
   }
+
+  /* ---- Free exploration ---- */
+
+  // No steps and no checks: the steps row stays and says so, the strip says
+  // there is no route, and neither is a pixel shorter than on a step with a
+  // command -- switching scenario does not move the panes.
+  chooseScenario("free");
+  await until(
+    "free exploration to load",
+    () => (textOf(".pg-scenario-btn") === "Free exploration" && textOf("#pg-next").includes("No route here")) || null,
+    60_000,
+  ).catch(() => undefined);
+  const freeStripHeight = Math.round(need<HTMLElement>("#pg-next").getBoundingClientRect().height);
+  const freeSteps = q<HTMLElement>("#pg-steps");
+  check(
+    "free exploration keeps the steps row and the strip at their heights, with no route in them",
+    textOf(".pg-scenario-btn") === "Free exploration" && textOf("#pg-next").includes("No route here")
+      && (freeSteps?.classList.contains("is-empty") ?? false) && stepStates().length === 0
+      && freeStripHeight === stripHeight && Math.round(freeSteps?.getBoundingClientRect().height ?? 0) >= 38,
+    `button "${textOf(".pg-scenario-btn")}"; steps ${stepStates().length}, row ` +
+      `${Math.round(freeSteps?.getBoundingClientRect().height ?? 0)}px; strip ${freeStripHeight}px ` +
+      `against ${stripHeight}px on a step with a command`,
+  );
 
   /* ---- Done ---- */
 

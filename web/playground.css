@@ -153,21 +153,152 @@
   color: var(--mute);
 }
 
-/* The native control keeps its own disclosure arrow and its own keyboard
- * behaviour; only the chrome around it is removed. */
-.pg-select {
+/* Opens the scenario picker. It reads as the scenario's name with a
+ * disclosure chevron, and shows its edge only when pointed at. */
+/* 28px tall like the toolbar's other controls -- and the tour skips a target
+ * under 24px, so at its text's own height the tour's first card vanished. */
+.pg-scenario-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
   max-width: 100%;
-  padding: 2px 4px;
+  min-height: 28px;
+  padding: 2px 6px;
   border: 1px solid transparent;
   border-radius: 2px;
   background: transparent;
   color: var(--fg);
   font: 500 13.5px var(--sans);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: pointer;
 }
 
-.pg-select:hover {
+.pg-scenario-btn::after {
+  content: "";
+  flex: none;
+  width: 5px;
+  height: 5px;
+  margin-top: -3px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.pg-scenario-btn:hover {
   border-color: var(--line);
+}
+
+.pg-scenario-btn:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 1px;
+}
+
+/* ---------- Scenario picker ----------
+ *
+ * The About dialog's frame at a list's width: a 1px rule, a 2px radius, no
+ * shadow, the tour's scrim behind it. A row is a scenario's title, how many
+ * steps it has and a sentence on what it is about; the one loaded is tinted
+ * with the selection colour. The list scrolls inside the dialog, so the
+ * scenarios still to come need no other change. */
+.pg-picker {
+  width: min(620px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 20px 24px 22px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.pg-picker[open] {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 14px;
+}
+
+.pg-picker::backdrop {
+  background: var(--bg);
+  opacity: 0.82;
+}
+
+.pg-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.pg-picker-title {
+  margin: 0;
+  font: 600 17px/1.3 var(--sans);
+}
+
+.pg-picker-close {
+  padding: 5px 12px;
+  font-size: 13px;
+}
+
+.pg-picker-note {
+  margin: 0;
+  font: 13.5px/1.5 var(--sans);
+  color: var(--fg2);
+}
+
+.pg-picker-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.pg-picker-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 16px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--bg);
+  text-align: left;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.pg-picker-option:hover {
+  border-color: var(--fg2);
+}
+
+.pg-picker-option:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 1px;
+}
+
+.pg-picker-option[aria-current="true"] {
+  border-color: var(--acc);
+  background: var(--accbg);
+}
+
+.pg-picker-name {
+  font: 600 15px/1.35 var(--sans);
+}
+
+.pg-picker-meta {
+  align-self: baseline;
+  font: 12px var(--mono);
+  color: var(--mute);
+  white-space: nowrap;
+}
+
+.pg-picker-desc {
+  grid-column: 1 / -1;
+  font: 13.5px/1.5 var(--sans);
+  color: var(--fg2);
 }
 
 /* ---------- Status bar ---------- */
@@ -326,6 +457,20 @@
   font: 400 12px var(--sans);
   color: var(--mute);
   min-width: 0;
+}
+
+/* The row a scenario with no steps keeps, at the steps' own height. */
+.pg-steps.is-empty {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 16px;
+}
+
+.pg-steps-empty {
+  margin: 0;
+  font: 13px var(--sans);
+  color: var(--mute);
 }
 
 /* ---------- Pane tabs (narrow layout only) ---------- */
@@ -1172,7 +1317,7 @@
   .pg-scenario {
     flex: 1 1 100%;
   }
-  .pg-select {
+  .pg-scenario-btn {
     flex: 1 1 auto;
     min-width: 0;
   }
@@ -1555,6 +1700,26 @@
     grid-row: 1;
     border-top: 0;
     border-bottom: 1px solid var(--line);
+  }
+
+  /* The strip keeps the height of a row holding a command box whether or
+   * not the step has one -- a finished route, free exploration, a patch's
+   * lone button -- so the panes under it do not move as the route does. */
+  .pg-next-run {
+    min-height: 35px;
+    align-content: center;
+  }
+
+  /* And one line for the command in it. The site's rule is that a command
+   * never hides its tail; here a long one -- `migrations generate` with all
+   * its flags -- would take a second line and move every pane under it. So
+   * it ends in an ellipsis where it runs out of room, with the whole command
+   * in its tooltip, in what Copy takes, and in what the terminal echoes when
+   * it runs. */
+  .pg-next-run .cmd pre {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .pg-rail {
