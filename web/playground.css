@@ -83,6 +83,33 @@
   margin-left: auto;
 }
 
+/* Opens the workspace actions as a menu, up to 900px; see "Phone" below. */
+.pg-more-btn {
+  display: none;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: none;
+  color: var(--fg2);
+  cursor: pointer;
+}
+
+.pg-more-btn:hover,
+.pg-more-btn[aria-expanded="true"] {
+  border-color: var(--line);
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.pg-more-btn:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 1px;
+}
+
 /* Amber, because a build the page cannot vouch for is something to read, not
  * an error. The default state is simply quiet. */
 /* A sentence a workspace action needs in front of the visitor: an import that
@@ -1427,8 +1454,8 @@
  *
  * The scenario picker, About and the leaving dialog fade in and rise a
  * little, over a scrim that fades with them, and go the same way. The
- * popovers -- the step's hint, Import's help, the site menu, the editor's
- * peek at a change -- fade in and drop a little from the control they open
+ * popovers -- the step's hint, Import's help, the site menu, the phone's
+ * workspace menu, the editor's peek at a change -- fade in and drop a little from the control they open
  * under. The start of each move is @starting-style's; the way out keeps the
  * element in the top layer until the fade ends (display and overlay,
  * allow-discrete). A browser without those opens and closes at once. */
@@ -1436,6 +1463,7 @@
   .pg-next-detail,
   .pg-help-pop,
   .pg-sitemenu,
+  .pg-actions[popover],
   .pgc-ed-peek {
     opacity: 0;
     transform: translateY(-4px);
@@ -1449,6 +1477,7 @@
   .pg-next-detail:popover-open,
   .pg-help-pop:popover-open,
   .pg-sitemenu:popover-open,
+  .pg-actions:popover-open,
   .pgc-ed-peek:popover-open {
     opacity: 1;
     transform: none;
@@ -1458,6 +1487,7 @@
     .pg-next-detail:popover-open,
     .pg-help-pop:popover-open,
     .pg-sitemenu:popover-open,
+    .pg-actions:popover-open,
     .pgc-ed-peek:popover-open {
       opacity: 0;
       transform: translateY(-4px);
@@ -1597,8 +1627,9 @@
     gap: 10px 12px;
   }
 
-  /* One row of compact buttons. site.css stacks .actions into a column on a
-   * phone, which gave these four the first screen to themselves. */
+  /* Without the script, one row of compact buttons. site.css stacks .actions
+   * into a column on a phone, which gave these four the first screen to
+   * themselves. With it, they are a menu; see below. */
   .pg-actions {
     display: flex;
     flex-wrap: wrap;
@@ -1629,6 +1660,68 @@
   }
   .pg-actions {
     margin-left: 0;
+  }
+
+  /* The workspace actions as a menu, opened by the "⋯" at the end of the
+   * scenario's line, which takes that line's last 36px. src/main.ts makes the
+   * row the menu's popover at this width. Reset throws the workspace's edits
+   * away, so a rule sets it apart from the other three. */
+  html.js .pg-bar {
+    flex: 1 1 0;
+  }
+  html.js .pg-more-btn {
+    display: inline-grid;
+  }
+  /* The menu's look is on [popover], not on :popover-open: a closing menu
+   * stays drawn while it fades, and without it the fade ran as a column of
+   * buttons in the middle of the screen. */
+  html.js .pg-actions[popover] {
+    inset: auto;
+    margin: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0;
+    min-width: 220px;
+    padding: 6px 0;
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    background: var(--bg);
+    color: var(--fg);
+  }
+  html.js .pg-actions[popover] .btn {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    font: 500 14px var(--sans);
+    color: var(--fg2);
+    text-align: left;
+  }
+  html.js .pg-actions[popover] #pg-import {
+    grid-column: 1;
+  }
+  html.js .pg-actions[popover] .btn:hover:not(:disabled) {
+    background: var(--code);
+    color: var(--fg);
+  }
+  html.js .pg-actions[popover] .btn:focus-visible {
+    outline-offset: -2px;
+  }
+  html.js .pg-actions[popover] .pg-help-btn {
+    grid-column: 2;
+    margin: 0 16px 0 8px;
+  }
+  html.js .pg-actions[popover] #pg-reset {
+    margin-top: 6px;
+    border-top: 1px solid var(--line);
+  }
+  html.js .pg-actions[popover]:not(:popover-open) {
+    display: none;
   }
   .pg-state {
     width: 100%;

@@ -64,6 +64,16 @@ const STEPS: readonly StepSpec[] = [
     prefer: ["below", "right"],
   },
   {
+    // Only up to 900px, where the actions fold into a menu; wider, the row
+    // is in plain sight and this step has no target.
+    targets: ["#pg-more"],
+    title: "Tour, Import, Export, Reset",
+    body:
+      "Import opens a SQLite file of your own as app.db, Export saves the workspace, " +
+      "and Reset puts back what the scenario seeded. This tour is in there too.",
+    prefer: ["below", "left"],
+  },
+  {
     targets: ["#pg-editor"],
     title: "The schema you want",
     body:

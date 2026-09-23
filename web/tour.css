@@ -198,16 +198,3 @@
     transition: top 160ms ease, left 160ms ease;
   }
 }
-
-/* ---------- The button that reopens it ---------- */
-
-/*
- * On a phone the actions row already carries Import, Export and Reset, and a
- * fourth control pushes the row onto a second line in front of the lede. The
- * tour is the least urgent of the four, so it is the one that goes.
- */
-@media (max-width: 560px) {
-  #pg-tour-open {
-    display: none;
-  }
-}

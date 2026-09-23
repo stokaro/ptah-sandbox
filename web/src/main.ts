@@ -513,6 +513,33 @@ swap("#pg-next", guide.next);
   };
   place();
   phone.addEventListener("change", place);
+
+  // Up to the same width the workspace actions are a menu behind the "⋯" at
+  // the end of the scenario's line (see index.html). The row is the menu:
+  // the buttons keep their handlers, and the popover attribute is what folds
+  // them away.
+  const actions = need<HTMLElement>("#pg-actions");
+  const more = need<HTMLElement>("#pg-more");
+  anchorPopover(actions, more);
+  const fold = (): void => {
+    if (phone.matches) {
+      actions.popover = "auto";
+      return;
+    }
+    if (actions.matches(":popover-open")) actions.hidePopover();
+    actions.removeAttribute("popover");
+  };
+  fold();
+  phone.addEventListener("change", fold);
+  // Opening puts focus on the first action, as the site menu does. An action
+  // closes the menu; the ? beside Import opens its note inside it instead.
+  actions.addEventListener("toggle", (event) => {
+    if (event.newState === "open") actions.querySelector<HTMLButtonElement>(".btn")?.focus();
+  });
+  actions.addEventListener("click", (event) => {
+    const action = event.target instanceof Element ? event.target.closest(".btn") : null;
+    if (action !== null && actions.matches(":popover-open")) actions.hidePopover();
+  });
 }
 
 /* ---------- Boot ---------- */
