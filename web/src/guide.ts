@@ -79,11 +79,13 @@ function commandBox(argv: readonly string[]): HTMLElement {
 }
 
 export class Guide {
-  /** The scenario bar: selector on the left, status pill on the right. */
+  /** The scenario selector, in the toolbar. */
   readonly bar: HTMLElement;
+  /** The runtime's status pill and the storage note, in the status bar. */
+  readonly state: HTMLElement;
   /** The five-column steps nav under the bar. */
   readonly steps: HTMLElement;
-  /** The two-column strip that sits below the terminal. */
+  /** The two-column strip that sits above the terminal. */
   readonly next: HTMLElement;
 
   private readonly host: GuideHost;
@@ -120,12 +122,11 @@ export class Guide {
     this.status.setAttribute("role", "status");
     this.storage = el("span", "pg-storage", "memory-only");
 
-    this.bar = el("div", "pg-bar");
-    fill(
-      this.bar,
+    this.bar = fill(
+      el("div", "pg-bar"),
       fill(el("span", "pg-scenario"), el("span", "pg-scenario-label", "Scenario"), this.select),
-      fill(el("div", "pg-bar-right"), this.status, this.storage),
     );
+    this.state = fill(el("div", "pg-state"), this.status, this.storage);
     this.setStatus(IDLE);
 
     this.steps = el("nav", "pg-steps");

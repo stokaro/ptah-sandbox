@@ -237,6 +237,10 @@ async function run(): Promise<void> {
     `rail says: ${earlyRail.replace(/\s+/g, " ").trim().slice(0, 160)}`,
   );
 
+  // The tour is opened now, while the boot strip is still above the panes, and
+  // its ring is read again once the strip has gone; see the check after ready.
+  need<HTMLElement>("#pg-tour-open").click();
+
   /* ---- 2. The loader counts real bytes and reaches ready ---- */
 
   let sawBytes = "";
@@ -261,6 +265,26 @@ async function run(): Promise<void> {
     need<HTMLElement>("#pg-boot-strip").hidden,
     `status pill: "${textOf(".pg-status").trim()}"`,
   );
+
+  // The frame is 1440px wide, so the panes fill a window-high frame, and the
+  // strip leaving moves them without changing the body's height. A tour that
+  // re-placed itself only when the body resized kept its ring 91px below the
+  // editor. Two frames is time enough for a resize observer to have answered.
+  await sleep(250);
+  const ring = need<HTMLElement>(".pg-tour-ring").getBoundingClientRect();
+  const editor = need<HTMLElement>("#pg-editor").getBoundingClientRect();
+  const off = Math.max(
+    Math.abs(ring.top - editor.top),
+    Math.abs(ring.left - editor.left),
+    Math.abs(ring.height - editor.height),
+  );
+  check(
+    "a tour opened during boot keeps its ring on the editor after the strip goes",
+    bootVisible && off < 2,
+    `opened with the strip visible: ${bootVisible}; ring top ${Math.round(ring.top)}, ` +
+      `editor top ${Math.round(editor.top)}, heights ${Math.round(ring.height)}/${Math.round(editor.height)}`,
+  );
+  need<HTMLElement>(".pg-tour-skip").click();
 
   const buildLine = textOf("#pg-running");
   check(

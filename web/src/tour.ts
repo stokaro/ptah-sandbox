@@ -256,8 +256,10 @@ export class Tour {
    * and goes away while the tour is open, and each of those is a layout shift
    * with no event of its own: the ring stayed 30px above the editor for the
    * whole of the first step, drawn across the step nav. Watching the body and
-   * the current target covers that, font swaps, and a pane that grows when
-   * its content arrives.
+   * every target covers that, font swaps, and a pane that grows when its
+   * content arrives. The body alone is not enough above 1100px, where the
+   * panes fill a window-high frame: the strip leaving moved the editor 91px
+   * and left the body exactly as tall as before, so only the panes resized.
    */
   private readonly resizes = new ResizeObserver(() => {
     if (this.open) this.place();
@@ -329,6 +331,7 @@ export class Tour {
     window.addEventListener("resize", this.onLayout);
     window.addEventListener("scroll", this.onLayout, true);
     this.resizes.observe(document.body);
+    for (const { target } of this.live) this.resizes.observe(target);
     this.go(0);
   }
 
