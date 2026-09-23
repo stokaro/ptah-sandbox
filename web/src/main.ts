@@ -494,6 +494,27 @@ swap("#pg-state", guide.state);
 swap("#pg-steps", guide.steps);
 swap("#pg-next", guide.next);
 
+/*
+ * On a phone the site header has room beside the brand, and the toolbar's
+ * first row held only the page's title and its short status. They move into
+ * the header there, and back when the window widens, so the panes get that
+ * row's height. The elements move rather than being drawn twice: the page
+ * keeps one h1 and the status one element.
+ */
+{
+  const phone = window.matchMedia("(max-width: 720px)");
+  const pageTitle = need<HTMLElement>(".pg-toolbar-title");
+  const shortStatus = need<HTMLElement>("#pg-mini");
+  const brand = document.querySelector<HTMLElement>(".site-header .brand");
+  const place = (): void => {
+    if (brand === null) return;
+    if (phone.matches) brand.after(pageTitle, shortStatus);
+    else document.getElementById("pg-bar")?.before(pageTitle, shortStatus);
+  };
+  place();
+  phone.addEventListener("change", place);
+}
+
 /* ---------- Boot ---------- */
 
 interface RawManifest {

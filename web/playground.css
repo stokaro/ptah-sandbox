@@ -1319,6 +1319,58 @@
   color: var(--fg);
 }
 
+/* ---------- The phone's header ----------
+ *
+ * Up to 720px, where the site header is the brand, the theme toggle and the
+ * menu button, src/main.ts moves the page's title and its short status into
+ * it, and the toolbar starts at the scenario. The brand keeps its mark and
+ * drops its name from view -- a screen reader still reads it -- so the row
+ * holds all of it. */
+@media (max-width: 720px) {
+  html.js .site-header .wrap {
+    justify-content: flex-start;
+    gap: 10px;
+  }
+
+  html.js .site-header .brand-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  html.js .site-header .pg-toolbar-title {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    font: 600 17px/1.2 var(--sans);
+    letter-spacing: 0;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  html.js .site-header .pg-mini {
+    flex: none;
+    margin-left: auto;
+    padding: 3px 7px;
+    font-size: 11.5px;
+  }
+
+  html.js .site-header .nav {
+    flex: none;
+  }
+}
+
+/* The narrowest phones keep the title whole by dropping the version from the
+ * short status; About still names it. */
+@media (max-width: 380px) {
+  html.js .site-header .pg-mini .v {
+    display: none;
+  }
+}
+
 /* ---------- Dialogs and popovers coming and going ----------
  *
  * The scenario picker, About and the leaving dialog fade in and rise a
