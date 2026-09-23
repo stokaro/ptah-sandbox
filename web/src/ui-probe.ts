@@ -244,6 +244,15 @@ async function run(): Promise<void> {
   // it does, so that is the card left open.
   need<HTMLElement>("#pg-tour-open").click();
   const firstTourCard = textOf(".pg-tour-title");
+  // The card points at what it describes: its pointer is on the edge facing
+  // the ring and across from the ring's middle.
+  await sleep(50);
+  const tourPointer = q<HTMLElement>(".pg-tour-pointer")?.getBoundingClientRect();
+  const tourRing = q<HTMLElement>(".pg-tour-ring")?.getBoundingClientRect();
+  const tourSide = q<HTMLElement>(".pg-tour-card")?.dataset["side"] ?? "";
+  const pointerAim = tourPointer && tourRing
+    ? Math.round(Math.abs(tourPointer.left + tourPointer.width / 2 - (tourRing.left + tourRing.width / 2)))
+    : -1;
   q<HTMLButtonElement>(".pg-tour-next")?.click();
 
   /* ---- 2. The loader counts real bytes and reaches ready ---- */
@@ -284,9 +293,9 @@ async function run(): Promise<void> {
     Math.abs(ring.height - editor.height),
   );
   check(
-    "the tour starts at the scenario picker",
-    firstTourCard === "Pick a scenario",
-    `first card "${firstTourCard}"`,
+    "the tour starts at the scenario picker, pointing at it",
+    firstTourCard === "Pick a scenario" && tourSide === "below" && pointerAim >= 0 && pointerAim <= 2,
+    `first card "${firstTourCard}", placed ${tourSide || "nowhere"}, pointer ${pointerAim}px off the ring's middle`,
   );
   check(
     "a tour opened during boot keeps its ring on the editor after the strip goes",
@@ -359,15 +368,16 @@ async function run(): Promise<void> {
   need<HTMLButtonElement>("#pg-sitemenu-btn").click();
   const menu = need<HTMLElement>("#pg-sitemenu");
   const menuOpen = menu.matches(":popover-open");
-  const menuLinks = menu.querySelectorAll("a").length;
-  const menuHere = menu.querySelector('a[aria-current="page"]')?.textContent ?? "";
+  const menuLinks = [...menu.querySelectorAll<HTMLAnchorElement>("a")];
+  const menuSelf = menuLinks.filter((link) => link.textContent === "Playground" || link.getAttribute("href") === "/");
   menu.hidePopover();
+  // The header's links and home, less the one to this page.
   check(
-    "the site header folds into the toolbar, and the Ptah mark opens its links",
+    "the site header folds into the toolbar, and the Ptah mark opens its links, not one to itself",
     siteHeader.getBoundingClientRect().height === 0 && menuOpen && headerLinks > 0
-      && menuLinks === headerLinks + 1 && menuHere === "Playground",
+      && menuLinks.length === headerLinks && menuSelf.length === 0,
     `header ${Math.round(siteHeader.getBoundingClientRect().height)}px tall; menu open ${menuOpen}, ` +
-      `${menuLinks} links for the header's ${headerLinks} and home, current "${menuHere}"`,
+      `${menuLinks.length} links for the header's ${headerLinks}; to itself: ${menuSelf.length}`,
   );
 
   const theme = (): string => doc.documentElement.getAttribute("data-theme") ?? "";

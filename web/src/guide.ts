@@ -138,6 +138,8 @@ export class Guide {
   private partAt = new Map<number, number>();
   /** Per step, the parts this page has seen done. */
   private partsDone = new Map<number, Set<number>>();
+  /** The strip's move from one height to another, while it runs. */
+  private heightMove: Animation | null = null;
   /** The step the strip is showing, or null to follow the route. */
   private pinned: number | null = null;
   /** Serializes refreshes so two overlapping passes cannot paint out of order. */
@@ -423,7 +425,34 @@ export class Guide {
     });
   }
 
+  /**
+   * Paints the strip. Where its height changed -- on a phone the strip is as
+   * tall as what the step says, and moving to another step or part changes
+   * it -- the strip moves from the old height to the new one instead of
+   * jumping, and what is under it moves with it. The full-window strip holds
+   * one height and never moves.
+   */
   private renderNext(): void {
+    const before = this.next.getBoundingClientRect().height;
+    // Cancelled before the new height is read, or the reading is the old
+    // animation's rather than the strip's own.
+    this.heightMove?.cancel();
+    this.paintNext();
+    const after = this.next.getBoundingClientRect().height;
+    if (before === 0 || Math.abs(after - before) < 1) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    this.next.style.overflow = "hidden";
+    this.heightMove = this.next.animate([{ height: `${before}px` }, { height: `${after}px` }], {
+      duration: 220,
+      easing: "ease",
+    });
+    const settle = (): void => {
+      this.next.style.overflow = "";
+    };
+    this.heightMove.finished.then(settle, settle);
+  }
+
+  private paintNext(): void {
     clear(this.next);
     const route = this.route;
     const actions = el("div", "pg-next-run");

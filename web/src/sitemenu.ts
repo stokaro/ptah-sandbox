@@ -29,11 +29,12 @@ export function installSiteMenu(control: HTMLElement, menu: HTMLElement): void {
   }
 
   for (const link of document.querySelectorAll<HTMLAnchorElement>(".site-header .nav-links a")) {
+    // Not the page this menu is on: a link from the playground to itself goes
+    // nowhere. The header keeps it, where it marks the section you are in.
+    if (link.getAttribute("aria-current") === "page") continue;
     const copy = document.createElement("a");
     copy.href = link.getAttribute("href") ?? link.href;
     copy.textContent = link.textContent;
-    const current = link.getAttribute("aria-current");
-    if (current !== null) copy.setAttribute("aria-current", current);
     const item = document.createElement("li");
     item.appendChild(copy);
     list.appendChild(item);
@@ -42,11 +43,10 @@ export function installSiteMenu(control: HTMLElement, menu: HTMLElement): void {
   menu.appendChild(list);
   anchorPopover(menu, control);
 
-  // Opening by keyboard or pointer puts focus on the page this is, so Tab
-  // walks on from where the reader is; Escape hands it back to the control.
+  // Opening puts focus on the first link, so Tab walks on down the list;
+  // Escape hands it back to the control.
   menu.addEventListener("toggle", (event) => {
     if (event.newState !== "open") return;
-    const here = menu.querySelector<HTMLAnchorElement>('a[aria-current="page"]') ?? menu.querySelector("a");
-    here?.focus();
+    menu.querySelector<HTMLAnchorElement>("a")?.focus();
   });
 }

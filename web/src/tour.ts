@@ -91,8 +91,8 @@ const STEPS: readonly StepSpec[] = [
     targets: [".pg-panetabs"],
     title: "Three panes, one at a time",
     body:
-      "At this width the editor, the console and the database share the screen. " +
-      "These tabs switch between them; nothing is lost when one is hidden.",
+      "At this width the editor, the console and the database take turns. The tabs at " +
+      "the bottom of the screen switch between them; nothing is lost when one is hidden.",
     prefer: ["below", "above"],
   },
   {
@@ -159,6 +159,23 @@ export interface Placement {
  * something has to give, and a readable card that overlaps beats a correct
  * one nobody can see.
  */
+/** How far from a card's corner its pointer may sit, so it stays on a straight edge. */
+export const POINTER_INSET = 16;
+
+/**
+ * Where along the card's edge its pointer goes: opposite the middle of the
+ * ring, measured from the card's left (above or below) or top (left or
+ * right), and kept off the corners. A card pushed aside by the window edge
+ * still points at what it is about.
+ */
+export function pointerAt(ring: Box, card: Box, side: Side): number {
+  const along = side === "below" || side === "above"
+    ? ring.left + ring.width / 2 - card.left
+    : ring.top + ring.height / 2 - card.top;
+  const length = side === "below" || side === "above" ? card.width : card.height;
+  return Math.round(Math.min(Math.max(POINTER_INSET, along), Math.max(POINTER_INSET, length - POINTER_INSET)));
+}
+
 export function choosePlacement(
   ring: Box,
   card: Box,
@@ -242,6 +259,7 @@ export class Tour {
   private readonly scrim: readonly HTMLElement[];
   private readonly ring: HTMLElement;
   private readonly card: HTMLElement;
+  private readonly pointer: HTMLElement;
   private readonly title: HTMLElement;
   private readonly body: HTMLElement;
   private readonly count: HTMLElement;
@@ -299,7 +317,12 @@ export class Tour {
 
     const foot = fill(el("div", "pg-tour-foot"), this.count, fill(el("div", "pg-tour-buttons"), skip, this.back, this.forward));
 
-    this.card = fill(el("div", "pg-tour-card"), this.title, this.body, foot);
+    // The pointer on the card's edge that faces the ring: without it, a
+    // ring around the phone's tab bar at the foot of the screen was easy to
+    // miss next to a card in the middle of it.
+    this.pointer = el("span", "pg-tour-pointer");
+    this.pointer.setAttribute("aria-hidden", "true");
+    this.card = fill(el("div", "pg-tour-card"), this.pointer, this.title, this.body, foot);
     this.card.setAttribute("role", "dialog");
     this.card.setAttribute("aria-modal", "true");
     this.card.setAttribute("aria-label", "A tour of this page");
@@ -423,6 +446,8 @@ export class Tour {
     this.card.style.left = `${spot.left}px`;
     this.card.style.top = `${spot.top}px`;
     this.card.dataset.side = spot.side;
+    const placed = { top: spot.top, left: spot.left, width: card.width, height: card.height };
+    this.pointer.style.setProperty("--pointer-at", `${pointerAt(rect, placed, spot.side)}px`);
   }
 
   private key(event: KeyboardEvent): void {

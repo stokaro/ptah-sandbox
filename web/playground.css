@@ -502,6 +502,11 @@
   box-shadow: inset 0 -2px 0 var(--acc);
 }
 
+.pg-panetab-icon {
+  display: block;
+  flex: none;
+}
+
 /* ---------- The three panes and the terminal ---------- */
 
 /*
@@ -1528,9 +1533,18 @@
     background: var(--code);
   }
   html.js body {
-    padding-bottom: 45px;
+    padding-bottom: 53px;
+  }
+  html.js .pg-panetab {
+    flex-direction: column;
+    gap: 2px;
+    min-height: 52px;
+    padding: 6px 8px 7px;
+    font-size: 11.5px;
   }
   html.js .pg-panetab[aria-selected="true"] {
+    color: var(--acc);
+    background: var(--bg);
     box-shadow: inset 0 2px 0 var(--acc);
   }
   html.js .pg-grid[data-pane="editor"] > .pg-rail,
@@ -2061,11 +2075,6 @@
 .pg-sitemenu a:focus-visible {
   outline: 2px solid var(--acc);
   outline-offset: -2px;
-}
-
-.pg-sitemenu a[aria-current="page"] {
-  color: var(--acc);
-  box-shadow: inset 2px 0 0 var(--acc);
 }
 
 .pg-sitemenu a.pg-sitemenu-home {
