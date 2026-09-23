@@ -297,10 +297,15 @@ button.pgc-ed-num:focus-visible {
   color: var(--fg);
 }
 
-.pgc-ed-peek:popover-open {
-  display: grid;
+/* Only the display waits for the popover to open. A closing popover is
+   still drawn while it fades, and a gap set only while open went first. */
+.pgc-ed-peek {
   gap: 10px;
   justify-items: start;
+}
+
+.pgc-ed-peek:popover-open {
+  display: grid;
 }
 
 .pgc-ed-peek-title {

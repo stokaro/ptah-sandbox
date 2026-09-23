@@ -1017,10 +1017,16 @@
   font: 13.5px/1.55 var(--sans);
 }
 
+/* Only the display waits for the popover to open. A closing popover is
+ * still drawn while it fades, and a gap set only while open went first. */
+.pg-next-detail,
+.pg-help-pop {
+  gap: 8px;
+}
+
 .pg-next-detail:popover-open,
 .pg-help-pop:popover-open {
   display: grid;
-  gap: 8px;
 }
 
 .pg-next-detail p,
