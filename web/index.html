@@ -45,8 +45,11 @@
     <nav class="nav" aria-label="Site">
       <ul class="nav-links" id="nav-links">
         <li><a href="https://docs.ptah.run/">Docs</a></li>
-        <li><a href="https://ptah.run/install/">Install</a></li>
-        <li><a href="https://ptah.run/in-practice/">In practice</a></li>
+        <!-- data-sitemenu="omit": the toolbar's site menu (src/sitemenu.ts)
+             leaves these two out. Both are pages of ptah.run, one click from
+             its home at the top of that menu. -->
+        <li><a href="https://ptah.run/install/" data-sitemenu="omit">Install</a></li>
+        <li><a href="https://ptah.run/in-practice/" data-sitemenu="omit">In practice</a></li>
         <li><a href="/" aria-current="page">Playground</a></li>
         <li><a href="https://operator.ptah.run/">Operator</a></li>
         <li><a href="https://blog.ptah.run/">Blog</a></li>

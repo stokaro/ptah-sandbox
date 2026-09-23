@@ -368,16 +368,18 @@ async function run(): Promise<void> {
   need<HTMLButtonElement>("#pg-sitemenu-btn").click();
   const menu = need<HTMLElement>("#pg-sitemenu");
   const menuOpen = menu.matches(":popover-open");
-  const menuLinks = [...menu.querySelectorAll<HTMLAnchorElement>("a")];
-  const menuSelf = menuLinks.filter((link) => link.textContent === "Playground" || link.getAttribute("href") === "/");
+  const menuNames = [...menu.querySelectorAll<HTMLAnchorElement>("a")].map((link) =>
+    (link.textContent ?? "").replace(/\s+/g, " ").trim(),
+  );
   menu.hidePopover();
-  // The header's links and home, less the one to this page.
+  // Home and the header's links, less the one to this page and the two the
+  // header marks as reached from home.
   check(
-    "the site header folds into the toolbar, and the Ptah mark opens its links, not one to itself",
-    siteHeader.getBoundingClientRect().height === 0 && menuOpen && headerLinks > 0
-      && menuLinks.length === headerLinks && menuSelf.length === 0,
-    `header ${Math.round(siteHeader.getBoundingClientRect().height)}px tall; menu open ${menuOpen}, ` +
-      `${menuLinks.length} links for the header's ${headerLinks}; to itself: ${menuSelf.length}`,
+    "the site header folds into the toolbar, and the Ptah mark opens the site's main pages",
+    siteHeader.getBoundingClientRect().height === 0 && menuOpen && headerLinks === 7
+      && menuNames.join(" | ") === "Ptah | Docs | Operator | Blog | GitHub ↗",
+    `header ${Math.round(siteHeader.getBoundingClientRect().height)}px tall, ${headerLinks} links; ` +
+      `menu open ${menuOpen}: ${menuNames.join(" | ")}`,
   );
 
   const theme = (): string => doc.documentElement.getAttribute("data-theme") ?? "";
