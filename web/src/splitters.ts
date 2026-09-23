@@ -2,10 +2,10 @@
  * The draggable lines between the panes of the full-window layout.
  *
  * Above 1100px the playground lays its panes out like an editor (see "Full
- * window" in playground.css): the file list, the editor and the database
- * across the top, the terminal across the bottom. Three lines between them can
- * be moved: the file list's right edge, the database pane's left edge, and the
- * top of the terminal's block. Each writes one custom property on the grid --
+ * window" in playground.css): the file list and the database pane at the
+ * sides, the editor and the terminal between them. Three lines can be moved:
+ * the file list's right edge, the database pane's left edge, and the top of
+ * the terminal. Each writes one custom property on the grid --
  * --pg-rail, --pg-db, --pg-term -- and the grid's template reads it. A size
  * nobody has set is left to the stylesheet's default.
  *
@@ -149,7 +149,7 @@ export function installSplitters(panes: SplitterPanes): void {
       const box = grid.getBoundingClientRect();
       if (name === "rail") return event.clientX - box.left;
       if (name === "db") return box.right - event.clientX;
-      return box.bottom - event.clientY - height(panes.next());
+      return box.bottom - event.clientY;
     };
 
     handle.addEventListener("pointerdown", (event) => {

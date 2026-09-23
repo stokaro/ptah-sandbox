@@ -60,6 +60,7 @@ import {
 import type { FileEntry } from "./protocol.ts";
 import { Session, SessionError, type RunHandle } from "./session.ts";
 import { installSplitters } from "./splitters.ts";
+import { installDock } from "./dock.ts";
 import {
   Store,
   canRun,
@@ -1065,6 +1066,19 @@ installSplitters({
   db: () => document.getElementById("pg-db"),
   next: () => document.getElementById("pg-next"),
   terminal: () => document.getElementById("pg-terminal"),
+});
+// Where the terminal sits in that layout: between the side panes, or across.
+installDock(grid, need<HTMLElement>("#pg-dock"));
+
+// About: the introduction, what is running and what this profile cannot do.
+// A dialog, because the full-window layout leaves no page under it to scroll
+// to. Escape closes it natively; so does a click on the backdrop, which is the
+// dialog element itself rather than anything inside it.
+const aboutDialog = need<HTMLDialogElement>("#pg-about");
+need<HTMLButtonElement>("#pg-about-open").addEventListener("click", () => aboutDialog.showModal());
+need<HTMLButtonElement>("#pg-about-close").addEventListener("click", () => aboutDialog.close());
+aboutDialog.addEventListener("click", (event) => {
+  if (event.target === aboutDialog) aboutDialog.close();
 });
 const importBtn = need<HTMLButtonElement>("#pg-import");
 const exportBtn = need<HTMLButtonElement>("#pg-export");

@@ -23,7 +23,7 @@ import {
   evaluateRoute,
   pad,
 } from "./scenario.ts";
-import type { RouteState, Scenario, StateProbe, Step, StepState } from "./scenario.ts";
+import type { RouteState, Scenario, StateProbe, StepState } from "./scenario.ts";
 
 /** What the guide needs from the rest of the page. */
 export interface GuideHost {
@@ -248,60 +248,56 @@ export class Guide {
   private renderNext(): void {
     clear(this.next);
     const route = this.route;
-    const copy = el("div", "pg-next-copy");
     const actions = el("div", "pg-next-run");
 
     if (!route) {
       fill(
-        copy,
-        el("strong", undefined, "Reading the workspace."),
-        el("span", "caption", "The steps below are scored against the real files and the real catalog, "
-          + "so they stay blank until there is something to read."),
+        this.next,
+        headlineWithHint("Reading the workspace.", {
+          paragraphs: ["The steps above are checked against the real files and the real catalog, "
+            + "so they stay blank until there is something to read."],
+        }),
+        actions,
       );
-      fill(this.next, copy, actions);
       return;
     }
 
     if (route.unavailable) {
       fill(
-        copy,
-        el("strong", undefined, this.current.title),
-        el("span", "caption", `${this.current.description} The route is not scored yet: `
-          + `${route.unavailable}. Reading and editing work already.`),
+        this.next,
+        headlineWithHint(this.current.title, {
+          paragraphs: [this.current.description,
+            `The route is not checked yet: ${route.unavailable}. Reading and editing work already.`],
+        }),
+        actions,
       );
-      fill(this.next, copy, actions);
       return;
     }
 
     const focused = this.focused();
 
     if (!focused) {
+      const paragraphs = [this.current.finished.caption];
+      if (this.current.note) paragraphs.push(this.current.note);
       fill(
-        copy,
-        el("strong", undefined, this.current.finished.headline),
-        el("span", "caption", this.current.finished.caption),
+        this.next,
+        headlineWithHint(this.current.finished.headline, { paragraphs, offScript: route.offScript }),
+        actions,
       );
-      if (this.current.note) copy.appendChild(el("span", "caption", this.current.note));
-      this.appendOffScript(copy, route);
-      fill(this.next, copy, actions);
       return;
     }
 
     const step = focused.step;
-    fill(copy, el("strong", undefined, step.headline));
-    copy.appendChild(el("span", "caption", captionFor(focused)));
-    this.appendOffScript(copy, route);
-
     this.appendActions(actions, focused);
-    fill(this.next, copy, actions);
-  }
-
-  private appendOffScript(copy: HTMLElement, route: RouteState): void {
-    if (!route.offScript) return;
-    // Amber, because this is something to read before carrying on. It is not
-    // an error: nothing has failed and nothing is blocked.
-    const note = el("p", "pg-next-note", `△ ${route.offScript}`);
-    copy.appendChild(note);
+    fill(
+      this.next,
+      headlineWithHint(step.headline, {
+        paragraphs: [focused.status === "done" ? step.done ?? step.instruction : step.instruction],
+        check: detailLine(focused),
+        offScript: route.offScript,
+      }),
+      actions,
+    );
   }
 
   private appendActions(container: HTMLElement, state: StepState): void {
@@ -376,16 +372,77 @@ function buttonLabel(state: StepState, waiting: boolean): string {
   return state.status === "done" ? "Run again →" : "Run next →";
 }
 
-/** What the strip says under the headline for one step. */
-function captionFor(state: StepState): string {
-  const step: Step = state.step;
-  if (state.status === "done") {
-    return `${step.done ?? step.instruction} Checked against the workspace: ${state.detail}.`;
+/** What the hint beside a headline opens. */
+interface Hint {
+  /** What the step asks for, or what it established once done. */
+  paragraphs: readonly string[];
+  /** What the route checked, in the check's own words. */
+  check?: string;
+  /** Set when the workspace has left the suggested route. */
+  offScript?: string | null;
+}
+
+/**
+ * The strip's headline, and a hint that opens the rest in a popover.
+ *
+ * The paragraphs used to sit under the headline. They are worth reading once,
+ * and as a paragraph they held three lines of height that every pane below
+ * gave up for as long as the step was shown. A note that the workspace has
+ * left the route is the exception: the hint then says so on the strip, in
+ * amber, because it is something to read before carrying on. It is not an
+ * error treatment, since nothing has failed and nothing is blocked.
+ */
+function headlineWithHint(headline: string, hint: Hint): HTMLElement {
+  const detail = el("div", "pg-next-detail");
+  detail.id = "pg-next-detail";
+  detail.popover = "auto";
+  for (const text of hint.paragraphs) detail.appendChild(el("p", undefined, text));
+  if (hint.check) detail.appendChild(el("p", "pg-next-check", hint.check));
+  if (hint.offScript) detail.appendChild(el("p", "pg-next-note", `△ ${hint.offScript}`));
+
+  const button = el("button", "pg-next-info");
+  button.type = "button";
+  button.popoverTargetElement = detail;
+  button.setAttribute("aria-expanded", "false");
+  if (hint.offScript) {
+    button.dataset["tone"] = "attention";
+    fill(button, el("span", undefined, "△"), document.createTextNode(" Off the route"));
+    button.firstElementChild?.setAttribute("aria-hidden", "true");
+  } else {
+    button.textContent = "i";
+    button.setAttribute("aria-label", "About this step");
+    button.title = "About this step";
   }
-  if (state.status === "unverifiable") {
-    return `${step.instruction} ${step.unverified ?? ""}`.trim();
-  }
-  return step.instruction;
+
+  // The popover is in the top layer, so it is placed rather than laid out:
+  // under the hint, kept inside the window. The page does not scroll in the
+  // full-window layout; where it does, a scroll or a resize closes the
+  // popover rather than leaving it behind at the old position.
+  const close = (): void => {
+    if (detail.matches(":popover-open")) detail.hidePopover();
+  };
+  detail.addEventListener("beforetoggle", (event) => {
+    const opening = event.newState === "open";
+    button.setAttribute("aria-expanded", String(opening));
+    if (!opening) {
+      window.removeEventListener("scroll", close);
+      window.removeEventListener("resize", close);
+      return;
+    }
+    const anchor = button.getBoundingClientRect();
+    detail.style.top = `${Math.round(anchor.bottom + 8)}px`;
+    detail.style.left = `${Math.round(anchor.left)}px`;
+    window.addEventListener("scroll", close, { once: true });
+    window.addEventListener("resize", close, { once: true });
+  });
+  detail.addEventListener("toggle", (event) => {
+    if (event.newState !== "open") return;
+    const right = detail.getBoundingClientRect().right;
+    const overflow = right - (window.innerWidth - 16);
+    if (overflow > 0) detail.style.left = `${Math.max(16, Math.round(button.getBoundingClientRect().left - overflow))}px`;
+  });
+
+  return fill(el("div", "pg-next-copy"), el("strong", undefined, headline), button, detail);
 }
 
 /** The tooltip on a step in the nav. */

@@ -288,12 +288,75 @@ async function run(): Promise<void> {
 
   const buildLine = textOf("#pg-running");
   check(
-    "the footer states the build that is actually running",
+    "About states the build that is actually running",
     /commands registered/.test(buildLine) && /SQLite/.test(buildLine),
     buildLine.replace(/\s+/g, " ").trim().slice(0, 180),
   );
 
   await until("the rail to show the catalog it read", () => textOf("#pg-rail").includes("3 rows"));
+
+  /* ---- The full-window layout ---- */
+
+  // The frame is 1440 by 1100, so this is the layout above 1100px: the header
+  // and the application fill the window and there is no page under them.
+  const page = doc.documentElement;
+  check(
+    "the full-window layout fits the window, with no page to scroll",
+    page.scrollHeight <= page.clientHeight,
+    `document ${page.scrollHeight}px tall in a ${page.clientHeight}px window`,
+  );
+
+  // What used to sit under the application is in About now, so About has to
+  // open, show it, and close again.
+  const about = need<HTMLDialogElement>("#pg-about");
+  need<HTMLButtonElement>("#pg-about-open").click();
+  const aboutShown = about.open && need<HTMLElement>("#pg-running").getBoundingClientRect().height > 0;
+  need<HTMLButtonElement>("#pg-about-close").click();
+  check(
+    "About opens from the status bar, shows what is running, and closes",
+    aboutShown && !about.open,
+    `open with the Running line on screen: ${aboutShown}; open after Close: ${about.open}`,
+  );
+
+  // Between the side panes is the default; the toolbar pair moves the
+  // terminal across the width and back. Read straight after each click,
+  // because a layout read is synchronous. It ends on the default.
+  const dockTo = (dock: string): { term: DOMRect; editor: DOMRect; grid: DOMRect } => {
+    need<HTMLButtonElement>(`#pg-dock [data-dock="${dock}"]`).click();
+    return {
+      term: need<HTMLElement>("#pg-terminal").getBoundingClientRect(),
+      editor: need<HTMLElement>("#pg-editor").getBoundingClientRect(),
+      grid: need<HTMLElement>(".pg-grid").getBoundingClientRect(),
+    };
+  };
+  const across = dockTo("full");
+  const between = dockTo("between");
+  check(
+    "the terminal sits under the editor between the side panes, or across the width when asked",
+    Math.abs(between.term.left - between.editor.left) < 2
+      && Math.abs(between.term.width - between.editor.width) < 2
+      && Math.abs(across.term.width - across.grid.width) < 2,
+    `between: terminal at ${Math.round(between.term.left)}, ${Math.round(between.term.width)}px wide, ` +
+      `editor at ${Math.round(between.editor.left)}, ${Math.round(between.editor.width)}px; ` +
+      `across: terminal ${Math.round(across.term.width)}px of a ${Math.round(across.grid.width)}px grid`,
+  );
+
+  // The step's strip is one line; what the step means is behind the hint.
+  const strip = need<HTMLElement>("#pg-next");
+  const stripHeight = Math.round(strip.getBoundingClientRect().height);
+  const hint = need<HTMLButtonElement>("#pg-next .pg-next-info");
+  hint.click();
+  const popover = need<HTMLElement>("#pg-next-detail");
+  const popoverOpen = popover.matches(":popover-open");
+  const gap = Math.round(popover.getBoundingClientRect().top - hint.getBoundingClientRect().bottom);
+  const popoverText = (popover.textContent ?? "").trim();
+  popover.hidePopover();
+  check(
+    "the step's strip is one line, and its hint opens what the step means under it",
+    stripHeight <= 64 && popoverOpen && gap >= 0 && gap < 20 && popoverText.length > 40,
+    `strip ${stripHeight}px tall; popover open ${popoverOpen}, ${gap}px under the hint, ` +
+      `says "${popoverText.slice(0, 80)}"`,
+  );
 
   /* ---- 3. Drift, through the terminal ---- */
 

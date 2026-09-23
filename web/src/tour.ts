@@ -108,7 +108,7 @@ const STEPS: readonly StepSpec[] = [
     body:
       "The next command, written out in full. Press Run next, or type it into the " +
       "prompt yourself. Nothing is installed and nothing leaves this tab.",
-    prefer: ["above", "below"],
+    prefer: ["below", "above"],
   },
 ];
 

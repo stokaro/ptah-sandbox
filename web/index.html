@@ -85,6 +85,22 @@
         </select>
       </label>
     </div>
+    <!--
+      Where the terminal sits in the full-window layout: between the file list
+      and the database pane, or across the whole width under them. Only that
+      layout has the choice, so the pair is hidden below 1101px; the choice is
+      kept in this browser by src/splitters.ts.
+    -->
+    <div class="pg-dock" id="pg-dock" role="group" aria-label="Terminal width">
+      <button class="pg-dock-btn" type="button" data-dock="between" aria-pressed="true" title="Terminal between the side panes">
+        <svg viewBox="0 0 18 14" width="18" height="14" aria-hidden="true"><rect x="0.5" y="0.5" width="17" height="13" rx="1" fill="none" stroke="currentColor"/><path d="M5.5 1v12M12.5 1v12" stroke="currentColor"/><rect x="6" y="8" width="6" height="5" fill="currentColor"/></svg>
+        <span class="sr-only">Terminal between the side panes</span>
+      </button>
+      <button class="pg-dock-btn" type="button" data-dock="full" aria-pressed="false" title="Terminal across the full width">
+        <svg viewBox="0 0 18 14" width="18" height="14" aria-hidden="true"><rect x="0.5" y="0.5" width="17" height="13" rx="1" fill="none" stroke="currentColor"/><path d="M5.5 1v7M12.5 1v7" stroke="currentColor"/><rect x="1" y="8" width="16" height="5" fill="currentColor"/></svg>
+        <span class="sr-only">Terminal across the full width</span>
+      </button>
+    </div>
     <div class="actions pg-actions">
       <!--
         Opens the tour the first visit shows by itself. It is here because a
@@ -316,29 +332,39 @@
       </span>
       <span class="pg-storage" id="pg-storage">memory-only</span>
     </div>
+    <button class="pg-about-open" type="button" id="pg-about-open" aria-haspopup="dialog">About</button>
   </div>
 </div>
 
-<div class="wrap pg-below">
-  <section class="pg-about" aria-label="About the playground">
-    <p class="lede">Edit a schema, run real Ptah commands against a SQLite database in this tab, inspect the result. Nothing is installed and nothing leaves the browser.</p>
-  </section>
-  <!--
-    What is actually running, and what this profile cannot do. The first line is
-    read off the module in this tab rather than written down here, so it cannot
-    be optimistic.
-  -->
-  <section class="pg-honesty" aria-label="What is running">
-    <dl class="flags">
-      <dt>Running</dt>
-      <dd id="pg-running">Nothing yet. The build, its commit and the SQLite version appear here once the module in this tab has answered for itself.</dd>
-      <dt>Cannot</dt>
-      <dd>Reach a network database, run Docker, or touch your disk. There is no PostgreSQL, MySQL or MariaDB here — the driver in this build is SQLite, in memory.</dd>
-      <dt>Keeps</dt>
-      <dd>Nothing. The workspace and the database live in this tab: reloading discards them. Export takes a copy with you.</dd>
-    </dl>
-  </section>
-</div>
+<!--
+  About this playground: what it is, what is actually running and what this
+  profile cannot do. It is a dialog rather than a section under the
+  application, because above 1100px the application is the whole window and
+  the page does not scroll. The Running line is read off the module in this
+  tab rather than written down here, so it cannot be optimistic.
+-->
+<dialog class="pg-about" id="pg-about" aria-labelledby="pg-about-title">
+  <div class="pg-about-head">
+    <h2 class="pg-about-title" id="pg-about-title">About this playground</h2>
+    <button class="btn btn-ghost pg-about-close" type="button" id="pg-about-close">Close</button>
+  </div>
+  <p class="lede">Edit a schema, run real Ptah commands against a SQLite database in this tab, inspect the result. Nothing is installed and nothing leaves the browser.</p>
+  <dl class="flags">
+    <dt>Running</dt>
+    <dd id="pg-running">Nothing yet. The build, its commit and the SQLite version appear here once the module in this tab has answered for itself.</dd>
+    <dt>Cannot</dt>
+    <dd>Reach a network database, run Docker, or touch your disk. There is no PostgreSQL, MySQL or MariaDB here — the driver in this build is SQLite, in memory.</dd>
+    <dt>Keeps</dt>
+    <dd>Nothing. The workspace and the database live in this tab: reloading discards them. Export takes a copy with you.</dd>
+  </dl>
+  <!-- The site footer is not drawn beside the full-window layout, so its links are here too. -->
+  <ul class="pg-about-links">
+    <li><a href="https://github.com/stokaro/ptah">GitHub</a></li>
+    <li><a href="https://github.com/stokaro/ptah/issues">Issues</a></li>
+    <li><a href="https://github.com/stokaro/ptah/releases">Changelog</a></li>
+    <li><a href="https://github.com/stokaro/ptah/blob/master/LICENSE">License</a></li>
+  </ul>
+</dialog>
 
 </main>
 

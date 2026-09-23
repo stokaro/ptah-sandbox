@@ -52,9 +52,9 @@ actually cancels, and the native confirmation prompt reading a real stdin. It is
 not a shell: no pipes, no redirects, no `$( )`. Unsupported syntax gets an
 explanation, never a silently mis-tokenized argv.
 
-**Honesty is a feature.** The footer states the version and commit of the
-WebAssembly that is actually running, the SQLite build, and what this profile
-cannot do. "Runs entirely in your browser" is a claim we test with the network
+**Honesty is a feature.** The status bar states the version and commit of the
+WebAssembly that is actually running and the SQLite build, and About adds what
+this profile cannot do. "Runs entirely in your browser" is a claim we test with the network
 switched off, not a slogan.
 
 **There is a door out.** Export downloads a workspace that opens in the
