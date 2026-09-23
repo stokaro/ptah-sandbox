@@ -6,7 +6,8 @@
  * layout those components sit in and the few pieces the site has no component
  * for -- the file rail, the guided steps, the status pill and the editor.
  *
- * No new colours. Every value below is a site.css token, so the dark theme is
+ * Two colours of its own, --pg-done and --pg-guide, declared once below for
+ * both themes. Every other value is a site.css token, so the dark theme is
  * the site's own token swap and needs no rules of its own.
  *
  * Colour discipline. There are two surfaces, so the application can be told
@@ -19,24 +20,36 @@
  * attention colour, for waiting, drift, recovery and warnings. The site's
  * other buttons stay black. Green (--pg-done, below) is the tick on a step
  * the route has checked as done, and nothing else. There is no red.
+ * --pg-guide (below) is the strip that says what the step on screen asks
+ * for: a lighter step of the selection tint, so it belongs to the step
+ * without competing with it.
  */
 
-/* The one colour site.css does not have. It sits at the lightness and chroma
- * the site's blue and amber use in each theme, on the green hue, so it reads
- * as one of them. The three blocks follow site.css's own: the system
- * preference, unless a choice was stored, and the stored choice. */
+/* The two colours site.css does not have. The three blocks follow
+ * site.css's own: the system preference, unless a choice was stored, and the
+ * stored choice.
+ *
+ * --pg-done sits at the lightness and chroma the site's blue and amber use
+ * in each theme, on the green hue, so it reads as one of them.
+ *
+ * --pg-guide is #f0f7fc in the light theme: the accent's hue, about half way
+ * from the page to --accbg in lightness and 40% of its chroma. The dark
+ * value is the same rule applied to the dark page and the dark --accbg. */
 :root {
   --pg-done: oklch(0.52 0.13 150);
+  --pg-guide: #f0f7fc;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --pg-done: oklch(0.78 0.13 150);
+    --pg-guide: oklch(0.228 0.02 235);
   }
 }
 
 :root[data-theme="dark"] {
   --pg-done: oklch(0.78 0.13 150);
+  --pg-guide: oklch(0.228 0.02 235);
 }
 
 /* The UA's `[hidden] { display: none }` sits at user-agent origin, so any
@@ -731,7 +744,7 @@
   align-items: center;
   padding: 8px 16px;
   border-top: 1px solid var(--line);
-  background: var(--code);
+  background: var(--pg-guide);
 }
 
 .pg-next .cmd {
