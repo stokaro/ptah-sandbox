@@ -844,6 +844,32 @@
   text-wrap: pretty;
 }
 
+/* A run the strip started is asking on stdin. Amber, the attention colour,
+ * on the headline and around the question, which is quoted in a box shaped
+ * like the command box it replaces. */
+.pg-next[data-state="asking"] .pg-next-copy strong {
+  color: var(--amber);
+}
+
+.pg-next-ask {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  max-width: 680px;
+  padding: 7px 12px;
+  border: 1px solid var(--amber);
+  border-radius: 2px;
+  background: color-mix(in oklab, var(--amber) 8%, var(--bg));
+  font: 12.5px/1.5 var(--mono);
+  color: var(--fg);
+}
+
+.pg-next-ask-sigil {
+  color: var(--amber);
+  font-weight: 600;
+}
+
 /* What the route checked, in the words of the check. */
 .pg-next-check {
   font: 12px/1.5 var(--mono);

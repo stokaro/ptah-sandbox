@@ -532,24 +532,56 @@ async function run(): Promise<void> {
   /* ---- 6. Apply, confirmed with YES through the terminal ---- */
 
   const usersBefore = textOf("#pg-rail");
+  const asks = (): number => (terminalText().match(/Type 'YES' to confirm/g) ?? []).length;
+  const stripAsking = (): boolean => q<HTMLElement>("#pg-next")?.dataset["state"] === "asking";
+  const rowAsking = (): boolean => q<HTMLElement>(".pg-term")?.hasAttribute("data-asking") ?? false;
+
+  // Typed at the prompt, the apply asks there and nowhere else: whoever typed
+  // it is looking at the row already. Declined, so the database is unchanged.
+  const asksBeforeTyped = asks();
   typeCommand(APPLY);
-  await until(
-    "the apply to ask for confirmation",
-    () => terminalText().includes("Type 'YES' to confirm"),
-    30_000,
-  );
+  await until("the typed apply to ask for confirmation", () => asks() > asksBeforeTyped || null, 30_000);
   check(
     "apply stops and asks, rather than being auto-approved",
     !terminalIdle() && textOf(".pg-status").includes("waiting for confirmation"),
     `status pill: "${textOf(".pg-status").trim()}"`,
+  );
+  check(
+    "a typed command that asks leaves the strip and the prompt row alone",
+    !stripAsking() && !rowAsking(),
+    `strip asking ${stripAsking()}, prompt row lit ${rowAsking()}`,
+  );
+  typeCommand("no");
+  await until("the declined apply to end", () => terminalIdle(), 30_000);
+
+  // Started from the strip, the same question is raised where the button
+  // was: the strip quotes it, the prompt row is lit, and focus is waiting
+  // in the prompt for the answer.
+  const applyRow = [...doc.querySelectorAll<HTMLElement>("#pg-next .pg-next-row")].find(
+    (row) => (row.textContent ?? "").includes(APPLY) && !(row.textContent ?? "").includes("--dry-run"),
+  );
+  const asksBeforeGuided = asks();
+  applyRow?.querySelector<HTMLButtonElement>("button.btn")?.click();
+  await until("the guided apply to ask for confirmation", () => asks() > asksBeforeGuided || null, 30_000).catch(
+    () => undefined,
+  );
+  await until("the strip to take the question", () => stripAsking() || null, 5_000).catch(() => undefined);
+  const promptFocused = doc.activeElement?.classList.contains("term-field-input") ?? false;
+  check(
+    "a command started from the strip that asks is raised in the strip and at the prompt",
+    applyRow !== undefined && stripAsking() && rowAsking() && promptFocused
+      && textOf("#pg-next").includes("Type 'YES' to confirm"),
+    `strip row ${applyRow === undefined ? "missing" : "found"}; strip asking ${stripAsking()}, ` +
+      `prompt row lit ${rowAsking()}, prompt focused ${promptFocused}; ` +
+      `strip says "${textOf("#pg-next").replace(/\s+/g, " ").trim().slice(0, 100)}"`,
   );
 
   typeCommand("YES");
   await until("the apply to finish", () => terminalIdle(), 60_000);
   const applyExit = textOf(".term-exit").trim();
   check(
-    "YES typed at the prompt completes the apply",
-    applyExit.includes("exit 0"),
+    "YES typed at the prompt completes the apply, and the strip and the row stop asking",
+    applyExit.includes("exit 0") && !stripAsking() && !rowAsking(),
     `bar said "${applyExit}"; before the apply the rail read ` +
       `${usersBefore.replace(/\s+/g, " ").trim().slice(0, 60)}`,
   );

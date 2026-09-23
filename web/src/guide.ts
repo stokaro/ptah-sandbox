@@ -38,6 +38,8 @@ export interface GuideHost {
   offerSql(sql: string): void;
   /** Brings a file up in the editor. */
   focusFile(path: string): void;
+  /** Puts focus on the terminal's prompt, where a running command reads its answer. */
+  focusPrompt(): void;
   /** What applying a patch to schema.sql as the editor holds it would do. */
   patchState(patch: readonly PatchHunk[]): PatchResult["state"];
   /** Applies a patch to schema.sql in the editor, as an edit the visitor could undo by hand. */
@@ -109,6 +111,8 @@ export class Guide {
 
   private current: Scenario;
   private route: RouteState | null = null;
+  /** What a run the strip started is asking on stdin; null when it is not. */
+  private question: string | null = null;
   /** The step the strip is showing, or null to follow the route. */
   private pinned: number | null = null;
   /** Serializes refreshes so two overlapping passes cannot paint out of order. */
@@ -207,6 +211,18 @@ export class Guide {
   }
 
   /** Points the strip at one step. Clicking a step in the nav does this. */
+  /**
+   * A run the strip started is asking a question on stdin, or has its answer
+   * (null). While it asks, the strip says so and quotes the question: the
+   * button that started it is at the top of the window and the prompt that
+   * wants the answer is at the bottom, and a confirmation nobody notices is
+   * a run that looks stuck.
+   */
+  asking(question: string | null): void {
+    this.question = question;
+    this.renderNext();
+  }
+
   focusStep(index: number): void {
     this.pinned = index;
     this.render();
@@ -263,6 +279,32 @@ export class Guide {
     clear(this.next);
     const route = this.route;
     const actions = el("div", "pg-next-run");
+    delete this.next.dataset["state"];
+
+    if (this.question !== null) {
+      const focused = this.focused();
+      this.next.dataset["state"] = "asking";
+      const answer = el("button", "btn", "Answer in the terminal");
+      answer.type = "button";
+      answer.addEventListener("click", () => this.host.focusPrompt());
+      const ask = fill(
+        el("div", "pg-next-ask"),
+        el("span", "pg-next-ask-sigil", "?"),
+        el("span", "pg-next-ask-text", this.question === "" ? "The command is waiting for input." : this.question),
+      );
+      actions.appendChild(fill(el("div", "pg-next-row"), ask, answer));
+      fill(
+        this.next,
+        headlineWithHint("Ptah is waiting for your answer in the terminal.", {
+          paragraphs: [
+            focused?.step.instruction
+              ?? "Type the answer at the prompt and press Enter. Ctrl+C cancels the command.",
+          ],
+        }),
+        actions,
+      );
+      return;
+    }
 
     if (!route) {
       fill(

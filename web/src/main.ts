@@ -375,7 +375,11 @@ const probe: StateProbe = {
 function guideHost(): GuideHost {
   return {
     probe,
-    run: (argv) => terminal.run(["ptah", ...argv]),
+    run: (argv) => terminal.run(["ptah", ...argv], { guided: true }),
+    focusPrompt: () => {
+      store.paneSelected("console");
+      terminal.focus();
+    },
     offerSql: (sql) => {
       editor.setText("sql", sql, { baseline: null });
       editor.activate("sql");
@@ -440,6 +444,11 @@ const terminal = new Terminal(need<HTMLElement>("#pg-terminal"), {
   host: terminalHost(),
   cwd: WORKSPACE,
   onExit: (argv, code) => void afterRun(argv, code),
+  // Only a run the guide started asks through the strip; see Terminal.run.
+  onAsk: (question) => {
+    if (question !== null) store.paneSelected("console");
+    guide.asking(question);
+  },
 });
 
 const guide = new Guide(guideHost(), SCENARIOS);
