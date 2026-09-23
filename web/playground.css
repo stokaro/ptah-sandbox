@@ -1180,18 +1180,53 @@
   cursor: pointer;
 }
 
-/* Where the steps are one row they read as a route: each ends in a chevron
- * pointing at the next. It is a hairline drawn wholly inside the step it
- * ends, tip on the boundary. A filled chevron reaching into the next step
- * cut a notch out of the step on screen, which read as a rendering fault. */
+/* Where the steps are one row they read as a route, the way breadcrumbs do:
+ * each ends in a chevron pointing at the next, and the chevrons stand
+ * between the steps rather than on them. A chevron is a hairline drawn
+ * inside the step it ends, tip on the boundary. The step on screen and a
+ * hovered step are marked by a rectangle that stops short of that chevron,
+ * with the underline drawn in it rather than as the step's border. Both
+ * earlier shapes put the mark and the chevron on top of each other: a filled
+ * chevron cut a notch out of the step on screen, and a full-width tint held
+ * its own chevron inside it with the underline running on beneath. */
 @media (min-width: 901px) {
   .pg-step {
     position: relative;
+    isolation: isolate;
     border-right: 0;
   }
 
   .pg-step:not(:last-child) {
     padding-right: 28px;
+  }
+
+  .pg-step:hover,
+  .pg-step[aria-current="step"] {
+    border-bottom-color: transparent;
+    background: transparent;
+  }
+
+  /* Under the text, down over the 2px the underline had, and clear of the
+   * chevron, which reaches at most 21px back from the boundary. */
+  .pg-step:hover::before,
+  .pg-step[aria-current="step"]::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    top: 0;
+    right: 0;
+    bottom: -2px;
+    left: 0;
+    background: linear-gradient(to top, var(--mute) 2px, transparent 2px);
+  }
+
+  .pg-step[aria-current="step"]::before {
+    background: linear-gradient(to top, var(--acc) 2px, var(--accbg) 2px);
+  }
+
+  .pg-step:not(:last-child):hover::before,
+  .pg-step:not(:last-child)[aria-current="step"]::before {
+    right: 26px;
   }
 
   .pg-step:not(:last-child)::after {
