@@ -2640,3 +2640,8 @@
     cursor: inherit;
   }
 }
+
+.pg-engine { margin-left: 16px; display: flex; align-items: center; gap: 7px; font-size: 12px; flex-wrap: wrap; }
+.pg-engine select { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 5px 7px; }
+.pg-engine-hint { font-size: 11px; opacity: .65; }
+@media (max-width: 900px) { .pg-engine { margin-left: 0; gap: 4px; font-size: 11px; } }

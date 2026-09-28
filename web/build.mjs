@@ -15,7 +15,7 @@
 //     supposed to allow. A stale hash silently disables the script, and the
 //     only symptom is a flash of the wrong theme on every load.
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdirSync, copyFileSync, rmSync } from "node:fs";
 import { build } from "esbuild";
 
 const dev = process.argv.includes("--dev");
@@ -78,6 +78,12 @@ if (inline === null) {
   }
 }
 
+const pgliteVersion = JSON.parse(readFileSync("node_modules/@electric-sql/pglite/package.json", "utf8")).version;
+const bridgeVersion = /export const PGLITE_VERSION = "([^"]+)"/.exec(readFileSync("src/runtime/postgres-bridge.ts", "utf8"))?.[1];
+if (bridgeVersion !== pgliteVersion) {
+  problems.push(`PGlite package ${pgliteVersion} does not match the bridge asset path ${bridgeVersion}; update and verify the PostgreSQL runtime together.`);
+}
+
 if (problems.length > 0) {
   for (const problem of problems) console.error(`build: ${problem}`);
   process.exit(1);
@@ -85,6 +91,7 @@ if (problems.length > 0) {
 
 /* ---------- Bundle ---------- */
 
+rmSync("dist", { recursive: true, force: true });
 await build({
   entryPoints: {
     main: "src/main.ts",
@@ -94,9 +101,18 @@ await build({
   },
   outdir: "dist",
   bundle: true,
+  splitting: true,
   format: "esm",
   target: "es2022",
   minify: !dev,
   sourcemap: dev ? "inline" : "external",
   logLevel: "info",
 });
+
+const pgliteDir = `dist/pglite-${pgliteVersion}`;
+mkdirSync(pgliteDir, { recursive: true });
+for (const asset of ["pglite.wasm", "initdb.wasm", "pglite.data"]) {
+  copyFileSync(`node_modules/@electric-sql/pglite/dist/${asset}`, `${pgliteDir}/${asset}`);
+}
+
+copyFileSync("node_modules/@electric-sql/pglite/LICENSE", `${pgliteDir}/LICENSE`);

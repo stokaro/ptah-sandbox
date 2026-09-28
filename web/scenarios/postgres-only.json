@@ -1,0 +1,187 @@
+{
+  "id": "postgres-only",
+  "title": "PostgresOnly",
+  "description": "Query JSONB and arrays, then let Ptah plan and apply a PostgreSQL GIN index.",
+  "note": "Requires PostgreSQL: UUID, JSONB, arrays, timestamptz, and GIN indexes. Selecting this scenario loads PostgreSQL automatically.",
+  "capabilities": {
+    "engines": [
+      "postgres"
+    ],
+    "defaultEngine": "postgres"
+  },
+  "database": {
+    "path": "app.db",
+    "url": "postgres://pglite/app"
+  },
+  "files": {
+    "schema.sql": "-- PostgreSQL-only types: UUID, JSONB, arrays, and timestamptz.\nCREATE TABLE events (\n  id UUID PRIMARY KEY,\n  payload JSONB NOT NULL,\n  tags TEXT[] NOT NULL,\n  created_at TIMESTAMPTZ NOT NULL\n);\n",
+    "README.md": "# PostgresOnly\n\nA real, memory-only PostgreSQL database powered by PGlite.\nThe table contains two synthetic events. Query JSONB, then add a GIN index\nto schema.sql and apply it through Ptah. Reloading discards this database.\n\n    ptah db capabilities --db-url postgres://pglite/app\n"
+  },
+  "seed": "-- PostgreSQL-only types: UUID, JSONB, arrays, and timestamptz.\nCREATE TABLE events (\n  id UUID PRIMARY KEY,\n  payload JSONB NOT NULL,\n  tags TEXT[] NOT NULL,\n  created_at TIMESTAMPTZ NOT NULL\n);\nINSERT INTO events VALUES\n  ('00000000-0000-0000-0000-000000000001', '{\"kind\":\"deploy\",\"service\":\"api\"}', ARRAY['production','api'], '2026-01-01T12:00:00Z'),\n  ('00000000-0000-0000-0000-000000000002', '{\"kind\":\"build\",\"service\":\"web\"}', ARRAY['ci','web'], '2026-01-02T12:00:00Z');\n",
+  "baseline": {
+    "check": {
+      "kind": "table",
+      "name": "events",
+      "present": true
+    },
+    "message": "This route expects the events table. Reset restores it."
+  },
+  "steps": [
+    {
+      "id": "capabilities",
+      "title": "Capabilities",
+      "caption": "Read the server profile",
+      "instruction": "Ask Ptah which capabilities this PostgreSQL server reports. The profile comes from the real server version.",
+      "action": {
+        "kind": "run",
+        "argv": [
+          "db",
+          "capabilities",
+          "--db-url",
+          "postgres://pglite/app"
+        ]
+      },
+      "check": {
+        "kind": "ran",
+        "prefix": [
+          "db",
+          "capabilities"
+        ],
+        "exit": 0
+      },
+      "headline": "Ask Ptah which capabilities this PostgreSQL server reports. The profile comes from the real server version."
+    },
+    {
+      "id": "query",
+      "title": "Query JSONB",
+      "caption": "PostgreSQL operators",
+      "instruction": "Read a JSONB field and filter with an array operator. The result is the deploy event.",
+      "action": {
+        "kind": "sql",
+        "sql": "SELECT id, payload->>'kind' AS kind, tags FROM events WHERE tags @> ARRAY['production'];"
+      },
+      "check": null,
+      "headline": "Read a JSONB field and filter with an array operator. The result is the deploy event.",
+      "unverified": "Read the SQL result yourself; this page cannot observe whether you have read it."
+    },
+    {
+      "id": "index",
+      "title": "Add a GIN index",
+      "caption": "Edit the desired schema",
+      "instruction": "Add a GIN index for JSONB containment queries to schema.sql. The database stays unchanged until you apply it.",
+      "action": {
+        "kind": "edit",
+        "file": "schema.sql",
+        "patch": [
+          {
+            "find": ");\n",
+            "replace": ");\n\nCREATE INDEX events_payload_idx ON events USING gin (payload);\n"
+          }
+        ],
+        "snippet": "CREATE INDEX events_payload_idx ON events USING gin (payload);",
+        "hint": "Append the index after the table definition."
+      },
+      "check": {
+        "kind": "declares",
+        "file": "schema.sql",
+        "index": "events_payload_idx",
+        "present": true
+      },
+      "headline": "Add a GIN index for JSONB containment queries to schema.sql. The database stays unchanged until you apply it."
+    },
+    {
+      "id": "plan",
+      "title": "Read the plan",
+      "caption": "PostgreSQL DDL",
+      "instruction": "Preview the real planner output. It should create events_payload_idx with USING gin.",
+      "action": {
+        "kind": "run",
+        "argv": [
+          "schema",
+          "apply",
+          "--schema-file",
+          "schema.sql",
+          "--db-url",
+          "postgres://pglite/app",
+          "--dry-run"
+        ]
+      },
+      "check": {
+        "kind": "ran",
+        "prefix": [
+          "schema",
+          "apply"
+        ],
+        "exit": 0,
+        "has": [
+          "--dry-run"
+        ]
+      },
+      "headline": "Preview the real planner output. It should create events_payload_idx with USING gin."
+    },
+    {
+      "id": "apply",
+      "title": "Apply",
+      "caption": "Keep the events",
+      "instruction": "Apply the index, answer YES, and verify that both events remain.",
+      "action": {
+        "kind": "run",
+        "argv": [
+          "schema",
+          "apply",
+          "--schema-file",
+          "schema.sql",
+          "--db-url",
+          "postgres://pglite/app"
+        ]
+      },
+      "check": {
+        "kind": "all",
+        "of": [
+          {
+            "kind": "index",
+            "name": "events_payload_idx",
+            "present": true
+          },
+          {
+            "kind": "rows",
+            "table": "events",
+            "count": 2,
+            "op": "eq"
+          }
+        ]
+      },
+      "headline": "Apply the index, answer YES, and verify that both events remain."
+    },
+    {
+      "id": "verify",
+      "title": "Verify",
+      "caption": "Desired = actual",
+      "instruction": "Run drift to confirm the PostgreSQL catalog matches schema.sql.",
+      "action": {
+        "kind": "run",
+        "argv": [
+          "schema",
+          "drift",
+          "--schema-file",
+          "schema.sql",
+          "--db-url",
+          "postgres://pglite/app"
+        ]
+      },
+      "check": {
+        "kind": "ran",
+        "prefix": [
+          "schema",
+          "drift"
+        ],
+        "exit": 0
+      },
+      "headline": "Run drift to confirm the PostgreSQL catalog matches schema.sql."
+    }
+  ],
+  "finished": {
+    "headline": "PostgreSQL types and indexes, planned and applied by Ptah.",
+    "caption": "Try another JSONB query or edit the desired schema. Reset restores the two events."
+  }
+}

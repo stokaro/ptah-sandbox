@@ -6,6 +6,6 @@
 # version and date are what git reports for commit. scripts/build-wasm.sh
 # checks all three against git before it builds, so a hand-edited line fails
 # the build rather than mislabeling a binary.
-commit 061fac0c6b2607f9442b440168fb45c3dfe5ba39
-version v0.8.0
-date 2026-09-22T19:33:37+02:00
+commit 0688d16e46aa5925a1821a4c457e8b45c5b8e4dc
+version v0.10.0
+date 2026-09-27T19:54:34+02:00

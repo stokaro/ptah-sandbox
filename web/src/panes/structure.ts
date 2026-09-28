@@ -59,7 +59,7 @@ export class StructurePane {
     this.title = host.querySelector<HTMLElement>(".pgc-pane-title")!;
     this.status = host.querySelector<HTMLElement>(".pgc-pane-status-line")!;
     this.body = host.querySelector<HTMLElement>(".pgc-pane-body")!;
-    this.setEmpty("Pick a table in the rail to read its actual schema out of SQLite.");
+    this.setEmpty("Pick a table in the rail to read its actual schema from the database.");
   }
 
   setLoading(note = "reading the catalog…"): void {
@@ -95,7 +95,7 @@ export class StructurePane {
 
     this.status.classList.remove("is-amber");
     this.title.textContent = table.name;
-    this.status.textContent = "actual schema · read from SQLite";
+    this.status.textContent = `actual schema · read from ${view.catalog.engine === "postgres" ? "PostgreSQL" : "SQLite"}`;
     clear(this.body);
 
     this.body.appendChild(this.columnsTable(table, view.diff));
@@ -224,7 +224,7 @@ export class StructurePane {
     return el(
       "p",
       "pgc-pane-note",
-      `Every column here is also in schema.sql, as SQLite parsed it at ${new Date(view.catalog.readAt).toLocaleTimeString("en-US")}.`,
+      `Every column here is also in schema.sql, as ${view.catalog.engine === "postgres" ? "PostgreSQL" : "SQLite"} parsed it at ${new Date(view.catalog.readAt).toLocaleTimeString("en-US")}.`,
     );
   }
 }

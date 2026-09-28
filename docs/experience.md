@@ -20,7 +20,7 @@ it.
 ## Principles
 
 **Nothing is staged.** The plan pane shows what the real planner produced. The
-data pane shows rows read back out of SQLite after the command finished. The
+data pane shows rows read back out of the selected database after the command finished. The
 exit code is the process's exit code. If a command fails, the failure stays on
 screen. A guided step never substitutes a prepared success for a real result.
 
@@ -53,7 +53,7 @@ not a shell: no pipes, no redirects, no `$( )`. Unsupported syntax gets an
 explanation, never a silently mis-tokenized argv.
 
 **Honesty is a feature.** The status bar states the version and commit of the
-WebAssembly that is actually running and the SQLite build, and About adds what
+WebAssembly that is actually running and the selected database build, and About adds what
 this profile cannot do. "Runs entirely in your browser" is a claim we test with the network
 switched off, not a slogan.
 

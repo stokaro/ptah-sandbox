@@ -34,3 +34,8 @@ goroot=$(GOOS= GOARCH= go env GOROOT)
 	PTAH_SANDBOX_SQLITE_DIR="$repo/web/vendor/sqlite" \
 		go test -exec=./testdata/go_js_wasm_exec_sqlite .
 )
+
+(
+  cd "$srcdir/internal/browserpostgres"
+  PTAH_SANDBOX_ROOT="$repo" go test -exec=./testdata/go_js_wasm_exec_postgres .
+)

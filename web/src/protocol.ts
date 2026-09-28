@@ -6,6 +6,9 @@
  * state the UI renders arrives as its own message.
  */
 
+export type DatabaseEngine = "sqlite" | "postgres";
+export interface EngineInfo { engine: DatabaseEngine; version: string; packageVersion?: string }
+
 export interface ReadyInfo {
   version: string;
   commit: string;
@@ -30,6 +33,7 @@ export interface FileEntry {
 export type WorkerRequest =
   /** Boot the runtime. `base` is the URL every vendored asset resolves against. */
   | { type: "init"; base: string }
+  | { type: "engine"; id: number; engine: DatabaseEngine }
   | { type: "run"; runId: number; argv: string[] }
   | { type: "stdin"; runId: number; data: string }
   | { type: "cancel"; runId: number }
@@ -64,6 +68,7 @@ export type BootPhase =
   | "starting";
 
 export type HostEvent =
+  | { type: "engine"; id: number; info: EngineInfo }
   | { type: "ready"; info: ReadyInfo; sqlite: SqliteInfo }
   /**
    * loaded/total are UNCOMPRESSED bytes. Content-Length would be the encoded

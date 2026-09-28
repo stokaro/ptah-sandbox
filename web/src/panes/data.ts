@@ -13,6 +13,7 @@
  * only printed when the count before the command was actually captured.
  */
 
+import { postgresRows } from "./postgres-catalog.ts";
 import type { Catalog } from "./catalog.ts";
 import { columnsAddedBetween, isWithoutRowid, quoteIdent } from "./catalog.ts";
 import { clear, el, marker, renderStatus, td, th } from "./dom.ts";
@@ -136,6 +137,7 @@ export function rowQueryFor(
   table: string,
   limit = ROW_LIMIT,
 ): { sql: string; order: string } {
+  if (catalog.engine === "postgres") return postgresRows(catalog, table, limit);
   const info = catalog.tables.find((t) => t.name === table);
   return rowQuery(table, { limit, withoutRowid: info ? isWithoutRowid(info) : false });
 }

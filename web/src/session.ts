@@ -23,6 +23,8 @@
 
 import type {
   BootPhase,
+  DatabaseEngine,
+  EngineInfo,
   FileEntry,
   HostEvent,
   ReadyInfo,
@@ -89,6 +91,8 @@ type Pending = { resolve(event: HostEvent): void; reject(error: Error): void };
  */
 function replyKey(event: HostEvent): string | null {
   switch (event.type) {
+    case "engine":
+      return `engine:${event.id}`;
     case "ready":
       return "ready";
     case "wrote":
@@ -250,6 +254,14 @@ export class Session {
       `removed:${path}`,
     );
     return event.revision;
+  }
+
+  async selectEngine(engine: DatabaseEngine): Promise<EngineInfo> {
+    const id = this.#nextId++;
+    const event = await this.#ask<Extract<HostEvent, { type: "engine" }>>(
+      { type: "engine", id, engine }, `engine:${id}`,
+    );
+    return event.info;
   }
 
   /* ---------- SQL ---------- */

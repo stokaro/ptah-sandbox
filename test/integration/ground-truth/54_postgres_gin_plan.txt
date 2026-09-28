@@ -1,0 +1,6 @@
+$ ptah schema apply --schema-file schema.sql --db-url postgres://postgres@localhost/postgres?sslmode=disable --dry-run
+--- exit: 0
+--- stdout ---
+Planned schema changes:
+CREATE INDEX IF NOT EXISTS "events_payload_idx" ON "events" USING gin ("payload");
+--- stderr ---

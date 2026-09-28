@@ -1,0 +1,29 @@
+--- a/dbschema/connection.go
++++ b/dbschema/connection.go
+@@ -9,6 +9,7 @@
+ 	"io"
+ 	"log/slog"
+ 	"net/url"
++	"runtime"
+ 	"strings"
+ 
+ 	_ "github.com/jackc/pgx/v5/stdlib"                   // PostgreSQL driver
+@@ -162,7 +163,7 @@
+ 	var newReader schemaReaderFactory
+ 	var newWriter schemaWriterFactory
+ 	switch dialectProtocol {
+-	case "pgx":
++	case "pgx", "browser-postgres":
+ 		newReader = func(runner sqlrunner.Runner) catalog.SchemaReader {
+ 			return postgres.NewPostgreSQLWireReaderWithCapabilities(
+ 				runner,
+@@ -490,6 +491,9 @@
+ func databaseDriverConfig(dialect, dbURL string) (driverName, dataSourceName string) {
+ 	switch dialect {
+ 	case platform.Postgres, platform.CockroachDB, platform.YugabyteDB, platform.Spanner:
++		if runtime.GOOS == "js" {
++			return "browser-postgres", convertPostgresWireURL(dbURL)
++		}
+ 		return "pgx", convertPostgresWireURL(dbURL)
+ 	case platform.MySQL, platform.MariaDB:
+ 		return "mysql", convertMySQLURL(dbURL)
