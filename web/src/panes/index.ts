@@ -42,6 +42,7 @@ const TAB_LABELS: Record<ResultView, string> = {
 
 export interface ResultPanesHandlers {
   onTabChange?(view: ResultView): void;
+  onRefreshPlan?(command: readonly string[]): void;
 }
 
 export class ResultPanes {
@@ -107,7 +108,7 @@ export class ResultPanes {
 
     this.data = new DataPane(this.bodies.data);
     this.structure = new StructurePane(this.bodies.structure);
-    this.plan = new PlanPane(this.bodies.plan);
+    this.plan = new PlanPane(this.bodies.plan, handlers.onRefreshPlan);
 
     this.show("data");
   }

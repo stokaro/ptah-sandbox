@@ -168,6 +168,20 @@ async function runCommand(line: string): Promise<{ exit: string; output: string 
   return { exit: textOf(".term-exit").trim(), output: terminalText().slice(before) };
 }
 
+async function refreshPlan(): Promise<{ exit: string; output: string }> {
+  await until("the plan refresh action to be available", () => q<HTMLButtonElement>(".pgc-plan-refresh-button")?.disabled === false, 30_000);
+  const before = terminalText().length;
+  const command = textOf(".pgc-plan-command");
+  const button = need<HTMLButtonElement>(".pgc-plan-refresh-button");
+  button.click();
+  const disabled = button.disabled;
+  button.click();
+  await until("the plan refresh to finish", () => terminalIdle() && !textOf('[data-result-pane="plan"] .pgc-pane-status-line').includes("stale") && q<HTMLButtonElement>(".pgc-plan-refresh-button")?.disabled === false, 60_000);
+  const output = terminalText().slice(before);
+  check("Refresh plan runs the displayed command once and disables repeat clicks", disabled && command.includes("--dry-run") && output.split(`$ ${command}`).length === 2, output.slice(0, 180));
+  return { exit: textOf(".term-exit").trim(), output };
+}
+
 /** Continue from the SQL pane using the guide button, without typing around it. */
 async function verifyAfterSql(engine: string): Promise<{ exit: string; output: string }> {
   const runnable = (): boolean => {
@@ -609,7 +623,7 @@ async function run(): Promise<void> {
 
   /* ---- 5. Editing again marks the shown plan stale ---- */
 
-  typeSchema(`${EDITED_SCHEMA}\n-- one more line, so the plan is about an older file\n`);
+  typeSchema(`${EDITED_SCHEMA}\nCREATE TABLE refresh_preview (id INTEGER PRIMARY KEY);\n`);
   // The pane says it twice: "stale" in the header line, and the reason in the
   // note under the statements. Both are asserted, because the header alone
   // could be a label with nothing behind it.
@@ -628,9 +642,17 @@ async function run(): Promise<void> {
     stale.replace(/\s+/g, " ").trim().slice(0, 200),
   );
 
+  const refreshed = await refreshPlan();
+  check("refresh plans against the edited buffer and retains the original dry-run command", refreshed.exit.includes("exit 0") && textOf(".pgc-plan-command") === DRY_RUN && textOf('[data-result-pane="plan"] .pgc-plan').includes("refresh_preview"), textOf('[data-result-pane="plan"] .pgc-pane-status-line'));
+
+  typeSchema("CREATE TABLE users (");
+  const failedRefresh = await refreshPlan();
+  check("a failed refresh replaces the old plan with an error and keeps the retry command", /exit [12]/.test(failedRefresh.exit) && textOf('[data-result-pane="plan"] .pgc-pane-status-line').includes("failed") && !q('[data-result-pane="plan"] .pgc-plan') && textOf(".pgc-plan-command") === DRY_RUN, textOf('[data-result-pane="plan"] .pgc-pane-status-line'));
+
   // Put the file back to exactly what the plan describes before applying it.
   typeSchema(EDITED_SCHEMA);
-  await sleep(1000);
+  const retriedRefresh = await refreshPlan();
+  check("refresh recovers after the schema is fixed without applying it", retriedRefresh.exit.includes("exit 0") && textOf('[data-result-pane="plan"] .pgc-plan').includes("ADD COLUMN") && !textOf('[data-result-pane="plan"] .pgc-plan').includes("refresh_preview"), textOf('[data-result-pane="plan"] .pgc-pane-status-line'));
 
   /* ---- 6. Apply, confirmed with YES through the terminal ---- */
 
@@ -736,6 +758,9 @@ async function run(): Promise<void> {
     header.some((h) => h.includes("active") && h.includes("new")),
     `header cells: ${header.join(" | ")}`,
   );
+  planTab?.click();
+  const refreshedDatabase = await refreshPlan();
+  check("refresh after applying plans against the changed database", refreshedDatabase.exit.includes("exit 0") && !textOf('[data-result-pane="plan"]').includes("ADD COLUMN") && !textOf('[data-result-pane="plan"] .pgc-pane-status-line').includes("stale"), refreshedDatabase.output.slice(-180));
 
   /* ---- 7b. Step 05 puts its query in the SQL pane and points at Run ---- */
 
@@ -1194,6 +1219,9 @@ async function run(): Promise<void> {
   await runCommand(DRIFT.replace("sqlite://app.db", "postgres://pglite/app"));
   typeSchema(EDITED_SCHEMA);
   await runCommand(DRY_RUN.replace("sqlite://app.db", "postgres://pglite/app"));
+  typeSchema(`${EDITED_SCHEMA}\n-- Refresh this PostgreSQL plan.\n`);
+  const refreshedPostgres = await refreshPlan();
+  check("PostgreSQL plan refresh retains its database URL", refreshedPostgres.exit.includes("exit 0") && textOf(".pgc-plan-command") === DRY_RUN.replace("sqlite://app.db", "postgres://pglite/app"), textOf(".pgc-plan-command"));
   typeCommand(APPLY.replace("sqlite://app.db", "postgres://pglite/app"));
   await until("PostgreSQL scenario A apply to ask", () => textOf(".pg-status").includes("waiting for confirmation"), 30_000);
   typeCommand("YES");

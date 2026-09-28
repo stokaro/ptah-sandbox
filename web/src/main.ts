@@ -529,6 +529,10 @@ function fitFullScreen(): void {
 
 const panes = new ResultPanes(need<HTMLElement>("#pg-db"), {
   onTabChange: () => paintPanes(),
+  onRefreshPlan: command => {
+    if (!canRun(store.state) || switching || sqlRunning) return;
+    terminal.run([...command]);
+  },
 });
 panes.setSource(DB_URL);
 
@@ -1118,12 +1122,13 @@ async function afterRun(argv: string[], code: number): Promise<void> {
 
   if (isPlan) {
     if (code === 0) {
-      panes.plan.show({ plan: parsePlanOutput(runOutput), origin: planOrigin(), kind: "dry run" });
+      panes.plan.show({ plan: parsePlanOutput(runOutput), origin: planOrigin(), kind: "dry run", command: ["ptah", ...real] });
       panes.show("plan");
     } else {
       panes.plan.setError(
         `The planner exited ${code}. Its output is in the terminal above.`,
         "Nothing was applied. The database is as it was.",
+        ["ptah", ...real],
       );
       panes.show("plan");
     }
@@ -1479,6 +1484,7 @@ function render(state: State): void {
   // offered when nothing is running. Export and Reset are the same.
   const idle = canRun(state) || state.boot.stage !== "ready";
   databasePicker.button.disabled = !canRun(state) || switching || sqlRunning;
+  panes.plan.setRefreshEnabled(canRun(state) && !switching && !sqlRunning);
   editor.setReadOnly(switching, "Loading the selected scenario and database…");
   importBtn.disabled = !canRun(state) || switching || sqlRunning || activeEngine !== "sqlite";
   importBtn.hidden = activeEngine === "postgres";
