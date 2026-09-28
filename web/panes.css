@@ -761,6 +761,35 @@ button.pgc-ed-num:focus-visible {
   margin-top: -6px;
 }
 
+.pgc-plan-refresh {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  justify-items: start;
+}
+
+.pgc-plan-refresh-label {
+  font: 500 12px var(--sans);
+  color: var(--fg2);
+}
+
+.pgc-plan-command {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--code);
+  color: var(--fg);
+  font: 12px/1.6 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.pgc-plan-refresh-button {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
 /* ---------- Empty, loading, error ---------- */
 
 .pgc-pane-status {

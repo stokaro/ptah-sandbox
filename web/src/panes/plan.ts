@@ -1,8 +1,8 @@
 /**
  * The plan pane: the SQL the real planner produced, and nothing else.
  *
- * This pane never executes anything. It has no query function, no exec
- * function, and no way to reach the bridge -- deliberately, so that "apply"
+ * This pane delegates refresh to the host's command runner. It has no query
+ * function and no way to reach the bridge -- deliberately, so that "apply"
  * cannot quietly become "run what is on screen". When the visitor applies,
  * the real command runs again and plans again against the file and the
  * catalog as they are at that moment. What is drawn here is a record of a
@@ -22,6 +22,7 @@
  */
 
 import { clear, el, marker, renderStatus } from "./dom.ts";
+import { quoteArgv } from "../terminal.ts";
 
 export interface PlanStatement {
   sql: string;
@@ -165,6 +166,8 @@ export interface PlanView {
   origin: PlanOrigin;
   /** How the plan was obtained, shown in the header: "dry run", "saved plan". */
   kind: string;
+  /** The exact dry-run argv to repeat, including the program name. */
+  command: readonly string[];
 }
 
 export class PlanPane {
@@ -174,8 +177,12 @@ export class PlanPane {
 
   private view: PlanView | null = null;
   private staleReason: string | null = null;
+  private refreshEnabled = false;
+  private refreshButton: HTMLButtonElement | null = null;
+  private readonly onRefresh: ((command: readonly string[]) => void) | undefined;
 
-  constructor(host: HTMLElement) {
+  constructor(host: HTMLElement, onRefresh?: (command: readonly string[]) => void) {
+    this.onRefresh = onRefresh;
     host.innerHTML = `
       <div class="pgc-pane-head">
         <strong class="pgc-pane-title">Schema plan</strong>
@@ -199,6 +206,7 @@ export class PlanPane {
   setEmpty(note: string): void {
     this.view = null;
     this.staleReason = null;
+    this.refreshButton = null;
     this.title.textContent = "Schema plan";
     this.status.textContent = "";
     this.status.classList.remove("is-amber");
@@ -210,9 +218,10 @@ export class PlanPane {
    * blank after a failed plan reads as "no changes needed", which is the
    * most expensive misreading available on this page.
    */
-  setError(message: string, note?: string): void {
+  setError(message: string, note?: string, command?: readonly string[]): void {
     this.view = null;
     this.staleReason = null;
+    this.refreshButton = null;
     this.status.textContent = "planning failed";
     this.status.classList.add("is-amber");
     renderStatus(this.body, {
@@ -220,6 +229,7 @@ export class PlanPane {
       message,
       note: note ?? "Nothing was applied. The database is as it was.",
     });
+    if (command) this.body.appendChild(this.refreshAction(command));
   }
 
   show(view: PlanView): void {
@@ -249,6 +259,27 @@ export class PlanPane {
     return this.staleReason !== null;
   }
 
+  setRefreshEnabled(enabled: boolean): void {
+    this.refreshEnabled = enabled;
+    if (this.refreshButton) this.refreshButton.disabled = !enabled || !this.onRefresh;
+  }
+
+  private refreshAction(command: readonly string[]): HTMLElement {
+    const action = el("div", "pgc-plan-refresh");
+    action.appendChild(el("span", "pgc-plan-refresh-label", "Refresh command"));
+    action.appendChild(el("pre", "pgc-plan-command", quoteArgv(command)));
+    const button = el("button", "btn btn-ghost pgc-plan-refresh-button", "Refresh plan");
+    button.type = "button";
+    button.disabled = !this.refreshEnabled || !this.onRefresh;
+    button.addEventListener("click", () => {
+      this.setRefreshEnabled(false);
+      this.onRefresh?.(command);
+    });
+    this.refreshButton = button;
+    action.appendChild(button);
+    return action;
+  }
+
   private paint(): void {
     const view = this.view;
     if (!view) return;
@@ -263,12 +294,13 @@ export class PlanPane {
     this.status.classList.toggle("is-amber", this.staleReason !== null);
 
     clear(this.body);
+    this.body.appendChild(this.provenance(view));
+    this.body.appendChild(this.refreshAction(view.command));
 
     if (view.plan.confident && count === 0) {
       this.body.appendChild(
         el("p", "pgc-pane-note", "The planner produced no statements. Nothing needs to change."),
       );
-      this.body.appendChild(this.provenance(view));
       return;
     }
 
@@ -284,7 +316,6 @@ export class PlanPane {
             "so it is not broken up here.",
         ),
       );
-      this.body.appendChild(this.provenance(view));
       return;
     }
 
@@ -308,7 +339,6 @@ export class PlanPane {
       list.appendChild(item);
     }
     this.body.appendChild(list);
-    this.body.appendChild(this.provenance(view));
   }
 
   private provenance(view: PlanView): HTMLElement {
@@ -316,16 +346,13 @@ export class PlanPane {
       return el(
         "p",
         "pgc-pane-note is-amber",
-        `△ This plan is out of date: ${this.staleReason}. It is still what the planner said at ` +
-          `revision r${view.origin.revision}. Applying re-runs the real command, which plans ` +
-          "again against the file and the catalog as they are then.",
+        `△ This plan is out of date: ${this.staleReason}. Refresh to plan against the current schema and database. Nothing will be applied.`,
       );
     }
     return el(
       "p",
       "pgc-pane-note",
-      `Produced by the real planner from revision r${view.origin.revision}. Editing schema.sql ` +
-        "marks this plan stale; apply re-plans against the current file and catalog.",
+      `Produced by the real planner from revision r${view.origin.revision}. Refresh runs the dry-run command below. Apply plans again before changing the database.`,
     );
   }
 }
