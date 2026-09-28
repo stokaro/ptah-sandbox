@@ -10,7 +10,7 @@ export function engineFromURL(url: string): DatabaseEngine | null {
 }
 
 export class DatabasePicker {
-  readonly button = el("button", "pg-engine-button", "SQLite ▾");
+  readonly button = el("button", "pg-engine-button", "SQLite");
   readonly element = el("div", "pg-engine");
   private readonly overlay = createOverlay("Choose a database", "pg-engine-overlay");
   private readonly choices = new Map<DatabaseEngine, { button: HTMLButtonElement; status: HTMLElement }>();
@@ -24,7 +24,7 @@ export class DatabasePicker {
     this.button.setAttribute("aria-haspopup", "dialog");
     this.button.addEventListener("click", () => this.overlay.open());
     this.overlay.dialog.addEventListener("cancel", event => { if (this.required) event.preventDefault(); });
-    fill(this.element, el("span", undefined, "Database"), this.button);
+    fill(this.element, el("span", "pg-engine-label", "Database"), this.button);
     this.overlay.body.appendChild(el("p", "pg-engine-note", "Switching databases resets this scenario's files and data. Export first to keep your work. Everything runs in this tab and stays in memory."));
     const options = [
       { engine: "sqlite" as const, title: `SQLite ${sqlite.version}`, tool: "Official SQLite WebAssembly build", note: "Loaded when the playground starts. Supports SQLite file imports and versioned migrations." },
@@ -57,7 +57,7 @@ export class DatabasePicker {
 
   update(engine: DatabaseEngine, supported: readonly DatabaseEngine[]): void {
     this.button.value = engine;
-    this.button.textContent = `${engine === "postgres" ? "PostgreSQL" : "SQLite"} ▾`;
+    this.button.textContent = engine === "postgres" ? "PostgreSQL" : "SQLite";
     for (const [value, choice] of this.choices) {
       choice.button.disabled = !supported.includes(value);
       choice.button.setAttribute("aria-pressed", String(value === engine));
