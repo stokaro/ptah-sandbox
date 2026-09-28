@@ -1178,6 +1178,7 @@ async function run(): Promise<void> {
   /* ---- PostgreSQL: real engine, same static hosting ---- */
   const enginePicker = need<HTMLButtonElement>("#pg-engine");
   chooseEngine("postgres");
+  check("an explicit engine choice is remembered before its runtime finishes loading", localStorage.getItem("ptah-play-engine") === "postgres", `saved engine: ${localStorage.getItem("ptah-play-engine")}`);
   await until("PostgreSQL to initialize", () => !enginePicker.disabled && textOf("[data-build-sqlite]").includes("PostgreSQL"), 90_000);
   const pgDrift = await runCommand(DRIFT.replace("sqlite://app.db", "postgres://pglite/app"));
   check("PostgreSQL runs Ptah without cross-origin isolation", !contentWindow.crossOriginIsolated && pgDrift.exit.includes("exit 0"), pgDrift.output.slice(-240));
@@ -1266,6 +1267,16 @@ async function run(): Promise<void> {
   doc = frame.contentDocument!;
   await until("reload to seed a fresh SQLite database", () => textOf(".pg-status").includes("ready") && textOf("#pg-rail").includes("3 rows"), 90_000);
   check("reload starts a fresh memory-only session without isolation", need<HTMLButtonElement>("#pg-engine").value === "sqlite" && !textOf("#pg-rail").includes("events") && !frame.contentWindow!.crossOriginIsolated, "fresh SQLite seed; no retained PostgreSQL events");
+  check("a remembered SQLite choice skips the required picker on reload", !need<HTMLDialogElement>(".pg-engine-overlay").open, "the saved engine is used without asking again");
+
+  // Reload immediately, while the newly selected runtime is still loading.
+  chooseEngine("postgres");
+  contentWindow.location.reload();
+  await new Promise<void>(resolve => frame.addEventListener("load", () => resolve(), { once: true }));
+  doc = frame.contentDocument!;
+  win = frame.contentWindow as unknown as FrameGlobals;
+  await until("reload after selecting PostgreSQL to finish", () => textOf(".pg-status").includes("ready") && textOf("#pg-rail").includes("3 rows"), 90_000);
+  check("PostgreSQL selection survives reloading during initialization without another prompt", need<HTMLButtonElement>("#pg-engine").value === "postgres" && !need<HTMLDialogElement>(".pg-engine-overlay").open, `selected engine: ${need<HTMLButtonElement>("#pg-engine").value}`);
 
   for (const engine of ["postgres", "sqlite"] as const) {
     await new Promise<void>(resolve => {
@@ -1277,7 +1288,16 @@ async function run(): Promise<void> {
     await until(`${engine} targeted link to initialize`, () => textOf(".pg-status").includes("ready") && need<HTMLButtonElement>("#pg-engine").value === engine, 90_000);
     const linkedDrift = await runCommand(DRIFT.replace("sqlite://app.db", engine === "postgres" ? "postgres://pglite/app" : "sqlite://app.db"));
     check(`${engine} targeted links preselect a working database without the required picker`, linkedDrift.exit.includes("exit 0") && !need<HTMLDialogElement>(".pg-engine-overlay").open, linkedDrift.output.slice(-160));
+    check(`${engine} in the URL does not overwrite the remembered engine`, localStorage.getItem("ptah-play-engine") === "postgres", `saved engine: ${localStorage.getItem("ptah-play-engine")}`);
   }
+  await new Promise<void>(resolve => {
+    frame.addEventListener("load", () => resolve(), { once: true });
+    frame.src = "index.html";
+  });
+  doc = frame.contentDocument!;
+  win = frame.contentWindow as unknown as FrameGlobals;
+  await until("the remembered engine to load without a URL override", () => textOf(".pg-status").includes("ready"), 90_000);
+  check("removing the URL override restores the saved engine without a prompt", need<HTMLButtonElement>("#pg-engine").value === "postgres" && !need<HTMLDialogElement>(".pg-engine-overlay").open, `selected engine: ${need<HTMLButtonElement>("#pg-engine").value}`);
 
   /* ---- Done ---- */
 

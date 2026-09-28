@@ -1288,12 +1288,12 @@ async function resetWorkspace(): Promise<void> {
 }
 
 const databasePicker = new DatabasePicker(engine => {
-  const remember = (): void => {
-    try { localStorage.setItem(ENGINE_KEY, engine); } catch { /* The choice still works for this tab. */ }
-    savedEngine = engine;
-  };
-  if (activeEngine === engine) { remember(); return; }
-  void guide.load(guide.scenario.id, engine).then(remember).catch((err: unknown) => {
+  // Remember the click before downloading or seeding: a reload can interrupt
+  // either operation. URL defaults never pass through this explicit choice.
+  try { localStorage.setItem(ENGINE_KEY, engine); } catch { /* The choice still works for this tab. */ }
+  savedEngine = engine;
+  if (activeEngine === engine) return;
+  void guide.load(guide.scenario.id, engine).catch((err: unknown) => {
     store.noticed({ text: String(err), tone: "attention" });
     databasePicker.update(activeEngine, guide.scenario.capabilities.engines);
   });
