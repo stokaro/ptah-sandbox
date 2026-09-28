@@ -1288,12 +1288,12 @@ async function resetWorkspace(): Promise<void> {
 }
 
 const databasePicker = new DatabasePicker(engine => {
-  const remember = (): void => {
-    try { localStorage.setItem(ENGINE_KEY, engine); } catch { /* The choice still works for this tab. */ }
-    savedEngine = engine;
-  };
-  if (activeEngine === engine) { remember(); return; }
-  void guide.load(guide.scenario.id, engine).then(remember).catch((err: unknown) => {
+  // Remember the click before downloading or seeding: a reload can interrupt
+  // either operation. URL defaults never pass through this explicit choice.
+  try { localStorage.setItem(ENGINE_KEY, engine); } catch { /* The choice still works for this tab. */ }
+  savedEngine = engine;
+  if (activeEngine === engine) return;
+  void guide.load(guide.scenario.id, engine).catch((err: unknown) => {
     store.noticed({ text: String(err), tone: "attention" });
     databasePicker.update(activeEngine, guide.scenario.capabilities.engines);
   });
@@ -1352,15 +1352,35 @@ anchorPopover(need<HTMLElement>("#pg-import-help-pop"), need<HTMLElement>("#pg-i
 
 // About: the introduction, what is running and what this profile cannot do.
 // A dialog, because the full-window layout leaves no page under it to scroll
-// to. Escape closes it natively; so does a click on the backdrop, which is the
-// dialog element itself rather than anything inside it.
+// to. Storage details replace About so closing them returns to the playground.
 const aboutDialog = need<HTMLDialogElement>("#pg-about");
-need<HTMLButtonElement>("#pg-about-open").addEventListener("click", () => aboutDialog.showModal());
-need<HTMLButtonElement>("#pg-mini").addEventListener("click", () => aboutDialog.showModal());
+const storageDialog = need<HTMLDialogElement>("#pg-storage-dialog");
+const aboutOpeners = [need<HTMLButtonElement>("#pg-about-open"), need<HTMLButtonElement>("#pg-mini")];
+let aboutOpener = aboutOpeners[0];
+for (const opener of aboutOpeners) {
+  opener.addEventListener("click", () => {
+    aboutOpener = opener;
+    aboutDialog.showModal();
+  });
+}
 need<HTMLButtonElement>("#pg-about-close").addEventListener("click", () => aboutDialog.close());
-aboutDialog.addEventListener("click", (event) => {
-  if (event.target === aboutDialog) aboutDialog.close();
+need<HTMLAnchorElement>("#pg-storage-open").addEventListener("click", event => {
+  event.preventDefault();
+  aboutDialog.close();
+  storageDialog.showModal();
 });
+need<HTMLButtonElement>("#pg-storage-close").addEventListener("click", () => storageDialog.close());
+storageDialog.addEventListener("close", () => {
+  const opener = aboutOpener.getClientRects().length ? aboutOpener : aboutOpeners.find(button => button.getClientRects().length);
+  opener?.focus({ preventScroll: true });
+});
+for (const dialog of [aboutDialog, storageDialog]) {
+  dialog.addEventListener("click", event => {
+    if (event.target !== dialog) return;
+    const rect = dialog.getBoundingClientRect();
+    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
+  });
+}
 const importBtn = need<HTMLButtonElement>("#pg-import");
 const exportBtn = need<HTMLButtonElement>("#pg-export");
 const resetBtn = need<HTMLButtonElement>("#pg-reset");
