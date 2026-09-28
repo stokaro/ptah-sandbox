@@ -17,6 +17,7 @@ import { postgresRows } from "./postgres-catalog.ts";
 import type { Catalog } from "./catalog.ts";
 import { columnsAddedBetween, isWithoutRowid, quoteIdent } from "./catalog.ts";
 import { clear, el, marker, renderStatus, td, th } from "./dom.ts";
+import { createOverlay } from "./overlay.ts";
 
 /** How many rows the pane will draw. Past this it says it is truncating. */
 export const ROW_LIMIT = 50;
@@ -87,6 +88,12 @@ export function formatCell(value: unknown): Cell {
     truncated,
     full: raw,
   };
+}
+
+/** Unabridged values for the record dialog, with binary bytes shown as hex. */
+export function recordValue(value: unknown): string {
+  if (value instanceof Uint8Array) return Array.from(value, byte => byte.toString(16).padStart(2, "0")).join(" ");
+  return formatCell(value).full;
 }
 
 export interface Capped<T> {
@@ -208,6 +215,7 @@ export class DataPane {
   private title: HTMLElement;
   private status: HTMLElement;
   private body: HTMLElement;
+  private readonly record = createOverlay("Record details", "pgc-record-overlay");
 
   private view: DataView | null = null;
   private sort: { column: number; direction: "asc" | "desc" } | null = null;
@@ -315,8 +323,21 @@ export class DataPane {
     const body = el("tbody");
     let anyEscaped = false;
     let anyTruncated = false;
-    for (const row of rows) {
-      const tr = el("tr");
+    for (const [index, row] of rows.entries()) {
+      const tr = el("tr", "pgc-data-row");
+      tr.tabIndex = 0;
+      tr.setAttribute("aria-label", `Open row ${index + 1} from ${view.table}`);
+      tr.setAttribute("aria-haspopup", "dialog");
+      tr.addEventListener("click", () => {
+        const selection = window.getSelection();
+        if (selection && !selection.isCollapsed && tr.contains(selection.anchorNode)) return;
+        this.openRecord(view, row, index);
+      });
+      tr.addEventListener("keydown", event => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        this.openRecord(view, row, index);
+      });
       for (let c = 0; c < view.columns.length; c++) {
         const cell = formatCell(row[c]);
         if (cell.escaped) anyEscaped = true;
@@ -343,6 +364,28 @@ export class DataPane {
     for (const line of this.notes(view, capped, anyEscaped, anyTruncated)) {
       this.body.appendChild(el("p", line.tone === "amber" ? "pgc-pane-note is-amber" : "pgc-pane-note", line.text));
     }
+  }
+
+  private openRecord(view: DataView, row: unknown[], index: number): void {
+    const label = `${view.table} · row ${index + 1}`;
+    this.record.title.textContent = label;
+    this.record.dialog.setAttribute("aria-label", label);
+    clear(this.record.body);
+    const fields = el("dl", "pgc-record-fields");
+    view.columns.forEach((column, at) => {
+      fields.appendChild(el("dt", undefined, column));
+      const value = row[at];
+      const field = el("dd");
+      if (value === null || value === undefined || value === "" || value instanceof Uint8Array) {
+        field.appendChild(el("span", "pgc-record-kind", value === "" ? "Empty text" : formatCell(value).text));
+      }
+      if (value !== null && value !== undefined && value !== "") {
+        field.appendChild(el("pre", "pgc-record-value", recordValue(value)));
+      }
+      fields.appendChild(field);
+    });
+    this.record.body.appendChild(fields);
+    this.record.open();
   }
 
   /**

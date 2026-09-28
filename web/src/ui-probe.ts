@@ -146,11 +146,67 @@ function terminalIdle(): boolean {
   return need<HTMLElement>("#pg-terminal").dataset["state"] === "idle";
 }
 
+function chooseEngine(engine: "sqlite" | "postgres"): void {
+  need<HTMLButtonElement>("#pg-engine").click();
+  need<HTMLButtonElement>(`.pg-engine-option[data-engine="${engine}"]`).click();
+}
+
+async function runGuideCommand(): Promise<{ exit: string; output: string }> {
+  await until("the guide command to become available", () => q<HTMLButtonElement>("#pg-next .pg-next-row button.btn")?.disabled === false, 30_000);
+  const before = terminalText().length;
+  need<HTMLButtonElement>("#pg-next .pg-next-row button.btn").click();
+  await until("the guide command to start", () => terminalText().length > before, 20_000);
+  await until("the guide command to finish", () => terminalIdle(), 60_000);
+  return { exit: textOf(".term-exit").trim(), output: terminalText().slice(before) };
+}
+
 async function runCommand(line: string): Promise<{ exit: string; output: string }> {
   const before = terminalText().length;
   typeCommand(line);
   await until(`${line} to start`, () => !terminalIdle() || terminalText().length > before, 20_000);
   await until(`${line} to finish`, () => terminalIdle());
+  return { exit: textOf(".term-exit").trim(), output: terminalText().slice(before) };
+}
+
+/** Continue from the SQL pane using the guide button, without typing around it. */
+async function verifyAfterSql(engine: string): Promise<{ exit: string; output: string }> {
+  const runnable = (): boolean => {
+    const button = q<HTMLButtonElement>("#pg-next .pg-next-row button.btn");
+    return button !== null && !button.disabled && button.textContent?.startsWith("Run") === true;
+  };
+  await until(`${engine} guide to recover after SQL`, () => runnable(), 10_000).catch(() => undefined);
+  check(
+    `${engine}: the drift button becomes runnable after the query finishes`,
+    runnable() && textOf(".pg-status").includes("ready"),
+    `status "${textOf(".pg-status").trim()}"; button "${textOf("#pg-next .pg-next-row button.btn")}"`,
+  );
+
+  // An unsuccessful query must release the guide too. Keep the current
+  // drift part visible so a stale Waiting label cannot hide in another step.
+  const input = need<HTMLTextAreaElement>("#pg-editor .pgc-ed-input");
+  input.value = "SELECT * FROM missing_guide_regression_table;";
+  input.dispatchEvent(new win.Event("input", { bubbles: true }));
+  const beforeError = terminalText().length;
+  need<HTMLButtonElement>(".pgc-ed-run button").click();
+  check(
+    `${engine}: the guide waits while a SQL query is running`,
+    q<HTMLButtonElement>("#pg-next .pg-next-row button.btn")?.disabled === true
+      && textOf(".pg-status").includes("running SQL"),
+    textOf("#pg-next .pg-next-row button.btn"),
+  );
+  await until(`${engine} SQL error to settle`, () => textOf(".pg-status").includes("ready"), 30_000);
+  await until(`${engine} guide to recover after a SQL error`, () => runnable(), 10_000).catch(() => undefined);
+  check(
+    `${engine}: a failed SQL query also releases the drift button`,
+    runnable() && /does not exist|no such table/.test(terminalText().slice(beforeError)),
+    `button "${textOf("#pg-next .pg-next-row button.btn")}"; ${terminalText().slice(beforeError).slice(-240)}`,
+  );
+  if (!runnable()) return { exit: "guide disabled", output: "The guide did not allow drift to run." };
+
+  const before = terminalText().length;
+  need<HTMLButtonElement>("#pg-next .pg-next-row button.btn").click();
+  await until(`${engine} guided drift to start`, () => terminalText().length > before, 20_000);
+  await until(`${engine} guided drift to finish`, () => terminalIdle(), 60_000);
   return { exit: textOf(".term-exit").trim(), output: terminalText().slice(before) };
 }
 
@@ -186,6 +242,8 @@ const HOSTILE = "<script>alert(1)</script>";
 
 async function run(): Promise<void> {
   const started = Date.now();
+  localStorage.removeItem("ptah-play-engine");
+  localStorage.removeItem("ptah-play-tour");
 
   // `need` looks inside the page under test; the frame itself belongs to this
   // document.
@@ -254,6 +312,12 @@ async function run(): Promise<void> {
     ? Math.round(Math.abs(tourPointer.left + tourPointer.width / 2 - (tourRing.left + tourRing.width / 2)))
     : -1;
   q<HTMLButtonElement>(".pg-tour-next")?.click();
+  await sleep(100);
+  const engineTourTitle = textOf(".pg-tour-title");
+  const engineTourRing = need<HTMLElement>(".pg-tour-ring").getBoundingClientRect();
+  const engineButtonRect = need<HTMLElement>("#pg-engine").getBoundingClientRect();
+  check("Tour highlights the database engine picker", engineTourTitle === "Choose a database engine" && Math.abs(engineTourRing.left - engineButtonRect.left) < 2, engineTourTitle);
+  q<HTMLButtonElement>(".pg-tour-next")?.click();
 
   /* ---- 2. The loader counts real bytes and reaches ready ---- */
 
@@ -304,6 +368,13 @@ async function run(): Promise<void> {
       `editor top ${Math.round(editor.top)}, heights ${Math.round(ring.height)}/${Math.round(editor.height)}`,
   );
   need<HTMLElement>(".pg-tour-skip").click();
+  await until("the initial database choice after Tour", () => q<HTMLDialogElement>(".pg-engine-overlay")?.open, 20_000);
+  const firstChoice = need<HTMLDialogElement>(".pg-engine-overlay");
+  const cancelChoice = new win.Event("cancel", { cancelable: true });
+  firstChoice.dispatchEvent(cancelChoice);
+  check("first visits must choose an engine after Tour", cancelChoice.defaultPrevented && firstChoice.open && need<HTMLButtonElement>(".pg-engine-overlay .pgc-overlay-close").hidden, "Escape does not dismiss the required choice");
+  check("the engine dialog describes both runtimes and versions before selection", firstChoice.textContent?.includes("SQLite 3.53.4") === true && firstChoice.textContent.includes("PostgreSQL 18.3") && firstChoice.textContent.includes("PGlite 0.5.8"), firstChoice.textContent?.slice(0, 160) ?? "");
+  need<HTMLButtonElement>('.pg-engine-option[data-engine="sqlite"]').click();
 
   const buildLine = textOf("#pg-running");
   check(
@@ -704,7 +775,7 @@ async function run(): Promise<void> {
 
   /* ---- 8. Drift is clean again ---- */
 
-  const after = await runCommand(DRIFT);
+  const after = await verifyAfterSql("SQLite");
   check(
     "drift is clean again after the apply",
     after.exit.includes("exit 0") && after.output.includes("No schema drift detected"),
@@ -753,6 +824,43 @@ async function run(): Promise<void> {
     `the pane contains ${pane.querySelectorAll("script").length} script elements and the ` +
       `characters ${HOSTILE}`,
   );
+
+  // Inspect an unbroken value longer than the grid's cell limit. The dialog
+  // must preserve every character and keep literal markup inert.
+  const longValue = `${"long-value-".repeat(70)}${HOSTILE}`;
+  await until("the preceding update to settle", () => !need<HTMLButtonElement>("#pg-engine").disabled, 30_000);
+  sqlInput.value = `SELECT '${longValue}' AS long_value, NULL AS nothing_here, '' AS empty_text;`;
+  sqlInput.dispatchEvent(new win.Event("input", { bubbles: true }));
+  need<HTMLButtonElement>(".pgc-ed-run button").click();
+  await until("the long result to settle", () => !need<HTMLButtonElement>("#pg-engine").disabled && paneHas("data", "long_value"), 30_000);
+  const recordRow = need<HTMLElement>('[data-result-pane="data"] .pgc-data-row');
+  recordRow.click();
+  const recordDialog = need<HTMLDialogElement>(".pgc-record-overlay");
+  check("clicking a row opens all its untruncated values as text", recordDialog.open && textOf(".pgc-record-value") === longValue && recordDialog.querySelector("script") === null && recordDialog.textContent?.includes("Empty text") === true && recordDialog.textContent.includes("NULL"), `full value length ${textOf(".pgc-record-value").length}; dialog open ${recordDialog.open}`);
+  need<HTMLButtonElement>(".pgc-record-overlay .pgc-overlay-close").click();
+  await sleep(20);
+  recordRow.focus();
+  recordRow.dispatchEvent(new win.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  check("a row also opens from the keyboard", recordDialog.open, "Enter on the focused row");
+  need<HTMLButtonElement>(".pgc-record-overlay .pgc-overlay-close").click();
+  await sleep(20);
+  need<HTMLButtonElement>("#pg-db .pgc-expand").click();
+  const resultsDialog = need<HTMLDialogElement>(".pgc-results-overlay");
+  const resultPanel = need<HTMLElement>("#pg-db");
+  check("the entire result panel expands into a modal", resultsDialog.open && resultsDialog.contains(resultPanel) && resultPanel.getBoundingClientRect().width > 1000, `expanded width ${Math.round(resultPanel.getBoundingClientRect().width)}`);
+  const resultTabs = [...resultPanel.querySelectorAll<HTMLButtonElement>(".pgc-tab")];
+  resultTabs.find(button => button.textContent === "Structure")?.click();
+  const structureInOverlay = !need<HTMLElement>('[data-result-pane="structure"]').hidden;
+  resultTabs.find(button => button.textContent === "Plan")?.click();
+  check("expanded results keep Structure and Plan tabs working", structureInOverlay && !need<HTMLElement>('[data-result-pane="plan"]').hidden, "both tabs switched in place");
+  resultTabs.find(button => button.textContent === "Data")?.click();
+  need<HTMLElement>('[data-result-pane="data"] .pgc-data-row').click();
+  check("a record can open above the expanded result panel", recordDialog.open && resultsDialog.open && textOf(".pgc-record-value") === longValue, "both dialogs open; value preserved");
+  need<HTMLButtonElement>(".pgc-record-overlay .pgc-overlay-close").click();
+  await sleep(20);
+  need<HTMLButtonElement>(".pgc-results-overlay .pgc-overlay-close").click();
+  await sleep(20);
+  check("closing expanded results restores the same panel and query", resultPanel.parentElement?.classList.contains("pg-grid") === true && paneHas("data", "long_value") && doc.activeElement === q("#pg-db .pgc-expand"), "panel restored, query retained, focus returned");
 
   /* ---- 11. Another scenario seeds and scores ---- */
 
@@ -1057,44 +1165,108 @@ async function run(): Promise<void> {
   );
 
   /* ---- PostgreSQL: real engine, same static hosting ---- */
-  const enginePicker = need<HTMLSelectElement>("#pg-engine");
-  enginePicker.value = "postgres";
-  enginePicker.dispatchEvent(new win.Event("change", { bubbles: true }));
+  const enginePicker = need<HTMLButtonElement>("#pg-engine");
+  chooseEngine("postgres");
   await until("PostgreSQL to initialize", () => !enginePicker.disabled && textOf("[data-build-sqlite]").includes("PostgreSQL"), 90_000);
   const pgDrift = await runCommand(DRIFT.replace("sqlite://app.db", "postgres://pglite/app"));
   check("PostgreSQL runs Ptah without cross-origin isolation", !contentWindow.crossOriginIsolated && pgDrift.exit.includes("exit 0"), pgDrift.output.slice(-240));
   check("database panes label the selected PostgreSQL engine", textOf("#pg-rail").includes("PostgreSQL / public") && textOf("#pg-db").includes("postgres://pglite/app"), textOf("[data-build-sqlite]"));
+  check("PostgreSQL hides Import and its hint", need<HTMLElement>("#pg-import").getBoundingClientRect().width === 0 && need<HTMLElement>("#pg-import-help").getBoundingClientRect().width === 0, "neither control takes up toolbar space");
+
+  // Repeat the reported route with PostgreSQL: apply, read back the rows in
+  // the SQL pane, then click the guide's drift button to finish the scenario.
+  chooseScenario("a");
+  await until("scenario A to seed", () => !enginePicker.disabled && enginePicker.value === "sqlite", 60_000);
+  chooseEngine("postgres");
+  await until("PostgreSQL scenario A to seed", () => !enginePicker.disabled && enginePicker.value === "postgres", 90_000);
+  await runCommand(DRIFT.replace("sqlite://app.db", "postgres://pglite/app"));
+  typeSchema(EDITED_SCHEMA);
+  await runCommand(DRY_RUN.replace("sqlite://app.db", "postgres://pglite/app"));
+  typeCommand(APPLY.replace("sqlite://app.db", "postgres://pglite/app"));
+  await until("PostgreSQL scenario A apply to ask", () => textOf(".pg-status").includes("waiting for confirmation"), 30_000);
+  typeCommand("YES");
+  await until("PostgreSQL scenario A to reach Verify", () => terminalIdle() && stepStates()[3] === "done", 60_000);
+  need<HTMLButtonElement>("#pg-next .pg-next-row button.btn").click();
+  need<HTMLButtonElement>(".pgc-ed-run button").click();
+  await until("PostgreSQL query to finish", () => textOf(".pg-status").includes("ready"), 60_000);
+  const pgGuided = await verifyAfterSql("PostgreSQL");
+  await until("PostgreSQL guided route to finish", () => stepStates().every(state => state === "done"), 15_000).catch(() => undefined);
+  check(
+    "PostgreSQL: the guide runs the final drift check and completes the route",
+    pgGuided.exit.includes("exit 0") && pgGuided.output.includes("No schema drift detected")
+      && stepStates().every(state => state === "done"),
+    `steps: ${stepStates().join(", ")}; ${pgGuided.output.slice(-180)}`,
+  );
   chooseScenario("postgres-only");
   await until("PostgresOnly to seed", () => !enginePicker.disabled && textOf("#pg-rail").includes("events") && textOf("#pg-rail").includes("2 rows"), 60_000);
-  check("PostgresOnly presets PostgreSQL and disables incompatible SQLite", enginePicker.value === "postgres" && enginePicker.options[0]?.disabled === true, enginePicker.value);
-  const schemaTabPG = [...doc.querySelectorAll<HTMLButtonElement>("#pg-editor .pgc-tab")].find(b => b.textContent?.includes("schema.sql"));
-  schemaTabPG?.click();
-  const pgSchema = need<HTMLTextAreaElement>("#pg-editor .pgc-ed-input");
-  pgSchema.value += "\nCREATE INDEX events_payload_idx ON events USING gin (payload);\n";
-  pgSchema.dispatchEvent(new win.Event("input", { bubbles: true }));
-  const pgDry = await runCommand(DRY_RUN.replace("sqlite://app.db", "postgres://pglite/app"));
+  check("PostgresOnly presets PostgreSQL and disables incompatible SQLite", enginePicker.value === "postgres" && q<HTMLButtonElement>('.pg-engine-option[data-engine="sqlite"]')?.disabled === true, enginePicker.value);
+  need<HTMLButtonElement>("#pg-next .pg-next-row button.btn").click();
+  await until("PostgresOnly capabilities to finish", () => terminalIdle() && stepStates()[0] === "done", 30_000);
+  need<HTMLButtonElement>("#pg-next .pg-next-row button.btn").click();
+  const jsonbInput = need<HTMLTextAreaElement>("#pg-editor .pgc-ed-input");
+  const jsonbQuery = jsonbInput.value;
+  jsonbInput.value = "SELECT * FROM missing_jsonb_regression_table;";
+  jsonbInput.dispatchEvent(new win.Event("input", { bubbles: true }));
+  need<HTMLButtonElement>(".pgc-ed-run button").click();
+  await until("the failed JSONB step query to settle", () => textOf(".pg-status").includes("ready"), 30_000);
+  check("PostgresOnly does not complete Query JSONB on a SQL error", stepStates()[1] !== "done", stepStates().join(", "));
+  jsonbInput.value = jsonbQuery;
+  jsonbInput.dispatchEvent(new win.Event("input", { bubbles: true }));
+  need<HTMLButtonElement>(".pgc-ed-run button").click();
+  await until("the JSONB step to advance", () => stepStates()[1] === "done" && stepStates()[2] === "current", 10_000).catch(() => undefined);
+  check(
+    "PostgresOnly completes Query JSONB and offers the GIN index after a successful query",
+    stepStates()[1] === "done" && stepStates()[2] === "current" && paneHas("data", "deploy")
+      && textOf("#pg-next .pg-next-row button.btn") === "Apply patch",
+    `steps: ${stepStates().join(", ")}; button "${textOf("#pg-next .pg-next-row button.btn")}"`,
+  );
+  need<HTMLButtonElement>("#pg-next .pg-next-row button.btn").click();
+  await until("the GIN patch to advance to the plan", () => stepStates()[2] === "done" && stepStates()[3] === "current", 30_000);
+  const pgDry = await runGuideCommand();
   check("PostgresOnly plans a real GIN index", pgDry.exit.includes("exit 0") && /USING gin/i.test(pgDry.output), pgDry.output.slice(-300));
-  typeCommand(APPLY.replace("sqlite://app.db", "postgres://pglite/app"));
+  await until("the final combined step", () => stepStates()[4] === "current", 30_000);
+  need<HTMLButtonElement>("#pg-next .pg-next-row button.btn").click();
   await until("PostgreSQL apply to ask", () => textOf(".pg-status").includes("waiting for confirmation"), 30_000);
   typeCommand("YES");
   await until("PostgreSQL apply to finish", () => terminalIdle(), 60_000);
-  const pgClean = await runCommand(DRIFT.replace("sqlite://app.db", "postgres://pglite/app"));
+  await until("the drift substep to appear", () => textOf("#pg-next .cmd pre").includes("schema drift"), 30_000);
+  const pgClean = await runGuideCommand();
   check("PostgreSQL apply preserves rows and ends with clean drift", pgClean.exit.includes("exit 0") && textOf("#pg-rail").includes("2 rows"), pgClean.output.slice(-240));
+  await until("all five PostgreSQL steps to finish", () => stepStates().every(state => state === "done"), 30_000);
+  check("the JSONB route completes five steps through its guided actions", stepStates().length === 5 && stepStates().every(state => state === "done") && textOf(".pg-scenario-btn") === "JSONB and a GIN index", stepStates().join(", "));
+  need<HTMLButtonElement>("#pg-reset").click();
+  await until("JSONB reset to settle", () => !enginePicker.disabled && stepStates()[0] === "current", 30_000);
+  check("reset clears the successful JSONB query check", stepStates()[1] !== "done", stepStates().join(", "));
   chooseScenario("c");
   await until("SQLite-only migrations to load", () => !enginePicker.disabled && enginePicker.value === "sqlite" && textOf(".pg-scenario-btn").includes("Versioned migrations"), 60_000);
-  check("versioned migrations declare SQLite-only capability", enginePicker.options[1]?.disabled === true, "PGlite cannot supply independent lock and execution sessions");
+  check("versioned migrations declare SQLite-only capability", q<HTMLButtonElement>('.pg-engine-option[data-engine="postgres"]')?.disabled === true, "PGlite cannot supply independent lock and execution sessions");
   chooseScenario("a");
   await until("SQLite preset to return", () => !enginePicker.disabled && enginePicker.value === "sqlite" && textOf("#pg-rail").includes("3 rows"), 60_000);
   const sqliteAgain = await runCommand(DRIFT);
   check("switching back restores the SQLite preset", sqliteAgain.exit.includes("exit 0") && textOf("[data-build-sqlite]").includes("SQLite"), sqliteAgain.output.slice(-150));
+  check("SQLite restores Import and its hint", need<HTMLElement>("#pg-import").getBoundingClientRect().width > 0 && need<HTMLElement>("#pg-import-help").getBoundingClientRect().width > 0, "both controls visible again");
 
   const wrongEngine = await runCommand("ptah schema drift --schema-file schema.sql --db-url postgres://pglite/app");
   check("an inactive PostgreSQL database cannot masquerade as SQLite output", wrongEngine.exit.includes("exit 2") && /select PostgreSQL/i.test(wrongEngine.output), wrongEngine.output.slice(-220));
+  // Scenario defaults do not change the remembered explicit engine choice.
+  chooseEngine("sqlite");
   contentWindow.location.reload();
   await new Promise<void>(resolve => frame.addEventListener("load", () => resolve(), {once:true}));
   doc = frame.contentDocument!;
   await until("reload to seed a fresh SQLite database", () => textOf(".pg-status").includes("ready") && textOf("#pg-rail").includes("3 rows"), 90_000);
-  check("reload starts a fresh memory-only session without isolation", need<HTMLSelectElement>("#pg-engine").value === "sqlite" && !textOf("#pg-rail").includes("events") && !frame.contentWindow!.crossOriginIsolated, "fresh SQLite seed; no retained PostgreSQL events");
+  check("reload starts a fresh memory-only session without isolation", need<HTMLButtonElement>("#pg-engine").value === "sqlite" && !textOf("#pg-rail").includes("events") && !frame.contentWindow!.crossOriginIsolated, "fresh SQLite seed; no retained PostgreSQL events");
+
+  for (const engine of ["postgres", "sqlite"] as const) {
+    await new Promise<void>(resolve => {
+      frame.addEventListener("load", () => resolve(), { once: true });
+      frame.src = `index.html?engine=${engine}`;
+    });
+    doc = frame.contentDocument!;
+    win = frame.contentWindow as unknown as FrameGlobals;
+    await until(`${engine} targeted link to initialize`, () => textOf(".pg-status").includes("ready") && need<HTMLButtonElement>("#pg-engine").value === engine, 90_000);
+    const linkedDrift = await runCommand(DRIFT.replace("sqlite://app.db", engine === "postgres" ? "postgres://pglite/app" : "sqlite://app.db"));
+    check(`${engine} targeted links preselect a working database without the required picker`, linkedDrift.exit.includes("exit 0") && !need<HTMLDialogElement>(".pg-engine-overlay").open, linkedDrift.output.slice(-160));
+  }
 
   /* ---- Done ---- */
 

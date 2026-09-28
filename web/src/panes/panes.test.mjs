@@ -33,7 +33,7 @@ import {
   referencedBy,
   rowCountSQL,
 } from "./catalog.ts";
-import { capRows, compareCells, formatCell, rowQuery, sortRows, CELL_LIMIT } from "./data.ts";
+import { capRows, compareCells, formatCell, recordValue, rowQuery, sortRows, CELL_LIMIT } from "./data.ts";
 import { parsePlanJSON, parsePlanOutput, planStaleReason } from "./plan.ts";
 import { columnNote, formatRowCount, formatSize } from "./rail.ts";
 import { structureMark } from "./structure.ts";
@@ -45,6 +45,15 @@ import { tokenizeSQL } from "../editor.ts";
 
 /** The shape a `sql` host event carries. */
 const rs = (columns, rows) => ({ columns, rows });
+
+test("record details retain complete text and binary bytes", () => {
+  const text = `${"long value ".repeat(100)}\n<script>literal markup</script>`;
+  assert.ok(formatCell(text).truncated);
+  assert.equal(recordValue(text), text);
+  assert.equal(recordValue(new Uint8Array([0, 10, 128, 255])), "00 0a 80 ff");
+  assert.equal(recordValue(null), "NULL");
+  assert.equal(recordValue(""), "");
+});
 
 /**
  * Scenario A after the apply, plus the drifted `nickname` column from
@@ -669,4 +678,3 @@ test("tokenizing is lossless for a real schema file", () => {
     .join("\n");
   assert.equal(joined, text);
 });
-

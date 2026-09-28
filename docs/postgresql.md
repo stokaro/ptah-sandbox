@@ -68,7 +68,7 @@ worker, discarding its in-memory state.
 PGlite provides one SQL session. The driver refuses simultaneous independent
 connections, which PostgreSQL versioned migrations require for locking and
 execution. Scenario C therefore declares SQLite-only capability. A, B, and
-free exploration support both engines; PostgresOnly defaults to PostgreSQL
+free exploration support both engines; JSONB and a GIN index defaults to PostgreSQL
 and refuses SQLite. Selecting a scenario applies its default; changing the
 engine resets the current scenario. The picker states this before the change.
 Commands against an inactive engine or an external-looking PostgreSQL URL are
@@ -77,7 +77,7 @@ refused, so the displayed engine identifies the database being used.
 ## Persistence and export
 
 Both PGlite instances use `memory://`. No IndexedDB database is created;
-a reload starts from the default SQLite scenario. Reset replaces the active
+a reload starts from a fresh seed for the linked or remembered engine. Reset replaces the active
 database, including PostgreSQL roles and session state, with a fresh instance.
 
 PostgreSQL export uses `dumpDataDir("gzip")` and names the archive

@@ -91,8 +91,8 @@ export function applyPatch(text: string, hunks: readonly PatchHunk[]): PatchResu
 /**
  * A description of state that is true once a step is done.
  *
- * `ran` is the one kind that looks at command history, and it looks only at
- * argv and exit code -- both facts about the process, not about its output.
+ * History checks use command exit codes and SQL completion records, never
+ * the text printed in the terminal.
  */
 export type Check =
   | { kind: "table"; name: string; present: boolean }
@@ -104,6 +104,7 @@ export type Check =
   | { kind: "file"; path: string; present: boolean }
   | { kind: "files"; dir: string; suffix: string; atLeast: number }
   | { kind: "ran"; prefix: string[]; has?: string[]; lacks?: string[]; exit?: number; after?: RunMatch }
+  | { kind: "sql-ran"; sql: string }
   | { kind: "all"; of: Check[] }
   | { kind: "any"; of: Check[] }
   | { kind: "not"; of: Check };
@@ -196,6 +197,12 @@ export interface QueryResult {
   rows: unknown[][];
 }
 
+/** A SQL-pane execution's outcome, recorded only after the database answers. */
+export interface SqlRunRecord {
+  sql: string;
+  succeeded: boolean;
+}
+
 /** The real state, behind one small interface so the engine stays testable. */
 export interface StateProbe {
   engine?: () => DatabaseEngine;
@@ -207,6 +214,8 @@ export interface StateProbe {
   listFiles(dir: string): Promise<string[]>;
   /** Every finished run this session, oldest first. */
   runs(): readonly RunRecord[];
+  /** Completed SQL-pane submissions for this workspace, oldest first. */
+  sqlRuns(): readonly SqlRunRecord[];
 }
 
 /**
@@ -545,6 +554,10 @@ class Pass {
   runs(): readonly RunRecord[] {
     return this.probe.runs();
   }
+
+  sqlRuns(): readonly SqlRunRecord[] {
+    return this.probe.sqlRuns();
+  }
 }
 
 function matchesRun(record: RunRecord, m: RunMatch): boolean {
@@ -662,6 +675,17 @@ async function evaluate(check: Check, pass: Pass): Promise<CheckResult> {
         detail: hits.length >= check.atLeast
           ? `${check.dir}/ holds ${hits.length} *${check.suffix} ${hits.length === 1 ? "file" : "files"}`
           : `${check.dir}/ holds no *${check.suffix} file yet`,
+      };
+    }
+    case "sql-ran": {
+      // Preserve whitespace and case inside literals. This checks execution
+      // of the offered statement, without guessing SQL equivalence.
+      const normalize = (sql: string): string => sql.trim().replace(/;$/, "").trim();
+      const matches = pass.sqlRuns().filter(run => normalize(run.sql) === normalize(check.sql));
+      if (matches.some(run => run.succeeded)) return { ok: true, detail: "The query completed successfully in the SQL pane." };
+      return {
+        ok: false,
+        detail: matches.length > 0 ? "The query failed. Correct the error and run it again." : "Run the offered query in the SQL pane.",
       };
     }
     case "ran": {
@@ -881,13 +905,18 @@ function asRecord(value: unknown, where: string): Record<string, unknown> {
 }
 
 const CHECK_KINDS = new Set([
-  "table", "column", "index", "rows", "declares", "file", "files", "ran", "all", "any", "not",
+  "table", "column", "index", "rows", "declares", "file", "files", "ran", "sql-ran", "all", "any", "not",
 ]);
 
 function parseCheck(value: unknown, where: string): Check {
   const raw = asRecord(value, where);
   const kind = asString(raw["kind"], `${where}.kind`);
   if (!CHECK_KINDS.has(kind)) fail(`${where}.kind`, `unknown check kind "${kind}"`);
+  if (kind === "sql-ran") {
+    const sql = asString(raw["sql"], `${where}.sql`);
+    if (sql.trim() === "") fail(`${where}.sql`, "expected a non-empty SQL statement");
+    return { kind, sql };
+  }
   if (kind === "all" || kind === "any") {
     const of = raw["of"];
     if (!Array.isArray(of) || of.length === 0) fail(`${where}.of`, "expected a non-empty array");
