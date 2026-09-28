@@ -407,6 +407,17 @@ async function run(): Promise<void> {
     aboutShown && !about.open,
     `open with the Running line on screen: ${aboutShown}; open after Close: ${about.open}`,
   );
+  need<HTMLButtonElement>("#pg-about-open").click();
+  need<HTMLAnchorElement>("#pg-storage-open").click();
+  const storage = need<HTMLDialogElement>("#pg-storage-dialog");
+  const replacedAbout = storage.open && !about.open && doc.querySelectorAll("dialog[open]").length === 1;
+  need<HTMLButtonElement>("#pg-storage-close").click();
+  await until("storage details to return focus to the playground", () => doc.activeElement === need("#pg-about-open"));
+  check(
+    "storage details replace About and close back to the playground",
+    replacedAbout && !storage.open && !about.open,
+    `one dialog after opening details: ${replacedAbout}; About open after Close: ${about.open}`,
+  );
 
   // Between the side panes is the default; the toolbar pair moves the
   // terminal across the width and back. Read straight after each click,

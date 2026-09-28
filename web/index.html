@@ -29,7 +29,7 @@
 <link rel="preload" href="assets/fonts/ibm-plex-mono-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="assets/site.css">
 <link rel="stylesheet" href="loader.css">
-<link rel="stylesheet" href="playground.css">
+<link rel="stylesheet" href="playground.css?v=storage-dialog">
 <!--
   Order matters. playground.css owns the page frame and the grid slots; the
   two below own the insides of the components that take those slots over, and
@@ -409,28 +409,43 @@
     <dt>Cannot</dt>
     <dd>Reach a network database, run Docker, or touch your disk. SQLite and PostgreSQL (PGlite) run in memory. There is no MySQL or MariaDB here. PGlite has one SQL session, so the versioned migrations scenario requires SQLite.</dd>
     <dt>Keeps</dt>
-    <dd>Browser preferences, listed below. The workspace and database live only in this tab: reloading discards them. Export takes a copy with you.</dd>
+    <dd>Browser preferences. The workspace and database live only in this tab: reloading discards them. Export takes a copy with you.</dd>
   </dl>
-  <section class="pg-about-storage" aria-labelledby="pg-storage-title">
-    <h3 id="pg-storage-title">Cookies and browser storage</h3>
-    <p>This playground does not set cookies or use analytics or advertising trackers. It saves these preferences in localStorage on this browser:</p>
-    <dl class="pg-storage-list">
-      <dt>Theme</dt><dd><code>ptah-theme</code> remembers light or dark mode.</dd>
-      <dt>Tour</dt><dd><code>ptah-play-tour</code> remembers that the tour has been shown.</dd>
-      <dt>Database</dt><dd><code>ptah-play-engine</code> remembers your selected engine. An <code>engine</code> parameter in a link takes priority.</dd>
-      <dt>Pane sizes</dt><dd><code>ptah-playground-panes</code> remembers the widths and heights you set by dragging pane dividers.</dd>
-      <dt>Terminal position</dt><dd><code>ptah-playground-dock</code> remembers whether the terminal spans the window or sits under the editor.</dd>
-    </dl>
-    <p>A temporary sessionStorage entry, <code>ptah-playground:reloaded-for-stale-cache</code>, prevents repeated reloads when cached files belong to different builds. It is cleared after a successful startup or when the tab closes.</p>
-    <p>Preferences stay until you clear this site's browser data. These entries contain no SQL, schema files, database rows, or credentials, and the playground does not send them to a server.</p>
-  </section>
   <!-- The site footer is not drawn beside the full-window layout, so its links are here too. -->
   <ul class="pg-about-links">
     <li><a href="https://github.com/stokaro/ptah">GitHub</a></li>
     <li><a href="https://github.com/stokaro/ptah/issues">Issues</a></li>
     <li><a href="https://github.com/stokaro/ptah/releases">Changelog</a></li>
     <li><a href="https://github.com/stokaro/ptah/blob/master/LICENSE">License</a></li>
+    <li><a href="#pg-storage-dialog" id="pg-storage-open" aria-haspopup="dialog" aria-controls="pg-storage-dialog">Cookies and browser storage</a></li>
   </ul>
+</dialog>
+
+<dialog class="pg-about pg-storage-dialog" id="pg-storage-dialog" aria-labelledby="pg-storage-title">
+  <div class="pg-about-head">
+    <h2 class="pg-about-title" id="pg-storage-title">Cookies and browser storage</h2>
+    <button class="btn btn-ghost pg-about-close" type="button" id="pg-storage-close" autofocus>Close</button>
+  </div>
+  <div class="pg-storage-body">
+    <p class="pg-storage-intro">This playground does not set cookies or use analytics or advertising trackers.</p>
+    <section aria-labelledby="pg-storage-preferences">
+      <h3 id="pg-storage-preferences">Saved preferences</h3>
+      <p>Stored in this browser's localStorage until you clear this site's browser data.</p>
+      <dl class="pg-storage-list">
+        <div><dt>Theme</dt><dd>Remembers light or dark mode.<code>ptah-theme</code></dd></div>
+        <div><dt>Tour</dt><dd>Remembers that the tour has been shown.<code>ptah-play-tour</code></dd></div>
+        <div><dt>Database</dt><dd>Remembers your selected engine. An <code class="pg-storage-inline">engine</code> parameter in a link takes priority.<code>ptah-play-engine</code></dd></div>
+        <div><dt>Pane sizes</dt><dd>Remembers the widths and heights you set by dragging pane dividers.<code>ptah-playground-panes</code></dd></div>
+        <div><dt>Terminal position</dt><dd>Remembers whether the terminal spans the window or sits under the editor.<code>ptah-playground-dock</code></dd></div>
+      </dl>
+    </section>
+    <section class="pg-storage-session" aria-labelledby="pg-storage-session-title">
+      <h3 id="pg-storage-session-title">Temporary session data</h3>
+      <p>A sessionStorage entry prevents repeated reloads when cached files belong to different builds. It is cleared after a successful startup or when the tab closes.</p>
+      <code>ptah-playground:reloaded-for-stale-cache</code>
+    </section>
+    <p class="pg-storage-note">These entries contain no SQL, schema files, database rows, or credentials. The playground does not send them to a server.</p>
+  </div>
 </dialog>
 
 </main>
