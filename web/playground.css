@@ -168,23 +168,26 @@
   min-width: 0;
 }
 
-.pg-scenario {
+.pg-scenario,
+.pg-engine {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
 }
 
-.pg-scenario-label {
+.pg-scenario-label,
+.pg-engine-label {
   font: 500 13.5px var(--sans);
   color: var(--mute);
 }
 
-/* Opens the scenario picker. It reads as the scenario's name with a
+/* Opens a toolbar picker. It reads as the current choice with a
  * disclosure chevron, and shows its edge only when pointed at. */
 /* 28px tall like the toolbar's other controls -- and the tour skips a target
  * under 24px, so at its text's own height the tour's first card vanished. */
-.pg-scenario-btn {
+.pg-scenario-btn,
+.pg-engine-button {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -203,7 +206,8 @@
   cursor: pointer;
 }
 
-.pg-scenario-btn::after {
+.pg-scenario-btn::after,
+.pg-engine-button::after {
   content: "";
   flex: none;
   width: 5px;
@@ -214,11 +218,13 @@
   transform: rotate(45deg);
 }
 
-.pg-scenario-btn:hover {
+.pg-scenario-btn:hover,
+.pg-engine-button:hover {
   border-color: var(--line);
 }
 
-.pg-scenario-btn:focus-visible {
+.pg-scenario-btn:focus-visible,
+.pg-engine-button:focus-visible {
   outline: 2px solid var(--acc);
   outline-offset: 1px;
 }
@@ -2756,8 +2762,7 @@
   }
 }
 
-.pg-engine { margin-left: 16px; display: flex; align-items: center; gap: 7px; font-size: 12px; flex-wrap: wrap; }
-.pg-engine-button { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 5px 7px; cursor: pointer; }
+.pg-engine { margin-left: 16px; }
 .pg-engine-button:disabled { cursor: wait; opacity: .6; }
 .pg-engine-note { color: var(--fg2); font: 14px/1.6 var(--sans); margin: 0 0 18px; }
 .pg-engine-option { width: 100%; display: flex; flex-direction: column; align-items: start; gap: 6px; padding: 18px; margin: 12px 0 0; text-align: left; border: 1px solid var(--line); border-radius: 3px; color: var(--fg); background: var(--bg); cursor: pointer; }
@@ -2768,4 +2773,4 @@
 .pg-engine-option:hover:not(:disabled), .pg-engine-option:focus-visible, .pg-engine-option[aria-pressed="true"] { border-color: var(--acc); }
 .pg-engine-option:disabled { cursor: default; opacity: .5; }
 #pg-import[hidden], #pg-import-help[hidden] { display: none; }
-@media (max-width: 900px) { .pg-engine { margin-left: 0; gap: 4px; font-size: 11px; } }
+@media (max-width: 900px) { .pg-engine { margin-left: 0; } }
