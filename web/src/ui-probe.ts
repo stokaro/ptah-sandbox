@@ -776,7 +776,7 @@ async function run(): Promise<void> {
   const pickerCurrent = picker.querySelector<HTMLElement>('.pg-picker-option[aria-current="true"]')?.dataset["scenario"];
   check(
     "the scenario picker lists every scenario with its title and description, the loaded one current",
-    picker.open && pickerRows.length === 4 && pickerRowsComplete && pickerCurrent === "a",
+    picker.open && pickerRows.length === 5 && pickerRowsComplete && pickerCurrent === "a",
     `open ${picker.open}; ${pickerRows.length} rows: ` +
       pickerRows.map((row) => row.querySelector(".pg-picker-name")?.textContent).join(" | ") +
       `; current ${pickerCurrent ?? "none"}`,
@@ -1055,6 +1055,46 @@ async function run(): Promise<void> {
       `${Math.round(freeSteps?.getBoundingClientRect().height ?? 0)}px; strip ${freeStripHeight}px ` +
       `against ${stripHeight}px on a step with a command`,
   );
+
+  /* ---- PostgreSQL: real engine, same static hosting ---- */
+  const enginePicker = need<HTMLSelectElement>("#pg-engine");
+  enginePicker.value = "postgres";
+  enginePicker.dispatchEvent(new win.Event("change", { bubbles: true }));
+  await until("PostgreSQL to initialize", () => !enginePicker.disabled && textOf("[data-build-sqlite]").includes("PostgreSQL"), 90_000);
+  const pgDrift = await runCommand(DRIFT.replace("sqlite://app.db", "postgres://pglite/app"));
+  check("PostgreSQL runs Ptah without cross-origin isolation", !contentWindow.crossOriginIsolated && pgDrift.exit.includes("exit 0"), pgDrift.output.slice(-240));
+  check("database panes label the selected PostgreSQL engine", textOf("#pg-rail").includes("PostgreSQL / public") && textOf("#pg-db").includes("postgres://pglite/app"), textOf("[data-build-sqlite]"));
+  chooseScenario("postgres-only");
+  await until("PostgresOnly to seed", () => !enginePicker.disabled && textOf("#pg-rail").includes("events") && textOf("#pg-rail").includes("2 rows"), 60_000);
+  check("PostgresOnly presets PostgreSQL and disables incompatible SQLite", enginePicker.value === "postgres" && enginePicker.options[0]?.disabled === true, enginePicker.value);
+  const schemaTabPG = [...doc.querySelectorAll<HTMLButtonElement>("#pg-editor .pgc-tab")].find(b => b.textContent?.includes("schema.sql"));
+  schemaTabPG?.click();
+  const pgSchema = need<HTMLTextAreaElement>("#pg-editor .pgc-ed-input");
+  pgSchema.value += "\nCREATE INDEX events_payload_idx ON events USING gin (payload);\n";
+  pgSchema.dispatchEvent(new win.Event("input", { bubbles: true }));
+  const pgDry = await runCommand(DRY_RUN.replace("sqlite://app.db", "postgres://pglite/app"));
+  check("PostgresOnly plans a real GIN index", pgDry.exit.includes("exit 0") && /USING gin/i.test(pgDry.output), pgDry.output.slice(-300));
+  typeCommand(APPLY.replace("sqlite://app.db", "postgres://pglite/app"));
+  await until("PostgreSQL apply to ask", () => textOf(".pg-status").includes("waiting for confirmation"), 30_000);
+  typeCommand("YES");
+  await until("PostgreSQL apply to finish", () => terminalIdle(), 60_000);
+  const pgClean = await runCommand(DRIFT.replace("sqlite://app.db", "postgres://pglite/app"));
+  check("PostgreSQL apply preserves rows and ends with clean drift", pgClean.exit.includes("exit 0") && textOf("#pg-rail").includes("2 rows"), pgClean.output.slice(-240));
+  chooseScenario("c");
+  await until("SQLite-only migrations to load", () => !enginePicker.disabled && enginePicker.value === "sqlite" && textOf(".pg-scenario-btn").includes("Versioned migrations"), 60_000);
+  check("versioned migrations declare SQLite-only capability", enginePicker.options[1]?.disabled === true, "PGlite cannot supply independent lock and execution sessions");
+  chooseScenario("a");
+  await until("SQLite preset to return", () => !enginePicker.disabled && enginePicker.value === "sqlite" && textOf("#pg-rail").includes("3 rows"), 60_000);
+  const sqliteAgain = await runCommand(DRIFT);
+  check("switching back restores the SQLite preset", sqliteAgain.exit.includes("exit 0") && textOf("[data-build-sqlite]").includes("SQLite"), sqliteAgain.output.slice(-150));
+
+  const wrongEngine = await runCommand("ptah schema drift --schema-file schema.sql --db-url postgres://pglite/app");
+  check("an inactive PostgreSQL database cannot masquerade as SQLite output", wrongEngine.exit.includes("exit 2") && /select PostgreSQL/i.test(wrongEngine.output), wrongEngine.output.slice(-220));
+  contentWindow.location.reload();
+  await new Promise<void>(resolve => frame.addEventListener("load", () => resolve(), {once:true}));
+  doc = frame.contentDocument!;
+  await until("reload to seed a fresh SQLite database", () => textOf(".pg-status").includes("ready") && textOf("#pg-rail").includes("3 rows"), 90_000);
+  check("reload starts a fresh memory-only session without isolation", need<HTMLSelectElement>("#pg-engine").value === "sqlite" && !textOf("#pg-rail").includes("events") && !frame.contentWindow!.crossOriginIsolated, "fresh SQLite seed; no retained PostgreSQL events");
 
   /* ---- Done ---- */
 

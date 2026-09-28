@@ -33,6 +33,8 @@
  * transferred.
  */
 
+import { readPostgresCatalog } from "./panes/postgres-catalog.ts";
+import type { DatabaseEngine, EngineInfo } from "./protocol.ts";
 import { Editor } from "./editor.ts";
 import { Guide, type GuideHost, type StatusPill } from "./guide.ts";
 import { Loader } from "./loader.ts";
@@ -78,7 +80,12 @@ import { zip } from "./zip.ts";
 
 /** The database as Ptah is given it. The bridge sees the bare key `app.db`. */
 const DB = "app.db";
-const DB_URL = `sqlite://${DB}`;
+let activeEngine: DatabaseEngine = "sqlite";
+let engineInfo: EngineInfo | null = null;
+let switching = false;
+let sqlRunning = false;
+let scenarioEpoch = 0;
+let DB_URL = `sqlite://${DB}`;
 const WORKSPACE = "/workspace";
 
 /* ---------- DOM helpers ---------- */
@@ -259,6 +266,10 @@ let schemaAtRun: string | null = null;
 function terminalHost(): TerminalHost {
   return {
     run(argv: string[], sink: RunSink): TerminalRun {
+      if (switching || sqlRunning) {
+        queueMicrotask(() => { sink.stderr("Wait for the database operation to finish.\n"); sink.done(2); });
+        return { stdin: () => undefined, cancel: () => undefined };
+      }
       // Typing the program name is the natural thing to do and the runtime is
       // already Ptah, so it is dropped rather than passed through as a
       // subcommand. The terminal echoed the line the visitor typed.
@@ -268,8 +279,14 @@ function terminalHost(): TerminalHost {
         return { stdin: () => undefined, cancel: () => undefined };
       }
 
+      const epoch = scenarioEpoch;
       let handle: RunHandle | null = null;
       const start = (): void => {
+        if (switching || epoch !== scenarioEpoch) {
+          sink.stderr("The scenario changed before the command started. Run it again against the current workspace.\n");
+          sink.done(2);
+          return;
+        }
         runOutput = "";
         schemaAtRun = editor.text("schema");
         showingQuery = false;
@@ -323,7 +340,7 @@ function terminalHost(): TerminalHost {
         },
       };
     },
-    isReady: () => store.state.boot.stage === "ready",
+    isReady: () => store.state.boot.stage === "ready" && !switching && !sqlRunning,
     commands: () => store.state.runtime.ready?.commands ?? [],
     paths: () => store.state.workspace.files.filter((f) => !f.isDir).map((f) => f.name),
     dbUrls: () => [DB_URL],
@@ -371,6 +388,7 @@ function absent(err: unknown): boolean {
 }
 
 const probe: StateProbe = {
+  engine: () => activeEngine,
   query: (sql) => session.sql(DB, sql),
   readFile: (path) =>
     session.readFile(path).then(
@@ -419,7 +437,7 @@ function guideHost(): GuideHost {
       if (first !== -1) editor.reveal(first);
     },
     loadScenario: (scenario) => loadScenario(scenario),
-    busy: () => !canRun(store.state),
+    busy: () => !canRun(store.state) || switching || sqlRunning,
   };
 }
 
@@ -677,14 +695,21 @@ async function writeFile(path: string, value: string): Promise<void> {
 let seeding: Promise<void> = Promise.resolve();
 
 function loadScenario(scenario: Scenario): Promise<void> {
+  switching = true;
+  ++scenarioEpoch;
+  ++refreshPass;
+  window.clearTimeout(saveTimer);
+  saveOwed = false;
+  render(store.state);
   // Failures are reported by the caller; the chain must survive one so a
   // later load is not permanently blocked behind a rejected promise.
   const next = seeding.then(
     () => seedScenario(scenario),
     () => seedScenario(scenario),
   );
-  seeding = next.catch(() => undefined);
-  return next;
+  const settled = next.catch(() => undefined);
+  seeding = settled;
+  return next.finally(() => { if (seeding === settled) { switching = false; render(store.state); } });
 }
 
 /**
@@ -695,6 +720,15 @@ function loadScenario(scenario: Scenario): Promise<void> {
  * on the first CREATE TABLE.
  */
 async function seedScenario(scenario: Scenario): Promise<void> {
+  await saving;
+  ++refreshPass;
+  const target = scenario.database.url.startsWith("postgres:") ? "postgres" : "sqlite";
+  engineInfo = await session.selectEngine(target);
+  activeEngine = target;
+  DB_URL = scenario.database.url;
+  panes.setSource(activeEngine === "postgres" ? `${DB_URL} · public schema` : DB_URL);
+  engineSelect.value = activeEngine;
+  for (const option of engineSelect.options) option.disabled = !scenario.capabilities.engines.includes(option.value as DatabaseEngine);
   store.scenarioSelected(scenario.id);
   // Directories are removed too, and `remove` is recursive. Skipping them left
   // one scenario's migrations/ in the next scenario's workspace: Reset says
@@ -730,7 +764,7 @@ async function seedScenario(scenario: Scenario): Promise<void> {
   editor.setText("schema", schema, { baseline: schema, syncedAt: revision });
   editor.setFooter("schema", "SQL · desired state", `revision r${revision}`);
   editor.activate("schema");
-  await refresh();
+  await refresh(true);
 }
 
 /* ---------- Reading real state back ---------- */
@@ -780,8 +814,8 @@ async function listWorkspace(): Promise<FileEntry[]> {
  */
 let refreshPass = 0;
 
-async function refresh(): Promise<void> {
-  if (session.failed) return;
+async function refresh(whileSeeding = false): Promise<void> {
+  if (session.failed || (switching && !whileSeeding)) return;
   const pass = ++refreshPass;
 
   const files = await listWorkspace();
@@ -790,13 +824,14 @@ async function refresh(): Promise<void> {
   // bridge as a bare key and Workspace.list() has never heard of it. Its size
   // has to be measured separately or the rail would print nothing for the one
   // file the visitor cares most about.
-  const bytes = await session.serialize(DB);
+  const dbBytes = activeEngine === "sqlite" ? (await session.serialize(DB)).byteLength : null;
   if (pass !== refreshPass) return;
-  store.workspaceChanged({ files, dbBytes: bytes.byteLength });
+  store.workspaceChanged({ files, dbBytes });
 
   try {
-    catalog = await readCatalog(DB, (path, sql) => session.sql(path, sql));
+    const nextCatalog = await (activeEngine === "postgres" ? readPostgresCatalog : readCatalog)(DB, (path, sql) => session.sql(path, sql));
     if (pass !== refreshPass) return;
+    catalog = nextCatalog;
   } catch (err) {
     if (pass !== refreshPass) return;
     catalog = null;
@@ -812,13 +847,24 @@ async function refresh(): Promise<void> {
   // PRAGMA queries, so the comparison is SQLite's parser against SQLite's.
   try {
     const schemaOnDisk = await session.readFile("schema.sql");
-    desired = await readDesiredCatalog(
+    if (pass !== refreshPass) return;
+    let nextDesired: Catalog;
+    if (activeEngine === "postgres") {
+      await session.dropDB("__desired.db");
+      if (pass !== refreshPass) return;
+      await session.execSQL("__desired.db", schemaOnDisk);
+      if (pass !== refreshPass) return;
+      nextDesired = await readPostgresCatalog("__desired.db", (path, sql) => session.sql(path, sql), false);
+    } else nextDesired = await readDesiredCatalog(
       schemaOnDisk,
       (path, sql) => session.execSQL(path, sql),
       (path, sql) => session.sql(path, sql),
     );
+    if (pass !== refreshPass) return;
+    desired = nextDesired;
     desiredError = null;
   } catch (err) {
+    if (pass !== refreshPass) return;
     desired = null;
     desiredError = String(err);
   }
@@ -912,7 +958,7 @@ async function paintData(): Promise<void> {
         total: table.rowCount,
         order,
         rowsBefore: catalogBefore?.tables.find((t) => t.name === selectedTable)?.rowCount ?? null,
-        status: catalogBefore === null ? "read from SQLite" : "read after the command finished",
+        status: catalogBefore === null ? `read from ${activeEngine === "postgres" ? "PostgreSQL" : "SQLite"}` : "read after the command finished",
       },
       catalogBefore,
       catalog,
@@ -1013,7 +1059,7 @@ function saveSchema(): Promise<void> {
 }
 
 async function writeSchema(): Promise<void> {
-  if (store.state.boot.stage !== "ready") return;
+  if (store.state.boot.stage !== "ready" || switching) return;
   const value = editor.text("schema");
   try {
     const revision = await session.writeFile("schema.sql", value);
@@ -1021,7 +1067,7 @@ async function writeSchema(): Promise<void> {
     editor.markSynced("schema", revision);
     editor.setFooter("schema", "SQL · desired state", `revision r${revision}`);
     await refresh();
-    await guide.refresh();
+    if (!switching) await guide.refresh();
   } catch (err) {
     store.noticed({ text: `schema.sql could not be written: ${String(err)}`, tone: "attention" });
   }
@@ -1078,7 +1124,9 @@ async function afterRun(argv: string[], code: number): Promise<void> {
 
 /** Runs the SQL tab's buffer against the database the CLI is pointed at. */
 async function runSql(sql: string): Promise<void> {
-  if (!canRun(store.state) || sql.trim() === "") return;
+  if (!canRun(store.state) || switching || sqlRunning || sql.trim() === "") return;
+  sqlRunning = true;
+  render(store.state);
   // What the statement returns is shown outside the editor, so the editor
   // gives the screen back first.
   editor.setFull(false);
@@ -1111,8 +1159,13 @@ async function runSql(sql: string): Promise<void> {
   } catch (err) {
     terminal.note(String(err), "attention");
   }
-  await refresh().catch(() => undefined);
-  await guide.refresh();
+  try {
+    await refresh().catch(() => undefined);
+    await guide.refresh();
+  } finally {
+    sqlRunning = false;
+    render(store.state);
+  }
 }
 
 /* ---------- Workspace actions ---------- */
@@ -1157,10 +1210,19 @@ async function exportWorkspace(): Promise<void> {
     if (file.isDir) continue;
     entries.push({ name: file.name, data: encoder.encode(await session.readFile(file.name)) });
   }
-  entries.push({ name: DB, data: await session.serialize(DB) });
-  entries.push({ name: "NEXT-STEPS.md", data: encoder.encode(NEXT_STEPS) });
+  const dbFile = activeEngine === "postgres" ? "postgres-data.tar.gz" : DB;
+  entries.push({ name: dbFile, data: await session.serialize(DB) });
+  entries.push({ name: "NEXT-STEPS.md", data: encoder.encode(activeEngine === "sqlite" ? NEXT_STEPS : `# PostgreSQL workspace
+
+postgres-data.tar.gz is a PGlite ${engineInfo?.packageVersion} data directory,
+created with dumpDataDir(). Restore it with PGlite.create({loadDataDir: blob}).
+It is not a SQLite file or a pg_dump SQL script.
+
+The workspace SQL files can also be used with a native PostgreSQL server.
+Replace postgres://pglite/app in commands with your server URL.
+`) });
   download("ptah-playground.zip", zip(entries), "application/zip");
-  terminal.note(`[export] ${entries.length} files, including ${DB} read straight out of SQLite`);
+  terminal.note(`[export] ${entries.length} files, including ${dbFile} read straight out of ${activeEngine === "postgres" ? "PostgreSQL" : "SQLite"}`);
 }
 
 const SQLITE_MAGIC = "SQLite format 3\0";
@@ -1209,6 +1271,28 @@ async function resetWorkspace(): Promise<void> {
   await guide.refresh();
   announce("The workspace was reset.");
 }
+
+const engineLabel = document.createElement("label");
+engineLabel.className = "pg-engine";
+engineLabel.textContent = "Database ";
+const engineSelect = document.createElement("select");
+engineSelect.id = "pg-engine";
+engineSelect.setAttribute("aria-label", "Database server");
+engineSelect.title = "Switching databases resets the current scenario";
+for (const [value, title] of [["sqlite", "SQLite"], ["postgres", "PostgreSQL"]]) {
+  const option = document.createElement("option"); option.value = value!; option.textContent = title!; engineSelect.append(option);
+}
+engineLabel.append(engineSelect);
+const engineHint = document.createElement("span");
+engineHint.className = "pg-engine-hint"; engineHint.textContent = "switching resets the scenario";
+engineLabel.append(engineHint);
+need(".pg-scenario").after(engineLabel);
+engineSelect.addEventListener("change", () => {
+  void guide.load(guide.scenario.id, engineSelect.value as DatabaseEngine).catch((err: unknown) => {
+    store.noticed({ text: String(err), tone: "attention" });
+    engineSelect.value = activeEngine;
+  });
+});
 
 /* ---------- The frame ---------- */
 
@@ -1320,7 +1404,7 @@ function renderBuild(state: State): void {
   if (info !== null && sqlite !== null) {
     showVersion(info.version);
     text(buildCommit, info.commit.slice(0, 7));
-    text(buildSqlite, `SQLite/WASM ${sqlite.version}`);
+    text(buildSqlite, activeEngine === "postgres" ? `PostgreSQL ${engineInfo?.version.match(/PostgreSQL ([\d.]+)/)?.[1] ?? ""} · PGlite ${engineInfo?.packageVersion}` : `SQLite/WASM ${sqlite.version}`);
     text(
       buildNote,
       buildMismatch
@@ -1331,8 +1415,8 @@ function renderBuild(state: State): void {
     text(
       runningLine,
       `Ptah ${info.version} (${info.commit.slice(0, 12)}), built with ${info.goVersion}, ` +
-        `${info.commands.length} commands registered. SQLite ${sqlite.version} ` +
-        `(${sqlite.sourceId.split(" ")[0]}), VFS ${sqlite.vfs.join(", ")}. ` +
+        `${info.commands.length} commands registered. ` +
+        (activeEngine === "postgres" ? `${engineInfo?.version}. ` : `SQLite ${sqlite.version}, VFS ${sqlite.vfs.join(", ")}. `) +
         `Every value on this line was read from the module running in this tab.`,
     );
     return;
@@ -1348,7 +1432,7 @@ let ticker = 0;
 
 function render(state: State): void {
   const status = statusOf(state);
-  showStatus({ glyph: status.glyph, text: status.text, tone: status.tone });
+  showStatus({ glyph: status.glyph, text: switching ? "loading database" : sqlRunning ? "running SQL" : status.text, tone: status.tone });
   guide.setStorage(
     state.workspace.dbBytes === null
       ? "memory-only"
@@ -1368,9 +1452,12 @@ function render(state: State): void {
   // Import replaces the database under whatever is reading it, so it is only
   // offered when nothing is running. Export and Reset are the same.
   const idle = canRun(state) || state.boot.stage !== "ready";
-  importBtn.disabled = !canRun(state);
-  exportBtn.disabled = !canRun(state);
-  resetBtn.disabled = !idle;
+  engineSelect.disabled = !canRun(state) || switching || sqlRunning;
+  editor.setReadOnly(switching, "Loading the selected scenario and database…");
+  importBtn.disabled = !canRun(state) || switching || sqlRunning || activeEngine !== "sqlite";
+  importBtn.title = activeEngine === "postgres" ? "SQLite file imports require the SQLite engine" : "Import a SQLite database";
+  exportBtn.disabled = !canRun(state) || switching || sqlRunning;
+  resetBtn.disabled = !idle || switching || sqlRunning;
 
   grid.dataset["pane"] = state.ui.pane;
   // Another pane asked for (a command waiting on an answer, a query's rows):

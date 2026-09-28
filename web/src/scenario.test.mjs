@@ -28,6 +28,7 @@ import { test } from "node:test";
 import {
   RunLog,
   SCENARIOS,
+  scenarioForEngine,
   applyPatch,
   evaluateCheck,
   evaluateRoute,
@@ -416,9 +417,9 @@ test("a string literal that looks like DDL is not read as DDL", () => {
 // the shipped scenarios
 // ---------------------------------------------------------------------------
 
-test("three guided scenarios ship with five steps each, then free exploration with none", () => {
-  assert.deepEqual(SCENARIOS.map((s) => s.id), ["a", "b", "c", "free"]);
-  assert.deepEqual(SCENARIOS.map((s) => s.steps.length), [5, 5, 5, 0]);
+test("four guided scenarios ship with explicit routes, then free exploration", () => {
+  assert.deepEqual(SCENARIOS.map((s) => s.id), ["a", "b", "c", "postgres-only", "free"]);
+  assert.deepEqual(SCENARIOS.map((s) => s.steps.length), [5, 5, 5, 6, 0]);
 });
 
 test("every step either has a check or says why it has none", () => {
@@ -643,4 +644,26 @@ test("B's report step is done by reading the drift as JSON while the drift is th
   // A JSON run with nothing to report exits 0 and is not reading the drift.
   const clean = await evaluateRoute(B, fakeProbe(seededWorld({ ...drifted, runs: runsFrom([DRIFT, 0], [DRIFT, 1], [DRIFT_JSON, 0]) })));
   assert.notEqual(byId(clean, "report").status, "done");
+});
+
+
+test("scenario engine presets refuse unsupported choices and adapt every command", () => {
+  const pgOnly = SCENARIOS.find(s => s.id === "postgres-only");
+  assert.equal(pgOnly.capabilities.defaultEngine,"postgres");
+  assert.throws(() => scenarioForEngine(pgOnly,"sqlite"),/requires postgres/);
+  assert.throws(() => scenarioForEngine(C,"postgres"),/requires sqlite/);
+  for (const preset of SCENARIOS.filter(s => s.capabilities.engines.includes("postgres"))) {
+    const pg = scenarioForEngine(preset,"postgres");
+    assert.equal(pg.database.url,"postgres://pglite/app");
+    assert.doesNotMatch(pg.seed,/PRAGMA/);
+    assert.doesNotMatch(JSON.stringify(pg.steps),/sqlite:\/\//);
+    assert.doesNotMatch(JSON.stringify(pg.files),/sqlite:\/\//);
+  }
+  assert.equal(A.database.url,"sqlite://app.db", "adaptation must not mutate the preset");
+});
+
+test("invalid scenario capability presets fail at load", () => {
+  const bad = structuredClone(A);
+  bad.capabilities = {engines:["sqlite"],defaultEngine:"postgres"};
+  assert.throws(() => parseScenario(bad),/capabilities/);
 });

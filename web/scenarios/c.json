@@ -2,7 +2,7 @@
   "id": "c",
   "title": "Versioned migrations",
   "description": "Write the change into migration files, hash and check them, then apply them in order.",
-  "note": "Direct apply and versioned migrations are different ways of working, not two halves of one. schema apply writes nothing into migrations/, and migrations up never reads schema.sql. A project picks one.",
+  "note": "Direct apply and versioned migrations are different ways of working, not two halves of one. schema apply writes nothing into migrations/, and migrations up never reads schema.sql. A project picks one. This browser scenario requires SQLite: PostgreSQL migrations need separate lock and execution sessions, while PGlite has one session.",
   "database": {
     "path": "app.db",
     "url": "sqlite://app.db"
@@ -214,5 +214,11 @@
   "finished": {
     "headline": "Two routes to the same desired state.",
     "caption": "schema apply changes the database now; migrations up replays a reviewed history. A project picks one, and Ptah does both."
+  },
+  "capabilities": {
+    "engines": [
+      "sqlite"
+    ],
+    "defaultEngine": "sqlite"
   }
 }

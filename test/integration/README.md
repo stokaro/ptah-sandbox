@@ -52,3 +52,10 @@ matching `session.run(...)` and `assertTranscript(...)` to `run.mjs`. A command
 that prompts needs an `answers` entry — `[[/pattern/, "text"]]`, where an empty
 text is EOF. Without one the run is canceled after 60 s and the suite fails
 rather than hanging.
+
+`node test/integration/postgres.mjs` runs every PostgreSQL-capable preset through
+real Ptah wasm and PGlite. It compares the PostgresOnly dry-run output byte for
+byte with `ground-truth/54_postgres_gin_plan.txt`. Captures 53 and 54 were made
+with native Ptah v0.10.0 (0688d16e46aa5925a1821a4c457e8b45c5b8e4dc) against
+PostgreSQL 18.6; PGlite 0.5.8 reports PostgreSQL 18.3. Scenario C explicitly
+requires SQLite because PostgreSQL migrations need multiple physical sessions.

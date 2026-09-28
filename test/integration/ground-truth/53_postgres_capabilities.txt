@@ -1,0 +1,93 @@
+$ ptah db capabilities --db-url postgres://postgres@localhost/postgres?sslmode=disable
+--- exit: 0
+--- stdout ---
+Dialect:            postgres
+Server version:     18.6
+Server product:     postgres
+Banner:             PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+Capability preset:  Postgres18 (postgres)
+Preset source:      version-ladder
+Support level:      certified
+Release line:       18
+
+certified: measured live on PostgreSQL 18.4 in capability-matrix run 32948628838: 52 rows, of which 45 agree, 6 are undecidable and one disagreed with Postgres17 -- named_not_null_constraints, which the server does and 17 does not. Postgres18 is Postgres17 plus that key, so the line now agrees on every decided row
+
+Behavior:
+  identifier_limit       63 bytes
+  enum_modeling          named-type
+  foreign_key_reference  unique
+
+Capabilities:
+  add_constraint_not_valid                supported
+  advisory_locks                          supported
+  alter_generated_column_expression       supported
+  alter_table_algorithm_lock              unsupported
+  catalog_check_constraint_table_name     unsupported
+  catalog_default_privileges              supported
+  catalog_dependencies                    supported
+  catalog_partitions                      supported
+  catalog_recursive_cte                   supported
+  catalog_row_statistics                  supported
+  catalog_trigger_definitions             supported
+  catalog_vector_info                     unsupported
+  catalog_view_dependencies               supported
+  check_constraints_enforced              supported
+  check_grant_statement                   unsupported
+  composite_types                         supported
+  constraint_comments                     supported
+  continuous_aggregates                   unsupported
+  create_index_concurrently               supported
+  create_or_replace_trigger               supported
+  ddl_inside_transaction                  supported
+  deferrable_constraints                  supported
+  deferrable_keys                         supported
+  domain_comments                         supported
+  domain_types                            supported
+  drop_check_clause                       unsupported
+  drop_constraint_generic                 supported
+  drop_constraint_if_exists               supported
+  drop_index_concurrently                 supported
+  drop_index_if_exists                    supported
+  enum_custom_type                        supported
+  enum_inline_column                      unsupported
+  extension_comments                      supported
+  foreign_key_delete_column_list          supported
+  foreign_keys                            supported
+  foreign_keys_create_backing_index       unsupported
+  foreign_keys_require_indexed_reference  unsupported
+  foreign_keys_require_unique_reference   supported
+  function_comments                       supported
+  functions                               supported
+  generated_columns                       supported
+  hypertables                             unsupported
+  index_include_spgist                    supported
+  materialized_view_comments              supported
+  materialized_views                      supported
+  migration_timeouts                      supported
+  named_not_null_constraints              supported
+  object_existence_guards                 supported
+  policy_comments                         supported
+  postgres_catalog_functions              supported
+  procedure_comments                      supported
+  procedures                              supported
+  range_types                             supported
+  rename_column_clause                    supported
+  role_management                         supported
+  row_deletion_policy                     unsupported
+  row_level_security                      supported
+  row_level_ttl                           unsupported
+  schema_comments                         supported
+  sequence_comments                       supported
+  sequence_start_counter_only             unsupported
+  sequences                               supported
+  show_routine_privilege                  unsupported
+  transactional_ddl                       supported
+  trigger_comments                        supported
+  triggers                                supported
+  type_comments                           supported
+  unique_constraints                      supported
+  unique_nulls_distinct_clause            supported
+  view_comments                           supported
+  views                                   supported
+  xml_type                                supported
+--- stderr ---

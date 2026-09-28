@@ -16,12 +16,14 @@
  * "Guided route" section at the end of it. Nothing here sets a colour.
  */
 
+import type { DatabaseEngine } from "./protocol.ts";
 import { clear, el, fill } from "./panes/dom.ts";
 import { diffView } from "./diffview.ts";
 import { diffLines, splitLines } from "./linediff.ts";
 import { anchorPopover } from "./popover.ts";
 import {
   SCENARIOS,
+  scenarioForEngine,
   describeArgv,
   evaluateRoute,
   pad,
@@ -190,16 +192,25 @@ export class Guide {
    * The route is emptied first, so nothing on screen claims to describe a
    * workspace that is being replaced underneath it.
    */
-  async load(id: string): Promise<void> {
-    const scenario = this.catalog.find((s) => s.id === id);
-    if (!scenario) throw new Error(`guide: no scenario "${id}"`);
+  async load(id: string, engine?: DatabaseEngine): Promise<void> {
+    const preset = this.catalog.find((s) => s.id === id);
+    if (!preset) throw new Error(`guide: no scenario "${id}"`);
+    const previous = this.current;
+    const scenario = scenarioForEngine(preset, engine);
     this.current = scenario;
     this.pinned = null;
     this.route = null;
     this.forgetParts();
     this.render();
-    await this.host.loadScenario(scenario);
-    await this.refresh();
+    try {
+      await this.host.loadScenario(scenario);
+      await this.refresh();
+    } catch (err) {
+      this.current = previous;
+      this.route = null;
+      this.render();
+      throw err;
+    }
   }
 
   /** The value comes from the host; the guide only draws it. */
@@ -260,11 +271,11 @@ export class Guide {
         option,
         el("span", "pg-picker-name", scenario.title),
         el("span", "pg-picker-meta", count === 0 ? "no steps" : count === 1 ? "1 step" : `${count} steps`),
-        el("span", "pg-picker-desc", scenario.description),
+        el("span", "pg-picker-desc", `${scenario.description} (${scenario.capabilities.engines.map(e => e === "postgres" ? "PostgreSQL" : "SQLite").join(" / ")})`),
       );
       option.addEventListener("click", () => {
         dialog.close();
-        if (scenario.id !== this.current.id) void this.load(scenario.id);
+        if (scenario.id !== this.current.id) void this.load(scenario.id).catch((err: unknown) => { this.next.textContent = `Could not load the scenario: ${String(err)}. Try Reset or choose another scenario.`; });
       });
       list.appendChild(fill(el("li"), option));
     }

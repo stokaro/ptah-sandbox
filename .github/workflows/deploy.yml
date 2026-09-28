@@ -61,6 +61,46 @@ jobs:
       - name: The site is publishable
         run: node web/scripts/check-site.mjs --root web --no-wasm
 
+  runtime:
+    name: Runtime and browser tests
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: .go-version
+          cache: false
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: runtime-go-${{ runner.os }}-${{ hashFiles('.go-version', 'third_party/ptah.pin', 'runtime/**') }}
+          restore-keys: |
+            runtime-go-${{ runner.os }}-
+      - run: npm ci
+        working-directory: web
+      - name: Build and test both database engines
+        run: make test
+      - name: Bundle
+        run: npm run build
+        working-directory: web
+      - name: Browser scenarios on ordinary static hosting
+        env:
+          CHROME: /usr/bin/google-chrome
+        run: |
+          python3 -m http.server 8788 --bind 127.0.0.1 --directory web >/tmp/ptah-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          node web/scripts/ui-probe-run.mjs --base http://127.0.0.1:8788/
+
   deploy:
     name: Deploy to GitHub Pages
     if: github.event_name != 'pull_request'

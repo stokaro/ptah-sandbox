@@ -150,12 +150,12 @@ export class Rail {
     catalog: Catalog,
     options: { diff?: SchemaDiff | null; addedColumns?: Set<string> } = {},
   ): void {
-    this.dbLabel.textContent = `Database · ${catalog.path}`;
+    this.dbLabel.textContent = `Database · ${catalog.engine === "postgres" ? "PostgreSQL / public" : catalog.path}`;
     clear(this.dbHost);
 
     if (catalog.tables.length === 0) {
       this.dbHost.appendChild(
-        el("p", "pgc-rail-empty", "No tables yet. The database is a real file with nothing in it."),
+        el("p", "pgc-rail-empty", "No tables yet. The selected database has no tables."),
       );
       return;
     }

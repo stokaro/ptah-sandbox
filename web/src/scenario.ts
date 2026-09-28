@@ -18,6 +18,9 @@
 import scenarioA from "../scenarios/a.json" with { type: "json" };
 import scenarioB from "../scenarios/b.json" with { type: "json" };
 import scenarioC from "../scenarios/c.json" with { type: "json" };
+import scenarioPostgres from "../scenarios/postgres-only.json" with { type: "json" };
+import type { DatabaseEngine } from "./protocol.ts";
+import { postgresTableNames, postgresIndexNames, postgresColumnNames } from "./panes/postgres-catalog.ts";
 import scenarioFree from "../scenarios/free.json" with { type: "json" };
 
 // ---------------------------------------------------------------------------
@@ -143,6 +146,8 @@ export interface Scenario {
   description: string;
   /** How this scenario differs from the others, when that needs saying. */
   note?: string;
+  capabilities: { engines: DatabaseEngine[]; defaultEngine: DatabaseEngine };
+  postgres?: { seed: string };
   database: { path: string; url: string };
   /** Written into the workspace before anything runs. */
   files: Record<string, string>;
@@ -193,6 +198,7 @@ export interface QueryResult {
 
 /** The real state, behind one small interface so the engine stays testable. */
 export interface StateProbe {
+  engine?: () => DatabaseEngine;
   /** A read-only query against the scenario's database. */
   query(sql: string): Promise<QueryResult>;
   /** A file in the workspace, or null when it is not there. */
@@ -483,7 +489,8 @@ class Pass {
 
   private catalog(type: "table" | "index"): Promise<Set<string>> {
     return this.ask(this.catalogCache, type, async () => {
-      const r = await this.probe.query(`SELECT name FROM sqlite_schema WHERE type = '${type}';`);
+      const sql = this.probe.engine?.() === 'postgres' ? (type === 'table' ? postgresTableNames : postgresIndexNames) : `SELECT name FROM sqlite_schema WHERE type = '${type}';`;
+      const r = await this.probe.query(sql);
       return new Set(r.rows.map((row) => String(row[0]).toLowerCase()));
     });
   }
@@ -498,8 +505,9 @@ class Pass {
 
   columns(table: string): Promise<string[]> {
     return this.ask(this.columnsCache, table.toLowerCase(), async () => {
-      const r = await this.probe.query(`PRAGMA table_info(${quoteIdent(table)});`);
-      return r.rows.map((row) => String(row[1]).toLowerCase());
+      const pg = this.probe.engine?.() === "postgres";
+      const r = await this.probe.query(pg ? postgresColumnNames(table) : `PRAGMA table_info(${quoteIdent(table)});`);
+      return r.rows.map((row) => String(row[pg ? 0 : 1]).toLowerCase());
     });
   }
 
@@ -979,12 +987,19 @@ export function parseScenario(value: unknown): Scenario {
   }
 
   const database = asRecord(raw["database"], `${where}.database`);
+  const caps = asRecord(raw["capabilities"], `${where}.capabilities`);
+  const engines = caps["engines"];
+  const defaultEngine = caps["defaultEngine"];
+  if (!Array.isArray(engines) || engines.length === 0 || engines.some(e => e !== "sqlite" && e !== "postgres") || !engines.includes(defaultEngine)) {
+    fail(`${where}.capabilities`, "expected supported engines and a supported defaultEngine");
+  }
   const finished = asRecord(raw["finished"], `${where}.finished`);
 
   const scenario: Scenario = {
     id,
     title: asString(raw["title"], `${where}.title`),
     description: asString(raw["description"], `${where}.description`),
+    capabilities: { engines: engines as DatabaseEngine[], defaultEngine: defaultEngine as DatabaseEngine },
     database: {
       path: asString(database["path"], `${where}.database.path`),
       url: asString(database["url"], `${where}.database.url`),
@@ -997,6 +1012,10 @@ export function parseScenario(value: unknown): Scenario {
       caption: asString(finished["caption"], `${where}.finished.caption`),
     },
   };
+  if (raw["postgres"] !== undefined) {
+    const pg = asRecord(raw["postgres"], `${where}.postgres`);
+    scenario.postgres = { seed: asString(pg["seed"], `${where}.postgres.seed`) };
+  }
   if (raw["note"] !== undefined) scenario.note = asString(raw["note"], `${where}.note`);
   if (raw["baseline"] !== undefined) {
     const baseline = asRecord(raw["baseline"], `${where}.baseline`);
@@ -1009,8 +1028,25 @@ export function parseScenario(value: unknown): Scenario {
 }
 
 /** The scenarios this build ships, parsed at load so a bad one is loud. */
-export const SCENARIOS: readonly Scenario[] = [scenarioA, scenarioB, scenarioC, scenarioFree].map(parseScenario);
+export const SCENARIOS: readonly Scenario[] = [scenarioA, scenarioB, scenarioC, scenarioPostgres, scenarioFree].map(parseScenario);
 
 export function scenarioById(id: string): Scenario | undefined {
   return SCENARIOS.find((s) => s.id === id);
+}
+
+/** Resolve a preset before loading it: commands and workspace name the engine actually used. */
+export function scenarioForEngine(scenario: Scenario, engine = scenario.capabilities.defaultEngine): Scenario {
+  if (!scenario.capabilities.engines.includes(engine)) throw new Error(`${scenario.title} requires ${scenario.capabilities.engines.join(" or ")}`);
+  if (engine === "sqlite" || scenario.database.url.startsWith("postgres:")) return scenario;
+  if (!scenario.postgres) throw new Error(`${scenario.title} has no PostgreSQL seed`);
+  const rewrite = (value: unknown): unknown => {
+    if (typeof value === "string") return value.replaceAll("sqlite://app.db", "postgres://pglite/app").replaceAll("SQLite", "PostgreSQL").replace(/^sqlite$/, "postgres");
+    if (Array.isArray(value)) return value.map(rewrite);
+    if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([k,v]) => [k, rewrite(v)]));
+    return value;
+  };
+  const adapted = rewrite(scenario) as Scenario;
+  adapted.capabilities = scenario.capabilities;
+  adapted.seed = scenario.postgres!.seed;
+  return adapted;
 }

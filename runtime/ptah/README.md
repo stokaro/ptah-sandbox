@@ -14,7 +14,7 @@ What makes that work is the pin and the two overlay trees beside it:
 | Path                   | What it holds                                     | Tracked |
 | ---------------------- | ------------------------------------------------- | ------- |
 | `third_party/ptah.pin` | The one upstream commit every build is made from  | yes     |
-| `upstream-patch/`      | Changes to files that exist upstream; empty today | yes     |
+| `upstream-patch/`      | The browser PostgreSQL driver selection hook | yes     |
 | `runtime/ptah/`        | Files that do not exist upstream and never will   | yes     |
 | `build/ptah-src/`      | The three of them, assembled                      | no      |
 
@@ -31,8 +31,9 @@ as [stokaro/ptah#3046](https://github.com/stokaro/ptah/pull/3046) -- the
 js/wasm build profile with its shared runner, and the conditional rename
 `internal/fsdurable` needs on a platform with no `renameat(2)`, without which
 every artifact publication, `ptah migrations generate` above all, failed
-closed. The directory is empty, the pin names a commit that carries them, and
-the build applies no patches at all.
+closed. The current pin carries those changes. The remaining patch selects
+`browser-postgres` for PostgreSQL on `js` and reuses the upstream reader and
+writer unchanged.
 
 Anything that would embarrass such a PR -- a browser bridge, a wasm entry
 point, a host protocol -- lives here instead, where it never has to be

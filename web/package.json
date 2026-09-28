@@ -9,17 +9,21 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "test": "npm run test:unit && npm run test:integration && npm run test:migrations",
+    "test": "npm run test:unit && npm run test:integration && npm run test:migrations && npm run test:postgres",
     "test:unit": "node --test 'src/**/*.test.mjs'",
     "test:memfs": "node src/runtime/memfs.test.mjs",
     "test:integration": "node ../test/integration/run.mjs",
     "typecheck": "tsc --noEmit",
     "test:migrations": "node ../test/integration/migrations.mjs",
     "test:ui": "node scripts/ui-probe-run.mjs",
-    "build": "node build.mjs"
+    "build": "node build.mjs",
+    "test:postgres": "node ../test/integration/postgres.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.25.12",
     "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.8"
   }
 }

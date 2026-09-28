@@ -1,7 +1,7 @@
 # ptah-sandbox
 
 The source of [play.ptah.run](https://play.ptah.run) — Ptah running in a
-browser tab. Real Ptah, compiled to WebAssembly, against a real SQLite,
+browser tab. Real Ptah, compiled to WebAssembly, against real SQLite or PostgreSQL,
 compiled to WebAssembly. No server, no account, nothing installed, and no
 recorded output.
 
@@ -17,7 +17,7 @@ does not fake anything:
 - The commands are Ptah's own Cobra commands, from a pinned upstream commit.
   The parser, planner, lint rules and migration engine are the ones in the
   release, not a JavaScript imitation of them.
-- The database is SQLite compiled to WebAssembly, reached through a
+- Both databases run as WebAssembly, reached through a
   `database/sql` driver, so Ptah's readers and writers run unchanged.
 - The exit code you see is the exit code the command returned. The confirmation
   prompt is the real prompt, reading a real stdin.
@@ -31,7 +31,7 @@ query tool, so the pane is the playground's own and is labeled as such.
 ## Layout
 
     third_party/ptah.pin  the upstream commit every build is made from
-    upstream-patch/       empty, and meant to stay that way -- see below
+    upstream-patch/       the browser PostgreSQL driver selection hook
     runtime/ptah/         new Go packages copied into Ptah's module at build time
     web/                  the playground itself, and its vendored runtime
     fixtures/             the demo workspaces
@@ -40,7 +40,7 @@ query tool, so the pane is the playground's own and is labeled as such.
 
 There is no `go.mod` here. The build materializes a copy of pinned Ptah and
 builds inside Ptah's own module, so the browser entry point and the browser
-SQLite driver are ordinary internal packages and Ptah grows no public API for
+database drivers are ordinary internal packages and Ptah grows no public API for
 the sake of a website.
 
 ## Build
@@ -174,18 +174,60 @@ To measure it yourself against anything, including `make serve`:
 
 ## Upstream
 
-The Go changes that make Ptah build for `js/wasm` belong in Ptah, not here, so
-`upstream-patch/` is empty: they landed in
-[stokaro/ptah#3046](https://github.com/stokaro/ptah/pull/3046), closing
-[#3045](https://github.com/stokaro/ptah/issues/3045), and the pin names a
-commit that carries them. The build applies no patches at all.
+The original Go changes for `js/wasm` landed in
+[stokaro/ptah#3046](https://github.com/stokaro/ptah/pull/3046). The current
+`upstream-patch/0001-browser-postgres-driver.patch` selects the browser driver
+on `js` builds and routes it to the existing PostgreSQL reader and writer.
+It changes no catalog query, capability, planner rule, or generated SQL.
+Remove this hook when upstream provides it. The browser driver and its host
+bridge live under `runtime/ptah/` and `web/src/runtime/`.
 
-If something the browser needs cannot be done from outside Ptah again, a patch
-goes back in that directory in the shape it will be proposed as, and leaves
-again when it merges. An empty directory there is the goal state, not an
-oversight, and `scripts/build-wasm.sh` treats it as one.
+## Database engines and scenario capabilities
+
+The database picker selects SQLite or PostgreSQL and resets the current
+scenario. Every scenario declares its supported engines and default engine
+in `capabilities`; choosing a scenario loads its default automatically.
+
+| Scenario | Engines | Default |
+| --- | --- | --- |
+| A: Change a schema | SQLite, PostgreSQL | SQLite |
+| B: Detect drift | SQLite, PostgreSQL | SQLite |
+| C: Versioned migrations | SQLite | SQLite |
+| PostgresOnly: JSONB and a GIN index | PostgreSQL | PostgreSQL |
+| Free exploration | SQLite, PostgreSQL | SQLite |
+
+PostgreSQL is PGlite 0.5.8, whose `SELECT version()` reports PostgreSQL 18.3.
+The package is pinned in `web/package-lock.json`. Its code and assets load
+only after PostgreSQL is selected. Both engines are memory-only: reloads
+start from the SQLite seed, and Reset creates a fresh database. Nothing is
+stored in IndexedDB. The database panes show the PostgreSQL `public` schema;
+Ptah's terminal output uses its own catalog reader.
+
+Go awaits PGlite Promises from command goroutines. Waiting yields to the
+worker's event loop; the JavaScript callback that starts a command has already
+returned. No `Atomics.wait`, `SharedArrayBuffer`, service worker, or special
+hosting headers are needed. The browser suite exercises this on an ordinary
+static HTTP server with `crossOriginIsolated === false`.
+
+PGlite has one physical SQL session. The driver refuses a second simultaneous
+connection. PostgreSQL versioned migrations need separate lock and execution
+sessions, so scenario C is SQLite-only. The engine picker disables unsupported
+choices. A remote-looking PostgreSQL URL is refused; the local URL is
+`postgres://pglite/app`.
+
+SQLite exports contain `app.db`. PostgreSQL exports contain
+`postgres-data.tar.gz`, produced by PGlite's `dumpDataDir`, with restoration
+instructions in `NEXT-STEPS.md`. This is a PGlite data directory, not a SQLite
+file or a `pg_dump` script. SQLite file import is available only on SQLite.
+
+Validation includes real PostgreSQL driver tests, all supported scenario
+variants against Ptah wasm, a byte-for-byte GIN plan comparison with native
+Ptah v0.10.0 on PostgreSQL 18.6, and browser engine-switch checks. PR CI rebuilds
+the runtime before these checks. Details and measurements are in
+[docs/postgresql.md](docs/postgresql.md).
 
 ## License
 
-MIT. The vendored SQLite build and the web fonts carry their own terms; see
+MIT. PGlite is distributed under Apache-2.0 and PostgreSQL license terms.
+The vendored SQLite build and the web fonts carry their own terms; see
 `web/vendor/sqlite/PROVENANCE.md` and `web/assets/fonts/LICENSES.md`.

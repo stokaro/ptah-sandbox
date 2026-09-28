@@ -13,9 +13,8 @@
  *   4. instantiate ptah.wasm and go.run() -- never awaited, since the program
  *      parks on select{} and only ends with the Worker.
  *
- * Everything here is synchronous once booted. sqlite3.mjs is async only to
- * initialize; after that its C API is a plain call, which is what lets Go
- * drive it through syscall/js at all.
+ * SQLite calls are synchronous. PostgreSQL calls return Promises; the Go
+ * command goroutine yields while awaiting them, so the event loop stays live.
  */
 
 import { createRuntime, type Runtime } from "./runtime/index.ts";
@@ -53,6 +52,12 @@ interface PtahGoHalf {
 let runtime: Runtime | null = null;
 let sqlite: SqliteBridge | null = null;
 let ptah: PtahGoHalf | null = null;
+let engine: "sqlite" | "postgres" = "sqlite";
+let postgres: import("./runtime/postgres-bridge.ts").PostgresBridge | null = null;
+let assetBase = "";
+let activeRunId: number | null = null;
+let operations: Promise<void> = Promise.resolve();
+function pgPath(path: string): string { return path === "app.db" ? "app" : path; }
 
 function post(event: HostEvent, transfer?: Transferable[]): void {
   if (transfer) self.postMessage(event, transfer);
@@ -135,6 +140,7 @@ function phase(name: BootPhase): void {
 }
 
 async function boot(base: string): Promise<ReadyInfo> {
+  assetBase = base;
   runtime = createRuntime({ install: true });
 
   // Go's runtime panic path calls fs.writeSync directly, bypassing Contract B
@@ -175,7 +181,16 @@ async function boot(base: string): Promise<ReadyInfo> {
     // No instantiateWasm shim here: unlike Node, the browser's fetch resolves
     // the sibling sqlite3.wasm the glue asks for.
     const bridge = await createSqliteBridge({ initModule, initArgs: { printErr: () => {} } });
-    installSqliteBridge(bridge);
+    installSqliteBridge(new Proxy(bridge, {
+      get(target, key) {
+        const method = Reflect.get(target, key);
+        if (typeof method !== "function") return method;
+        return (...args: unknown[]) => {
+          if (engine !== "sqlite") throw new Error("Select SQLite before running a command against a SQLite database");
+          return Reflect.apply(method, target, args);
+        };
+      },
+    }));
     return bridge;
   })();
 
@@ -190,7 +205,7 @@ async function boot(base: string): Promise<ReadyInfo> {
     (self as unknown as { __ptahHost: unknown }).__ptahHost = {
       stdout: (runId: number, text: string) => post({ type: "stdout", runId, text }),
       stderr: (runId: number, text: string) => post({ type: "stderr", runId, text }),
-      done: (runId: number, code: number) => post({ type: "done", runId, code }),
+      done: (runId: number, code: number) => { if (activeRunId === runId) activeRunId = null; post({ type: "done", runId, code }); },
       ready: (info: ReadyInfo) => resolve(info),
       panic: (message: string) => post({ type: "panic", message }),
       truncated: (runId: number, limitBytes: number) =>
@@ -217,10 +232,32 @@ async function boot(base: string): Promise<ReadyInfo> {
 
 self.onerror = (e) => { post({ type: "fatal", message: `worker onerror: ${String(e)}` }); };
 
-self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
-  const msg = event.data;
+self.onmessage = (event: MessageEvent<WorkerRequest>) => {
+  // stdin/cancel must pass a command waiting on a Promise or a prompt.
+  if (event.data.type === "stdin" || event.data.type === "cancel") {
+    void dispatch(event.data);
+  } else {
+    operations = operations.then(() => dispatch(event.data));
+  }
+};
+
+async function dispatch(msg: WorkerRequest): Promise<void> {
   try {
+    if (activeRunId !== null && !["run", "stdin", "cancel", "readFile", "writeFile", "listFiles"].includes(msg.type)) {
+      throw new Error("Wait for the running command before changing the workspace or querying the database");
+    }
     switch (msg.type) {
+      case "engine": {
+        if (msg.engine === "postgres" && !postgres) {
+          const { createPostgresBridge } = await import("./runtime/postgres-bridge.ts");
+          postgres = await createPostgresBridge(assetBase);
+        }
+        engine = msg.engine;
+        (self as unknown as { __postgres: unknown }).__postgres = engine === "postgres" ? postgres : undefined;
+        const info = engine === "postgres" ? await postgres!.info() : { engine, version: sqlite!.info().version };
+        post({ type: "engine", id: msg.id, info });
+        return;
+      }
       case "init": {
         const info = await boot(msg.base);
         post({ type: "ready", info, sqlite: sqlite!.info() });
@@ -228,6 +265,7 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
       }
       case "run": {
         if (!ptah) throw new Error("worker: not initialized");
+        activeRunId ??= msg.runId;
         ptah.start(msg.runId, msg.argv);
         return;
       }
@@ -260,11 +298,16 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
         return;
       }
       case "sql": {
-        const rows = querySQL(msg.path, msg.sql);
+        const rows = engine === "postgres" ? await postgres!.sql(pgPath(msg.path), msg.sql) : querySQL(msg.path, msg.sql);
         post({ type: "sql", id: msg.id, rows });
         return;
       }
       case "execSQL": {
+        if (engine === "postgres") {
+          await postgres!.exec(pgPath(msg.path), msg.sql);
+          post({ type: "sqlDone", id: msg.id });
+          return;
+        }
         const handle = sqlite!.open(msg.path);
         try {
           sqlite!.exec(handle, msg.sql);
@@ -277,17 +320,19 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
       case "serialize": {
         // sqlite3_js_db_export hands back a detached copy, so the buffer can be
         // transferred rather than cloned; nothing in the wasm heap aliases it.
-        const bytes = sqlite!.serialize(msg.path);
+        const bytes = engine === "postgres" ? await postgres!.serialize(pgPath(msg.path)) : sqlite!.serialize(msg.path);
         post({ type: "serialized", id: msg.id, bytes }, [bytes.buffer]);
         return;
       }
       case "deserialize": {
+        if (engine !== "sqlite") throw new Error("SQLite imports require the SQLite engine");
         sqlite!.deserialize(msg.path, msg.bytes);
         post({ type: "deserialized", id: msg.id });
         return;
       }
       case "dropDB": {
-        sqlite!.drop(msg.path);
+        if (engine === "postgres") await postgres!.drop(pgPath(msg.path));
+        else sqlite!.drop(msg.path);
         post({ type: "dropped", id: msg.id });
         return;
       }

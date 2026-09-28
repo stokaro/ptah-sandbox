@@ -3,6 +3,7 @@
 package main
 
 import (
+	_ "ptah.run/internal/browserpostgres"
 	"ptah.run/internal/browsersqlite"
 	"ptah.run/internal/dbschema/sqlite"
 )
