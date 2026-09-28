@@ -629,6 +629,61 @@ button.pgc-ed-num:focus-visible {
   min-width: 0;
   min-height: 0;
 }
+.pgc-panes > .pgc-tabbar { gap: 6px; padding-right: 8px; }
+
+/* Full records and result panels use native dialogs above the workspace. */
+.pgc-overlay {
+  padding: 0;
+  width: min(760px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 32px);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--fg);
+  background: var(--bg);
+  margin: auto;
+}
+.pgc-overlay[open] { display: flex; flex-direction: column; }
+.pgc-overlay::backdrop { background: rgb(0 0 0 / 45%); }
+.pgc-overlay-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+.pgc-overlay-title { font: 500 18px var(--sans); margin: 0; overflow-wrap: anywhere; }
+.pgc-overlay-body { padding: 20px; min-height: 0; overflow: auto; }
+.pgc-overlay-close[hidden], .pgc-expand[hidden] { display: none; }
+.pgc-record-fields { display: grid; grid-template-columns: minmax(90px, 24%) minmax(0, 1fr); margin: 0; }
+.pgc-record-fields dt, .pgc-record-fields dd { margin: 0; padding: 12px 0; border-bottom: 1px solid var(--line2); overflow-wrap: anywhere; }
+.pgc-record-fields dt { padding-right: 20px; color: var(--mute); font: 500 13px var(--mono); }
+.pgc-record-value { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.65 var(--mono); }
+.pgc-record-kind { display: block; color: var(--mute); font: 12px/1.65 var(--mono); }
+.pgc-data-row { cursor: pointer; }
+@media (hover: hover) and (pointer: fine) {
+  .pgc-data-row:hover { background: var(--pgc-sel); }
+}
+.pgc-data-row:focus-visible { outline: 2px solid var(--acc); outline-offset: -2px; background: var(--pgc-sel); }
+.pgc-expand { flex: none; background: none; color: var(--mute); border: 1px solid var(--line); border-radius: 2px; width: 32px; height: 32px; cursor: pointer; font-size: 21px; }
+.pgc-expand:hover, .pgc-expand:focus-visible { color: var(--acc); border-color: var(--acc); }
+.pgc-results-overlay { width: calc(100vw - 32px); height: calc(100dvh - 32px); }
+.pgc-results-overlay > .pgc-overlay-body { flex: 1; display: flex; padding: 0; overflow: hidden; }
+.pgc-results-overlay .pgc-expanded { display: grid; width: 100%; height: 100%; border: 0; grid-template-rows: auto minmax(0, 1fr); }
+.pgc-results-overlay .pgc-expanded .pgc-tab-workspace { display: none; }
+@media (max-width: 600px) {
+  .pgc-panes .pgc-tab { padding-inline: 10px; font-size: 12.5px; }
+  .pgc-overlay { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); }
+  .pgc-overlay-head { padding: 12px; }
+  .pgc-overlay-body { padding: 12px; }
+  .pgc-record-fields { grid-template-columns: minmax(0, 1fr); }
+  .pgc-record-fields dt { border: 0; padding-bottom: 0; }
+  .pgc-results-overlay { height: calc(100dvh - 16px); }
+  .pgc-results-overlay .pgc-pane-head { align-items: start; flex-direction: column; gap: 6px; }
+  .pgc-results-overlay .pgc-pane-status-line { white-space: normal; }
+}
 
 .pgc-pane {
   /* All three share one grid row, so switching tabs cannot change the height

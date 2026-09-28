@@ -12,6 +12,7 @@ import { el } from "./dom.ts";
 import { DataPane } from "./data.ts";
 import { PlanPane } from "./plan.ts";
 import { StructurePane } from "./structure.ts";
+import { createOverlay } from "./overlay.ts";
 
 export * from "./catalog.ts";
 export * from "./data.ts";
@@ -81,6 +82,28 @@ export class ResultPanes {
       structure: this.makeTab(list, "structure"),
       plan: this.makeTab(list, "plan"),
     };
+
+    const expand = el("button", "pgc-expand", "⤢");
+    expand.type = "button";
+    expand.title = "Expand results";
+    expand.setAttribute("aria-label", "Expand results");
+    expand.setAttribute("aria-haspopup", "dialog");
+    host.querySelector(".pgc-tabbar")!.appendChild(expand);
+    const placeholder = document.createComment("results panel");
+    const overlay = createOverlay("Results", "pgc-results-overlay", () => {
+      placeholder.replaceWith(host);
+      host.classList.remove("pgc-expanded");
+      expand.hidden = false;
+      expand.focus();
+    });
+    expand.addEventListener("click", () => {
+      if (this.current === "workspace") this.show("data");
+      host.replaceWith(placeholder);
+      overlay.body.appendChild(host);
+      host.classList.add("pgc-expanded");
+      expand.hidden = true;
+      overlay.open();
+    });
 
     this.data = new DataPane(this.bodies.data);
     this.structure = new StructurePane(this.bodies.structure);

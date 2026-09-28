@@ -39,6 +39,7 @@ import { Editor } from "./editor.ts";
 import { Guide, type GuideHost, type StatusPill } from "./guide.ts";
 import { Loader } from "./loader.ts";
 import { Tour } from "./tour.ts";
+import { DatabasePicker, engineFromURL } from "./database-picker.ts";
 import {
   ResultPanes,
   columnsAddedBetween,
@@ -87,6 +88,13 @@ let sqlRunning = false;
 let scenarioEpoch = 0;
 let DB_URL = `sqlite://${DB}`;
 const WORKSPACE = "/workspace";
+const ENGINE_KEY = "ptah-play-engine";
+const linkedEngine = engineFromURL(window.location.href);
+let savedEngine: DatabaseEngine | null = null;
+try {
+  const saved = localStorage.getItem(ENGINE_KEY);
+  if (saved === "sqlite" || saved === "postgres") savedEngine = saved;
+} catch { /* Storage may be unavailable; the URL still works. */ }
 
 /* ---------- DOM helpers ---------- */
 
@@ -220,6 +228,7 @@ let selectedTable: string | null = null;
 let showingQuery = false;
 /** Every finished command, for the route's `ran` checks. argv and code only. */
 const runLog = new RunLog();
+const sqlRuns: { sql: string; succeeded: boolean }[] = [];
 
 function planOrigin(): PlanOrigin {
   return { revision: editor.bufferRevision("schema"), catalogAt: catalog?.readAt ?? 0 };
@@ -368,9 +377,8 @@ function terminalHost(): TerminalHost {
 /**
  * What the route is scored against.
  *
- * Deliberately four methods and no fifth: `query`, `readFile`, `listFiles` and
- * the run log. There is no way to reach stdout from here, so a check cannot be
- * written that greps the transcript for a word.
+ * Checks read the workspace, catalog, and completed command/SQL records.
+ * They cannot reach stdout or search the terminal transcript.
  */
 /**
  * A path that is not there is an answer, not a failure.
@@ -407,6 +415,7 @@ const probe: StateProbe = {
       },
     ),
   runs: (): readonly RunRecord[] => runLog.all(),
+  sqlRuns: () => sqlRuns,
 };
 
 function guideHost(): GuideHost {
@@ -664,7 +673,7 @@ async function boot(): Promise<void> {
   try { sessionStorage.removeItem(STALE_KEY); } catch { /* storage refused */ }
 
   store.bootProgress("seeding", 0, 0);
-  await loadScenario(guide.scenario);
+  await guide.load(guide.scenario.id, linkedEngine ?? savedEngine ?? "sqlite");
 
   store.bootReady();
   loader.done(`ptah ${info.version} · sqlite ${sqlite.version}`);
@@ -727,8 +736,8 @@ async function seedScenario(scenario: Scenario): Promise<void> {
   activeEngine = target;
   DB_URL = scenario.database.url;
   panes.setSource(activeEngine === "postgres" ? `${DB_URL} · public schema` : DB_URL);
-  engineSelect.value = activeEngine;
-  for (const option of engineSelect.options) option.disabled = !scenario.capabilities.engines.includes(option.value as DatabaseEngine);
+  editor.setFooter("sql", `SQL · executes in ${DB_URL}`);
+  databasePicker.update(activeEngine, scenario.capabilities.engines);
   store.scenarioSelected(scenario.id);
   // Directories are removed too, and `remove` is recursive. Skipping them left
   // one scenario's migrations/ in the next scenario's workspace: Reset says
@@ -747,6 +756,7 @@ async function seedScenario(scenario: Scenario): Promise<void> {
   // The route's `ran` checks read the log. Leaving it would tick steps done
   // against commands that ran before this workspace existed.
   runLog.clear();
+  sqlRuns.length = 0;
   catalog = null;
   catalogBefore = null;
   selectedTable = null;
@@ -1125,6 +1135,7 @@ async function afterRun(argv: string[], code: number): Promise<void> {
 /** Runs the SQL tab's buffer against the database the CLI is pointed at. */
 async function runSql(sql: string): Promise<void> {
   if (!canRun(store.state) || switching || sqlRunning || sql.trim() === "") return;
+  const epoch = scenarioEpoch;
   sqlRunning = true;
   render(store.state);
   // What the statement returns is shown outside the editor, so the editor
@@ -1136,6 +1147,7 @@ async function runSql(sql: string): Promise<void> {
   const started = performance.now();
   try {
     const result = await session.sql(DB, sql);
+    if (epoch === scenarioEpoch) sqlRuns.push({ sql, succeeded: true });
     terminal.note(
       `  → ${result.rows.length} ${result.rows.length === 1 ? "row" : "rows"} · ` +
         `${Math.round(performance.now() - started)} ms`,
@@ -1157,14 +1169,17 @@ async function runSql(sql: string): Promise<void> {
       store.paneSelected("database");
     }
   } catch (err) {
+    if (epoch === scenarioEpoch) sqlRuns.push({ sql, succeeded: false });
     terminal.note(String(err), "attention");
   }
   try {
     await refresh().catch(() => undefined);
-    await guide.refresh();
   } finally {
     sqlRunning = false;
     render(store.state);
+    // The guide reads busy() while painting its next action. Release the SQL
+    // operation first, or the final render leaves its Run button on Waiting.
+    await guide.refresh();
   }
 }
 
@@ -1272,27 +1287,18 @@ async function resetWorkspace(): Promise<void> {
   announce("The workspace was reset.");
 }
 
-const engineLabel = document.createElement("label");
-engineLabel.className = "pg-engine";
-engineLabel.textContent = "Database ";
-const engineSelect = document.createElement("select");
-engineSelect.id = "pg-engine";
-engineSelect.setAttribute("aria-label", "Database server");
-engineSelect.title = "Switching databases resets the current scenario";
-for (const [value, title] of [["sqlite", "SQLite"], ["postgres", "PostgreSQL"]]) {
-  const option = document.createElement("option"); option.value = value!; option.textContent = title!; engineSelect.append(option);
-}
-engineLabel.append(engineSelect);
-const engineHint = document.createElement("span");
-engineHint.className = "pg-engine-hint"; engineHint.textContent = "switching resets the scenario";
-engineLabel.append(engineHint);
-need(".pg-scenario").after(engineLabel);
-engineSelect.addEventListener("change", () => {
-  void guide.load(guide.scenario.id, engineSelect.value as DatabaseEngine).catch((err: unknown) => {
+const databasePicker = new DatabasePicker(engine => {
+  const remember = (): void => {
+    try { localStorage.setItem(ENGINE_KEY, engine); } catch { /* The choice still works for this tab. */ }
+    savedEngine = engine;
+  };
+  if (activeEngine === engine) { remember(); return; }
+  void guide.load(guide.scenario.id, engine).then(remember).catch((err: unknown) => {
     store.noticed({ text: String(err), tone: "attention" });
-    engineSelect.value = activeEngine;
+    databasePicker.update(activeEngine, guide.scenario.capabilities.engines);
   });
 });
+need(".pg-scenario").after(databasePicker.element);
 
 /* ---------- The frame ---------- */
 
@@ -1452,10 +1458,12 @@ function render(state: State): void {
   // Import replaces the database under whatever is reading it, so it is only
   // offered when nothing is running. Export and Reset are the same.
   const idle = canRun(state) || state.boot.stage !== "ready";
-  engineSelect.disabled = !canRun(state) || switching || sqlRunning;
+  databasePicker.button.disabled = !canRun(state) || switching || sqlRunning;
   editor.setReadOnly(switching, "Loading the selected scenario and database…");
   importBtn.disabled = !canRun(state) || switching || sqlRunning || activeEngine !== "sqlite";
-  importBtn.title = activeEngine === "postgres" ? "SQLite file imports require the SQLite engine" : "Import a SQLite database";
+  importBtn.hidden = activeEngine === "postgres";
+  need<HTMLButtonElement>("#pg-import-help").hidden = activeEngine === "postgres";
+  if (activeEngine === "postgres") need<HTMLElement>("#pg-import-help-pop").hidePopover();
   exportBtn.disabled = !canRun(state) || switching || sqlRunning;
   resetBtn.disabled = !idle || switching || sqlRunning;
 
@@ -1602,10 +1610,16 @@ render(store.state);
 // before the runtime exists -- so it opens now rather than waiting for boot.
 // It is offered after `render`, because the rail and the panes have to hold
 // their real size before anything measures them.
-const tour = new Tour();
+let choiceScheduled = false;
+const offerEngineChoice = (): void => {
+  if (linkedEngine !== null || savedEngine !== null || choiceScheduled) return;
+  choiceScheduled = true;
+  void booted.then(() => databasePicker.requireChoice(), () => undefined);
+};
+const tour = new Tour(offerEngineChoice);
 tour.mount();
 document.getElementById("pg-tour-open")?.addEventListener("click", () => tour.start());
-requestAnimationFrame(() => tour.offerFirstVisit());
+requestAnimationFrame(() => { if (!tour.offerFirstVisit()) offerEngineChoice(); });
 
 // Running is the only thing that waits for the runtime. Everything above this
 // line has already drawn.

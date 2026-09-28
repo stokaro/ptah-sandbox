@@ -1,7 +1,7 @@
 /** Real PostgreSQL. Every database is ephemeral and confined to this worker. */
 import { PGlite } from "@electric-sql/pglite";
 
-export const PGLITE_VERSION = "0.5.8";
+import { PGLITE_VERSION } from "./engine-versions.ts";
 
 export async function createPostgresBridge(base?: string) {
   const assets = base === undefined ? {} : await (async () => {

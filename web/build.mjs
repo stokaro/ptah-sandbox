@@ -79,7 +79,7 @@ if (inline === null) {
 }
 
 const pgliteVersion = JSON.parse(readFileSync("node_modules/@electric-sql/pglite/package.json", "utf8")).version;
-const bridgeVersion = /export const PGLITE_VERSION = "([^"]+)"/.exec(readFileSync("src/runtime/postgres-bridge.ts", "utf8"))?.[1];
+const bridgeVersion = /export const PGLITE_VERSION = "([^"]+)"/.exec(readFileSync("src/runtime/engine-versions.ts", "utf8"))?.[1];
 if (bridgeVersion !== pgliteVersion) {
   problems.push(`PGlite package ${pgliteVersion} does not match the bridge asset path ${bridgeVersion}; update and verify the PostgreSQL runtime together.`);
 }

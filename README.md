@@ -187,19 +187,29 @@ bridge live under `runtime/ptah/` and `web/src/runtime/`.
 The database picker selects SQLite or PostgreSQL and resets the current
 scenario. Every scenario declares its supported engines and default engine
 in `capabilities`; choosing a scenario loads its default automatically.
+The picker opens a dialog with the database and runtime versions before loading
+them. On a first visit, finishing or skipping the tour requires a database
+choice. The explicit choice is remembered in this browser.
+
+Targeted links override that preference and skip the required choice:
+
+- [Open PostgreSQL](https://play.ptah.run/?engine=postgres)
+- [Open SQLite](https://play.ptah.run/?engine=sqlite)
+
+Unknown `engine` values are treated as unspecified. Tour highlights the picker.
 
 | Scenario | Engines | Default |
 | --- | --- | --- |
 | A: Change a schema | SQLite, PostgreSQL | SQLite |
 | B: Detect drift | SQLite, PostgreSQL | SQLite |
 | C: Versioned migrations | SQLite | SQLite |
-| PostgresOnly: JSONB and a GIN index | PostgreSQL | PostgreSQL |
+| JSONB and a GIN index | PostgreSQL | PostgreSQL |
 | Free exploration | SQLite, PostgreSQL | SQLite |
 
 PostgreSQL is PGlite 0.5.8, whose `SELECT version()` reports PostgreSQL 18.3.
 The package is pinned in `web/package-lock.json`. Its code and assets load
 only after PostgreSQL is selected. Both engines are memory-only: reloads
-start from the SQLite seed, and Reset creates a fresh database. Nothing is
+start from a fresh seed for the linked or remembered engine, and Reset creates a fresh database. Nothing is
 stored in IndexedDB. The database panes show the PostgreSQL `public` schema;
 Ptah's terminal output uses its own catalog reader.
 
@@ -219,6 +229,16 @@ SQLite exports contain `app.db`. PostgreSQL exports contain
 `postgres-data.tar.gz`, produced by PGlite's `dumpDataDir`, with restoration
 instructions in `NEXT-STEPS.md`. This is a PGlite data directory, not a SQLite
 file or a `pg_dump` script. SQLite file import is available only on SQLite.
+Its button and help hint are hidden while PostgreSQL is selected.
+
+Every guided scenario has five steps. The JSONB scenario checks a successful
+SQL-pane query, then groups Apply and Verify as two parts of its final step.
+SQL errors leave the query step incomplete and release the next-command button.
+
+Click a Data row (or focus it and press Enter) to inspect every field without
+cell truncation. The expand button opens the entire Data / Structure / Plan
+panel as a dialog. Close or Escape returns to the workspace without losing
+the selected tab or query result.
 
 Validation includes real PostgreSQL driver tests, all supported scenario
 variants against Ptah wasm, a byte-for-byte GIN plan comparison with native

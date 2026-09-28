@@ -4,6 +4,7 @@ import process from "node:process";
 import {readFileSync} from "node:fs";
 import { boot } from "./harness.mjs";
 import { createPostgresBridge } from "../../web/src/runtime/postgres-bridge.ts";
+import { PGLITE_VERSION, POSTGRES_VERSION } from "../../web/src/runtime/engine-versions.ts";
 import { SCENARIOS, scenarioForEngine, applyPatch, evaluateRoute } from "../../web/src/scenario.ts";
 import { readPostgresCatalog } from "../../web/src/panes/postgres-catalog.ts";
 
@@ -20,7 +21,9 @@ async function run(argv, code = 0, answers = []) {
 }
 try {
  assert.equal(session.ready.version, "v0.10.0");
- assert.match((await postgres.info()).version, /PostgreSQL 18\.3/);
+ const info = await postgres.info();
+ assert.equal(info.version.split(" ")[1], POSTGRES_VERSION, "the picker must describe the PostgreSQL build that ships");
+ assert.equal(info.packageVersion, PGLITE_VERSION);
  const url = "postgres://pglite/app";
  for (const preset of SCENARIOS.filter(s => s.capabilities.engines.includes("postgres"))) {
   const scenario = scenarioForEngine(preset, "postgres");
@@ -66,6 +69,7 @@ try {
    readFile:async path=>{try{return session.workspace.readText(path)}catch{return null}},
    listFiles:async path=>{try{return session.workspace.list(path).map(f=>f.name)}catch{return []}},
    runs:()=>[],
+   sqlRuns:()=>[],
   });
   assert.equal(route.unavailable,null);
  }

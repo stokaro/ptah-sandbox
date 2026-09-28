@@ -64,6 +64,12 @@ const STEPS: readonly StepSpec[] = [
     prefer: ["below", "right"],
   },
   {
+    targets: ["#pg-engine"],
+    title: "Choose a database engine",
+    body: "Open this picker to see the SQLite and PostgreSQL versions and the runtime each uses. Switching databases resets the scenario. Some scenarios require a specific engine.",
+    prefer: ["below", "right"],
+  },
+  {
     // Only up to 900px, where the actions fold into a menu; wider, the row
     // is in plain sight and this step has no target.
     targets: ["#pg-more"],
@@ -85,7 +91,7 @@ const STEPS: readonly StepSpec[] = [
     targets: ["#pg-rail"],
     title: "What the database actually has",
     body:
-      "The workspace files, and below them the tables read back out of SQLite " +
+      "The workspace files, and below them the tables read back out of the selected database " +
       "after each command. This side is measured, not assumed.",
     prefer: ["right", "below"],
   },
@@ -115,7 +121,7 @@ const STEPS: readonly StepSpec[] = [
   },
   {
     targets: ["#pg-steps"],
-    title: "Five steps, if you want them",
+    title: "Guided steps, if you want them",
     body:
       "A step ticks when the state actually changed — the column is in the catalog — " +
       "never because you pressed something. Going off the route is fine.",
@@ -264,6 +270,7 @@ function focusable(root: HTMLElement): HTMLElement[] {
 }
 
 export class Tour {
+  private readonly onClose: (() => void) | undefined;
   private readonly root: HTMLElement;
   private readonly scrim: readonly HTMLElement[];
   private readonly ring: HTMLElement;
@@ -302,7 +309,8 @@ export class Tour {
     if (this.open) this.place();
   });
 
-  constructor() {
+  constructor(onClose?: () => void) {
+    this.onClose = onClose;
     // Four rectangles rather than one big `box-shadow` spread: the design has
     // no shadows in it, and four rects also leave the cut-out genuinely
     // transparent instead of tinted.
@@ -350,9 +358,10 @@ export class Tour {
   }
 
   /** Opens the tour if this browser has not been shown it before. */
-  offerFirstVisit(): void {
-    if (seen()) return;
+  offerFirstVisit(): boolean {
+    if (seen()) return false;
     this.start();
+    return true;
   }
 
   /** Opens the tour unconditionally. The Tour button calls this. */
@@ -387,6 +396,7 @@ export class Tour {
     this.resizes.disconnect();
     this.restore?.focus();
     this.restore = null;
+    this.onClose?.();
   }
 
   private go(to: number): void {

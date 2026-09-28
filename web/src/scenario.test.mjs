@@ -45,6 +45,38 @@ const A = scenarioById("a");
 const B = scenarioById("b");
 const C = scenarioById("c");
 
+test("the JSONB step needs its own successfully completed SQL submission", async () => {
+  const scenario = scenarioById("postgres-only");
+  const step = scenario.steps[1];
+  assert.equal(scenario.steps.length, 5);
+  assert.equal(step.check.kind, "sql-ran");
+  assert.equal(step.check.sql, step.action.sql);
+  const sqlRuns = [];
+  const probe = fakeProbe({ sqlRuns });
+  assert.equal((await evaluateCheck(step.check, probe)).ok, false);
+  sqlRuns.push({ sql: "SELECT 1;", succeeded: true });
+  sqlRuns.push({ sql: step.action.sql, succeeded: false });
+  assert.equal((await evaluateCheck(step.check, probe)).ok, false);
+  sqlRuns.push({ sql: step.action.sql, succeeded: true });
+  assert.equal((await evaluateCheck(step.check, probe)).ok, true);
+  sqlRuns.length = 0;
+  assert.equal((await evaluateCheck(step.check, probe)).ok, false, "reset must forget the query");
+});
+
+test("SQL completion matching does not normalize the contents of string literals", async () => {
+  const probe = fakeProbe({ sqlRuns: [{ sql: "SELECT 'a  b';", succeeded: true }] });
+  assert.equal((await evaluateCheck({ kind: "sql-ran", sql: "SELECT 'a b';" }, probe)).ok, false);
+  assert.equal((await evaluateCheck({ kind: "sql-ran", sql: " SELECT 'a  b' " }, probe)).ok, true);
+});
+
+test("PostgreSQL's final step requires drift after an applied change", async () => {
+  const step = scenarioById("postgres-only").steps[4];
+  assert.equal(step.also.length, 1);
+  const drift = step.check.of.find(check => check.kind === "ran");
+  assert.equal((await evaluateCheck(drift, fakeProbe({ runs: runsFrom([DRIFT, 0], [APPLY, 0]) }))).ok, false);
+  assert.equal((await evaluateCheck(drift, fakeProbe({ runs: runsFrom([APPLY, 0], [DRIFT, 0]) }))).ok, true);
+});
+
 // ---------------------------------------------------------------------------
 // a probe over plain objects: a catalog, a workspace, a run log
 // ---------------------------------------------------------------------------
@@ -94,6 +126,7 @@ function fakeProbe(world) {
         .map((p) => p.slice(prefix.length));
     },
     runs: () => runs,
+    sqlRuns: () => world.sqlRuns ?? [],
   };
 }
 
@@ -419,7 +452,7 @@ test("a string literal that looks like DDL is not read as DDL", () => {
 
 test("four guided scenarios ship with explicit routes, then free exploration", () => {
   assert.deepEqual(SCENARIOS.map((s) => s.id), ["a", "b", "c", "postgres-only", "free"]);
-  assert.deepEqual(SCENARIOS.map((s) => s.steps.length), [5, 5, 5, 6, 0]);
+  assert.deepEqual(SCENARIOS.map((s) => s.steps.length), [5, 5, 5, 5, 0]);
 });
 
 test("every step either has a check or says why it has none", () => {
