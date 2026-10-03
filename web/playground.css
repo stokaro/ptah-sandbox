@@ -1613,11 +1613,11 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .pg-picker,
-  .pg-engine-overlay,
+  .pgc-overlay,
   .pg-about,
   .pg-leave,
   .pg-picker::backdrop,
-  .pg-engine-overlay::backdrop,
+  .pgc-overlay::backdrop,
   .pg-about::backdrop,
   .pg-leave::backdrop {
     transition:
@@ -1628,7 +1628,7 @@
   }
 
   .pg-picker,
-  .pg-engine-overlay,
+  .pgc-overlay,
   .pg-about,
   .pg-leave {
     opacity: 0;
@@ -1636,7 +1636,7 @@
   }
 
   .pg-picker[open],
-  .pg-engine-overlay[open],
+  .pgc-overlay[open],
   .pg-about[open],
   .pg-leave[open] {
     opacity: 1;
@@ -1644,7 +1644,7 @@
   }
 
   .pg-picker::backdrop,
-  .pg-engine-overlay::backdrop,
+  .pgc-overlay::backdrop,
   .pg-about::backdrop,
   .pg-leave::backdrop {
     opacity: 0;
@@ -1656,13 +1656,13 @@
     opacity: 0.82;
   }
 
-  .pg-engine-overlay[open]::backdrop {
+  .pgc-overlay[open]::backdrop {
     opacity: 1;
   }
 
   @starting-style {
     .pg-picker[open],
-    .pg-engine-overlay[open],
+    .pgc-overlay[open],
     .pg-about[open],
     .pg-leave[open] {
       opacity: 0;
@@ -1670,7 +1670,7 @@
     }
 
     .pg-picker[open]::backdrop,
-    .pg-engine-overlay[open]::backdrop,
+    .pgc-overlay[open]::backdrop,
     .pg-about[open]::backdrop,
     .pg-leave[open]::backdrop {
       opacity: 0;

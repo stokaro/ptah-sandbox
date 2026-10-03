@@ -249,8 +249,11 @@ async function dispatch(msg: WorkerRequest): Promise<void> {
     switch (msg.type) {
       case "engine": {
         if (msg.engine === "postgres" && !postgres) {
+          post({ type: "engineProgress", phase: "downloading PostgreSQL", loaded: 0, total: 0 });
           const { createPostgresBridge } = await import("./runtime/postgres-bridge.ts");
-          postgres = await createPostgresBridge(assetBase);
+          postgres = await createPostgresBridge(assetBase, (phase, loaded, total) => {
+            post({ type: "engineProgress", phase, loaded, total });
+          });
         }
         engine = msg.engine;
         (self as unknown as { __postgres: unknown }).__postgres = engine === "postgres" ? postgres : undefined;

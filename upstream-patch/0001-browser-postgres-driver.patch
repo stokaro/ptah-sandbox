@@ -4,11 +4,12 @@
  	"io"
  	"log/slog"
  	"net/url"
+-	"strconv"
 +	"runtime"
++	"strconv"
  	"strings"
  
- 	_ "github.com/jackc/pgx/v5/stdlib"                   // PostgreSQL driver
-@@ -162,7 +163,7 @@
+@@ -163,7 +164,7 @@
  	var newReader schemaReaderFactory
  	var newWriter schemaWriterFactory
  	switch dialectProtocol {
@@ -17,7 +18,7 @@
  		newReader = func(runner sqlrunner.Runner) catalog.SchemaReader {
  			return postgres.NewPostgreSQLWireReaderWithCapabilities(
  				runner,
-@@ -490,6 +491,9 @@
+@@ -491,6 +492,9 @@
  func databaseDriverConfig(dialect, dbURL string) (driverName, dataSourceName string) {
  	switch dialect {
  	case platform.Postgres, platform.CockroachDB, platform.YugabyteDB, platform.Spanner:

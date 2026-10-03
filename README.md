@@ -208,7 +208,9 @@ Unknown `engine` values are treated as unspecified. Tour highlights the picker.
 
 PostgreSQL is PGlite 0.5.8, whose `SELECT version()` reports PostgreSQL 18.3.
 The package is pinned in `web/package-lock.json`. Its code and assets load
-only after PostgreSQL is selected. Both engines are memory-only: reloads
+only after PostgreSQL is selected. The loading bar counts decoded bytes across
+the PostgreSQL assets against their bundled size manifest, then shows compilation
+and initialization until the scenario is ready. Both engines are memory-only: reloads
 start from a fresh seed for the linked or remembered engine, and Reset creates a fresh database. Nothing is
 stored in IndexedDB. The database panes show the PostgreSQL `public` schema;
 Ptah's terminal output uses its own catalog reader.

@@ -1,9 +1,9 @@
 {
-  "ptahVersion": "v0.10.0",
-  "ptahCommit": "0688d16e46aa5925a1821a4c457e8b45c5b8e4dc",
-  "ptahCommitDate": "2026-09-27T19:54:34+02:00",
+  "ptahVersion": "v0.12.0",
+  "ptahCommit": "a38061fe1aa60269fe8726fb905403fd787aac3b",
+  "ptahCommitDate": "2026-10-02T19:40:17+02:00",
   "goVersion": "go1.27.1",
-  "builtAt": "2026-09-28T04:09:31Z",
+  "builtAt": "2026-10-03T11:52:25Z",
   "wasmExec": {
     "file": "wasm_exec.js",
     "sha256": "0c949f4996f9a89698e4b5c586de32249c3b69b7baadb64d220073cc04acba14",
@@ -11,9 +11,9 @@
   },
   "wasm": {
     "file": "ptah.wasm",
-    "sha256": "d26a0394a2f5e8cb28dfbc2a0de5d1c0a87a11e9d728d0ce5dfad6d465615b66",
-    "bytes": 129223698,
-    "gzipBytes": 23969875
+    "sha256": "c1e05e329d753108b09a4ce76af1513746f6b5e2373ddf27f1b2b75212d3bb66",
+    "bytes": 130359719,
+    "gzipBytes": 24213622
   },
   "commands": [
     "completion",

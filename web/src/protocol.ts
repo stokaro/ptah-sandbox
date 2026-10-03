@@ -67,8 +67,11 @@ export type BootPhase =
   | "initializing SQLite"
   | "starting";
 
+export type EngineLoadPhase = "downloading PostgreSQL" | "compiling PostgreSQL" | "initializing PostgreSQL";
+
 export type HostEvent =
   | { type: "engine"; id: number; info: EngineInfo }
+  | { type: "engineProgress"; phase: EngineLoadPhase; loaded: number; total: number }
   | { type: "ready"; info: ReadyInfo; sqlite: SqliteInfo }
   /**
    * loaded/total are UNCOMPRESSED bytes. Content-Length would be the encoded

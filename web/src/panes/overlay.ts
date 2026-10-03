@@ -16,7 +16,14 @@ export function createOverlay(label: string, className: string, onClose?: () => 
     const rect = dialog.getBoundingClientRect();
     if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
   });
-  dialog.addEventListener("close", () => onClose?.());
+  dialog.addEventListener("close", async () => {
+    if (!onClose) return;
+    // Keep the expanded panel in the dialog until its exit transition ends.
+    // Without motion (or discrete-transition support), restore it immediately.
+    const animations = dialog.getAnimations();
+    if (animations.length) await Promise.allSettled(animations.map(animation => animation.finished));
+    if (!dialog.open) onClose();
+  });
   document.body.appendChild(dialog);
   return { dialog, body, title, close, open: () => { if (!dialog.open) dialog.showModal(); } };
 }

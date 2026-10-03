@@ -2,22 +2,11 @@
 import { PGlite } from "@electric-sql/pglite";
 
 import { PGLITE_VERSION } from "./engine-versions.ts";
+import { loadPostgresAssets, type EngineProgress } from "./postgres-assets.ts";
 
-export async function createPostgresBridge(base?: string) {
-  const assets = base === undefined ? {} : await (async () => {
-    const root = new URL(`dist/pglite-${PGLITE_VERSION}/`, base);
-    const fetchAsset = async (name: string) => {
-      const r = await fetch(new URL(name, root));
-      if (!r.ok) throw new Error(`PGlite ${name}: HTTP ${r.status}`);
-      return r;
-    };
-    const [pgliteWasmModule, initdbWasmModule, fsBundle] = await Promise.all([
-      fetchAsset("pglite.wasm").then((r) => WebAssembly.compileStreaming(r)),
-      fetchAsset("initdb.wasm").then((r) => WebAssembly.compileStreaming(r)),
-      fetchAsset("pglite.data").then((r) => r.blob()),
-    ]);
-    return { pgliteWasmModule, initdbWasmModule, fsBundle };
-  })();
+export async function createPostgresBridge(base?: string, progress?: EngineProgress) {
+  const assets = base === undefined ? {} : await loadPostgresAssets(base, progress);
+  progress?.("initializing PostgreSQL", 0, 0);
   const databases = new Map<string, PGlite>();
   const parsers = new Map<string, Record<number, (text: string) => string>>();
   let handle = 0;

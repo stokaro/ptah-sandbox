@@ -872,6 +872,7 @@ async function run(): Promise<void> {
   const recordRow = need<HTMLElement>('[data-result-pane="data"] .pgc-data-row');
   recordRow.click();
   const recordDialog = need<HTMLDialogElement>(".pgc-record-overlay");
+  check("record details use the shared dialog entrance animation", recordDialog.getAnimations().some(animation => animation.effect?.getTiming().duration === 180), "180 ms entrance transition");
   check("clicking a row opens all its untruncated values as text", recordDialog.open && textOf(".pgc-record-value") === longValue && recordDialog.querySelector("script") === null && recordDialog.textContent?.includes("Empty text") === true && recordDialog.textContent.includes("NULL"), `full value length ${textOf(".pgc-record-value").length}; dialog open ${recordDialog.open}`);
   need<HTMLButtonElement>(".pgc-record-overlay .pgc-overlay-close").click();
   await sleep(20);
@@ -882,6 +883,7 @@ async function run(): Promise<void> {
   await sleep(20);
   need<HTMLButtonElement>("#pg-db .pgc-expand").click();
   const resultsDialog = need<HTMLDialogElement>(".pgc-results-overlay");
+  check("expanded results use the shared dialog entrance animation", resultsDialog.getAnimations().some(animation => animation.effect?.getTiming().duration === 180), "180 ms entrance transition");
   const resultPanel = need<HTMLElement>("#pg-db");
   check("the entire result panel expands into a modal", resultsDialog.open && resultsDialog.contains(resultPanel) && resultPanel.getBoundingClientRect().width > 1000, `expanded width ${Math.round(resultPanel.getBoundingClientRect().width)}`);
   const resultTabs = [...resultPanel.querySelectorAll<HTMLButtonElement>(".pgc-tab")];
@@ -893,9 +895,10 @@ async function run(): Promise<void> {
   need<HTMLElement>('[data-result-pane="data"] .pgc-data-row').click();
   check("a record can open above the expanded result panel", recordDialog.open && resultsDialog.open && textOf(".pgc-record-value") === longValue, "both dialogs open; value preserved");
   need<HTMLButtonElement>(".pgc-record-overlay .pgc-overlay-close").click();
-  await sleep(20);
+  await sleep(220);
   need<HTMLButtonElement>(".pgc-results-overlay .pgc-overlay-close").click();
-  await sleep(20);
+  check("expanded results retain their content during the exit transition", resultsDialog.contains(resultPanel), "panel remains in the closing dialog");
+  await until("the expanded panel's exit animation to finish", () => resultPanel.parentElement?.classList.contains("pg-grid"), 2_000);
   check("closing expanded results restores the same panel and query", resultPanel.parentElement?.classList.contains("pg-grid") === true && paneHas("data", "long_value") && doc.activeElement === q("#pg-db .pgc-expand"), "panel restored, query retained, focus returned");
 
   /* ---- 11. Another scenario seeds and scores ---- */
@@ -1202,9 +1205,24 @@ async function run(): Promise<void> {
 
   /* ---- PostgreSQL: real engine, same static hosting ---- */
   const enginePicker = need<HTMLButtonElement>("#pg-engine");
+  const engineProgress: { visible: boolean; label: string; detail: string; indeterminate: boolean; done: boolean }[] = [];
+  const bootStrip = need<HTMLElement>("#pg-boot-strip");
+  const progressObserver = new MutationObserver(() => {
+    engineProgress.push({
+      visible: !bootStrip.hidden,
+      label: textOf(".boot-label"),
+      detail: textOf(".boot-detail"),
+      indeterminate: need<HTMLElement>(".boot").classList.contains("is-indeterminate"),
+      done: need<HTMLElement>(".boot").classList.contains("is-done"),
+    });
+  });
+  progressObserver.observe(bootStrip, { subtree: true, childList: true, characterData: true, attributes: true });
   chooseEngine("postgres");
   check("an explicit engine choice is remembered before its runtime finishes loading", localStorage.getItem("ptah-play-engine") === "postgres", `saved engine: ${localStorage.getItem("ptah-play-engine")}`);
   await until("PostgreSQL to initialize", () => !enginePicker.disabled && textOf("[data-build-sqlite]").includes("PostgreSQL"), 90_000);
+  progressObserver.disconnect();
+  check("cold PostgreSQL downloads show measured progress after Ptah is ready", engineProgress.some(p => p.visible && p.label === "downloading PostgreSQL" && /\d+\.\d+ \/ \d+\.\d+ MiB/.test(p.detail) && !p.indeterminate && !p.done), JSON.stringify(engineProgress.slice(-8)));
+  check("PostgreSQL initialization stays visible until the scenario is ready", engineProgress.some(p => p.visible && p.label === "initializing PostgreSQL" && p.indeterminate && !p.done) && bootStrip.hidden, "indeterminate initialization followed by a hidden loader");
   const pgDrift = await runCommand(DRIFT.replace("sqlite://app.db", "postgres://pglite/app"));
   check("PostgreSQL runs Ptah without cross-origin isolation", !contentWindow.crossOriginIsolated && pgDrift.exit.includes("exit 0"), pgDrift.output.slice(-240));
   check("database panes label the selected PostgreSQL engine", textOf("#pg-rail").includes("PostgreSQL / public") && textOf("#pg-db").includes("postgres://pglite/app"), textOf("[data-build-sqlite]"));
@@ -1240,6 +1258,9 @@ async function run(): Promise<void> {
   chooseScenario("postgres-only");
   await until("PostgresOnly to seed", () => !enginePicker.disabled && textOf("#pg-rail").includes("events") && textOf("#pg-rail").includes("2 rows"), 60_000);
   check("PostgresOnly presets PostgreSQL and disables incompatible SQLite", enginePicker.value === "postgres" && q<HTMLButtonElement>('.pg-engine-option[data-engine="sqlite"]')?.disabled === true, enginePicker.value);
+  // Seeding releases the engine picker before the asynchronous guide probe
+  // has scored the route and painted its first action.
+  await until("the JSONB capabilities action to appear", () => stepStates()[0] === "current" && q<HTMLButtonElement>("#pg-next .pg-next-row button.btn")?.disabled === false, 30_000);
   need<HTMLButtonElement>("#pg-next .pg-next-row button.btn").click();
   await until("PostgresOnly capabilities to finish", () => terminalIdle() && stepStates()[0] === "done", 30_000);
   need<HTMLButtonElement>("#pg-next .pg-next-row button.btn").click();
