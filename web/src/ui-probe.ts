@@ -1258,6 +1258,9 @@ async function run(): Promise<void> {
   chooseScenario("postgres-only");
   await until("PostgresOnly to seed", () => !enginePicker.disabled && textOf("#pg-rail").includes("events") && textOf("#pg-rail").includes("2 rows"), 60_000);
   check("PostgresOnly presets PostgreSQL and disables incompatible SQLite", enginePicker.value === "postgres" && q<HTMLButtonElement>('.pg-engine-option[data-engine="sqlite"]')?.disabled === true, enginePicker.value);
+  // Seeding releases the engine picker before the asynchronous guide probe
+  // has scored the route and painted its first action.
+  await until("the JSONB capabilities action to appear", () => stepStates()[0] === "current" && q<HTMLButtonElement>("#pg-next .pg-next-row button.btn")?.disabled === false, 30_000);
   need<HTMLButtonElement>("#pg-next .pg-next-row button.btn").click();
   await until("PostgresOnly capabilities to finish", () => terminalIdle() && stepStates()[0] === "done", 30_000);
   need<HTMLButtonElement>("#pg-next .pg-next-row button.btn").click();
