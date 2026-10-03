@@ -11,7 +11,7 @@
  * ended on, because a bar that stops moving reads as a hang.
  */
 
-import type { BootPhase } from "./protocol.ts";
+import type { BootPhase, EngineLoadPhase } from "./protocol.ts";
 
 const MIB = 1024 * 1024;
 
@@ -42,9 +42,10 @@ export class Loader {
     this.detail = host.querySelector(".boot-detail")!;
   }
 
-  update(phase: BootPhase, loaded: number, total: number): void {
+  update(phase: BootPhase | EngineLoadPhase, loaded: number, total: number): void {
+    this.root.classList.remove("is-done", "is-failed");
     this.label.textContent = phase;
-    if (phase === "downloading" && total > 0) {
+    if (phase.startsWith("downloading") && total > 0) {
       const pct = Math.min(100, (loaded / total) * 100);
       this.root.classList.remove("is-indeterminate");
       this.fill.style.width = `${pct.toFixed(1)}%`;
@@ -54,6 +55,7 @@ export class Loader {
       // rather than standing still at a number that has stopped meaning
       // anything.
       this.root.classList.add("is-indeterminate");
+      this.fill.style.removeProperty("width");
       this.detail.textContent = "";
     }
   }

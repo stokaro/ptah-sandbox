@@ -84,6 +84,7 @@ const DB = "app.db";
 let activeEngine: DatabaseEngine = "sqlite";
 let engineInfo: EngineInfo | null = null;
 let switching = false;
+let engineLoading = false;
 let sqlRunning = false;
 let scenarioEpoch = 0;
 let DB_URL = `sqlite://${DB}`;
@@ -182,6 +183,11 @@ function makeSession(): Session {
   return new Session(new URL("dist/worker.js", base).href, {
     onProgress: (phase, loaded, total) => {
       store.bootProgress(phase, loaded, total);
+      loader.update(phase, loaded, total);
+    },
+    onEngineProgress: (phase, loaded, total) => {
+      engineLoading = true;
+      bootStrip.hidden = false;
       loader.update(phase, loaded, total);
     },
     onPanic: (message) => terminal.note(`the runtime panicked: ${message}`, "attention"),
@@ -713,7 +719,7 @@ function loadScenario(scenario: Scenario): Promise<void> {
   ++refreshPass;
   window.clearTimeout(saveTimer);
   saveOwed = false;
-  render(store.state);
+  store.noticed(null);
   // Failures are reported by the caller; the chain must survive one so a
   // later load is not permanently blocked behind a rejected promise.
   const next = seeding.then(
@@ -722,7 +728,13 @@ function loadScenario(scenario: Scenario): Promise<void> {
   );
   const settled = next.catch(() => undefined);
   seeding = settled;
-  return next.finally(() => { if (seeding === settled) { switching = false; render(store.state); } });
+  return next.finally(() => {
+    if (seeding === settled) {
+      switching = false;
+      engineLoading = false;
+      render(store.state);
+    }
+  });
 }
 
 /**
@@ -1471,7 +1483,7 @@ function render(state: State): void {
   );
 
   renderBuild(state);
-  bootStrip.hidden = state.boot.stage === "ready";
+  bootStrip.hidden = state.boot.stage === "ready" && !engineLoading;
 
   const notice = state.ui.notice;
   noticeLine.hidden = notice === null;

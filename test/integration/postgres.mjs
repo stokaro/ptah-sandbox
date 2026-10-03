@@ -20,7 +20,9 @@ async function run(argv, code = 0, answers = []) {
  return result;
 }
 try {
- assert.equal(session.ready.version, "v0.10.0");
+ const manifest = JSON.parse(readFileSync(new URL("../../web/vendor/ptah/manifest.json", import.meta.url), "utf8"));
+ assert.equal(session.ready.version, manifest.ptahVersion);
+ assert.equal(session.ready.commit, manifest.ptahCommit);
  const info = await postgres.info();
  assert.equal(info.version.split(" ")[1], POSTGRES_VERSION, "the picker must describe the PostgreSQL build that ships");
  assert.equal(info.packageVersion, PGLITE_VERSION);

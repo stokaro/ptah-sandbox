@@ -23,6 +23,7 @@
 
 import type {
   BootPhase,
+  EngineLoadPhase,
   DatabaseEngine,
   EngineInfo,
   FileEntry,
@@ -74,6 +75,7 @@ export interface RunHandle {
 
 export interface SessionHandlers {
   onProgress?(phase: BootPhase, loaded: number, total: number): void;
+  onEngineProgress?(phase: EngineLoadPhase, loaded: number, total: number): void;
   /** Go's runtime panic path, which bypasses the host boundary entirely. */
   onPanic?(message: string): void;
   /** Anything written straight to fd 1 or fd 2. Normally nothing ever is. */
@@ -364,6 +366,10 @@ export class Session {
       }
       case "progress": {
         this.#handlers.onProgress?.(event.phase, event.loaded, event.total);
+        return;
+      }
+      case "engineProgress": {
+        this.#handlers.onEngineProgress?.(event.phase, event.loaded, event.total);
         return;
       }
       case "panic": {

@@ -15,7 +15,7 @@
 //     supposed to allow. A stale hash silently disables the script, and the
 //     only symptom is a flash of the wrong theme on every load.
 import { createHash } from "node:crypto";
-import { readFileSync, mkdirSync, copyFileSync, rmSync } from "node:fs";
+import { readFileSync, mkdirSync, copyFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { build } from "esbuild";
 
 const dev = process.argv.includes("--dev");
@@ -111,8 +111,11 @@ await build({
 
 const pgliteDir = `dist/pglite-${pgliteVersion}`;
 mkdirSync(pgliteDir, { recursive: true });
+const pgliteSizes = {};
 for (const asset of ["pglite.wasm", "initdb.wasm", "pglite.data"]) {
   copyFileSync(`node_modules/@electric-sql/pglite/dist/${asset}`, `${pgliteDir}/${asset}`);
+  pgliteSizes[asset] = statSync(`${pgliteDir}/${asset}`).size;
 }
+writeFileSync(`${pgliteDir}/assets.json`, JSON.stringify(pgliteSizes) + "\n");
 
 copyFileSync("node_modules/@electric-sql/pglite/LICENSE", `${pgliteDir}/LICENSE`);
