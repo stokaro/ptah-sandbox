@@ -213,9 +213,16 @@
   .pg-install:not([hidden]) {
     animation: pg-install-reveal 240ms ease-out;
   }
+  .pg-install.is-closing {
+    animation: pg-install-dismiss 200ms ease-in forwards;
+  }
   @keyframes pg-install-reveal {
     from { grid-template-rows: 0fr; opacity: 0; transform: translateY(-8px); }
     to { grid-template-rows: 1fr; opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pg-install-dismiss {
+    from { grid-template-rows: 1fr; opacity: 1; transform: translateY(0); }
+    to { grid-template-rows: 0fr; opacity: 0; transform: translateY(-8px); }
   }
 }
 

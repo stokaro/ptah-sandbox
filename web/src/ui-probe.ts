@@ -412,9 +412,11 @@ async function run(): Promise<void> {
   const closeInstall = need<HTMLButtonElement>("#pg-install-close");
   closeInstall.focus();
   closeInstall.click();
+  const installClosing = installPanel.inert && installPanel.classList.contains("is-closing");
+  await until("the CLI reminder to finish closing", () => installPanel.hidden);
   const installExpiry = Number(localStorage.getItem("ptah-play-install-dismissed-until"));
-  check("closing the CLI reminder saves one week and leaves its status link accessible",
-    installPanel.hidden && Math.abs(installExpiry - Date.now() - 604_800_000) < 1000
+  check("closing the CLI reminder animates, saves one week, and leaves its status link accessible",
+    installClosing && installPanel.hidden && Math.abs(installExpiry - Date.now() - 604_800_000) < 2000
       && doc.activeElement === installLink && installLink.getBoundingClientRect().height > 0
       && installLink.href === "https://ptah.run/install/",
     `hidden ${installPanel.hidden}; expires ${installExpiry}; focus ${doc.activeElement?.id}`);

@@ -17,16 +17,31 @@ export function installCliPrompt(
 ): void {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let dismissedUntil: string | null = null;
+  let renderVersion = 0;
 
   const read = (): void => {
     try { dismissedUntil = localStorage.getItem(INSTALL_PROMPT_KEY); }
     catch { /* Keep the tab's choice when browser storage is unavailable. */ }
   };
   const render = (): void => {
+    const version = ++renderVersion;
     clearTimeout(timer);
     const delay = installPromptDelay(dismissedUntil);
     if (delay > 0 && panel.contains(document.activeElement)) fallback.focus();
-    panel.hidden = delay > 0;
+    // Remove closing controls from keyboard navigation while the strip folds.
+    panel.inert = delay > 0;
+    if (delay === 0) {
+      panel.classList.remove("is-closing");
+      panel.hidden = false;
+    } else if (!panel.hidden) {
+      panel.classList.add("is-closing");
+      void Promise.allSettled(panel.getAnimations().map(animation => animation.finished)).then(() => {
+        // Another tab may have restored the strip while its exit was running.
+        if (version !== renderVersion) return;
+        panel.hidden = true;
+        panel.classList.remove("is-closing");
+      });
+    }
     if (delay > 0) timer = setTimeout(render, delay);
   };
 
