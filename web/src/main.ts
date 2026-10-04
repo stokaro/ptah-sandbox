@@ -68,6 +68,7 @@ import { installSplitters } from "./splitters.ts";
 import { installDock } from "./dock.ts";
 import { installSiteMenu } from "./sitemenu.ts";
 import { installLinks } from "./links.ts";
+import { installCliPrompt } from "./install-prompt.ts";
 import { anchorPopover } from "./popover.ts";
 import {
   Store,
@@ -1365,6 +1366,11 @@ installDock(grid, need<HTMLElement>("#pg-dock"));
 installSiteMenu(need<HTMLElement>("#pg-sitemenu-btn"), need<HTMLElement>("#pg-sitemenu"));
 // After the menu, so its copies of the header's links are marked too.
 installLinks();
+installCliPrompt(
+  need<HTMLElement>("#pg-install"),
+  need<HTMLButtonElement>("#pg-install-close"),
+  need<HTMLAnchorElement>("#pg-install-link"),
+);
 anchorPopover(need<HTMLElement>("#pg-import-help-pop"), need<HTMLElement>("#pg-import-help"));
 
 // About: the introduction, what is running and what this profile cannot do.
