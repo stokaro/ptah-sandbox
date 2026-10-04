@@ -6,7 +6,7 @@
  * layout those components sit in and the few pieces the site has no component
  * for -- the file rail, the guided steps, the status pill and the editor.
  *
- * Two colours of its own, --pg-done and --pg-guide, declared once below for
+ * Three colours of its own, --pg-done, --pg-guide and --pg-install-bg, below for
  * both themes. Every other value is a site.css token, so the dark theme is
  * the site's own token swap and needs no rules of its own.
  *
@@ -27,7 +27,7 @@
  * without competing with it.
  */
 
-/* The two colours site.css does not have. The three blocks follow
+/* The colours site.css does not have. The three blocks follow
  * site.css's own: the system preference, unless a choice was stored, and the
  * stored choice.
  *
@@ -40,18 +40,21 @@
 :root {
   --pg-done: oklch(0.52 0.13 150);
   --pg-guide: #f0f7fc;
+  --pg-install-bg: #fff7d6;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --pg-done: oklch(0.78 0.13 150);
     --pg-guide: oklch(0.228 0.02 235);
+    --pg-install-bg: #39301e;
   }
 }
 
 :root[data-theme="dark"] {
   --pg-done: oklch(0.78 0.13 150);
   --pg-guide: oklch(0.228 0.02 235);
+  --pg-install-bg: #39301e;
 }
 
 /* The UA's `[hidden] { display: none }` sits at user-agent origin, so any
@@ -127,6 +130,125 @@
 
 .pg-build-warn {
   color: var(--amber);
+}
+
+/* ---------- CLI installation reminder ---------- */
+
+.pg-install {
+  display: grid;
+  grid-template-rows: 1fr;
+  flex: none;
+  background: var(--pg-install-bg);
+  color: var(--fg2);
+}
+
+.pg-install-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pg-install-content {
+  display: flex;
+  align-items: center;
+  gap: 12px 24px;
+  padding: 2px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.pg-install-message {
+  display: contents;
+}
+
+.pg-install-content p {
+  margin: 0;
+  font: 12px/1.5 var(--sans);
+}
+
+.pg-install-content strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.pg-install-action {
+  flex: none;
+  margin-left: auto;
+  font: 600 12px/1.5 var(--sans);
+  color: var(--acc);
+  white-space: nowrap;
+}
+
+.pg-install-close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  color: var(--fg2);
+  background: transparent;
+  cursor: pointer;
+}
+
+.pg-install-close:hover {
+  color: var(--fg);
+  background: var(--bg);
+}
+
+.pg-install-link {
+  flex: none;
+  font: 600 12px/1.5 var(--sans);
+  white-space: nowrap;
+}
+
+.pg-install-close:focus-visible,
+.pg-install-action:focus-visible,
+.pg-install-link:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pg-install:not([hidden]) {
+    animation: pg-install-reveal 240ms ease-out;
+  }
+  @keyframes pg-install-reveal {
+    from { grid-template-rows: 0fr; opacity: 0; transform: translateY(-8px); }
+    to { grid-template-rows: 1fr; opacity: 1; transform: translateY(0); }
+  }
+}
+
+@media (max-width: 900px) {
+  /* The site header is the top menu on phones; precede the scenario row. */
+  html.js .pg-install { order: -1; }
+  /* Extend through the page wrapper's gutters at both mobile breakpoints. */
+  .pg-install { margin-inline: -48px; }
+  .pg-install-content {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) 28px;
+    gap: 0;
+    padding: 0 10px;
+  }
+  .pg-install-message {
+    display: flex;
+    grid-column: 2;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .pg-install-content p { min-width: 0; }
+  .pg-install-content p > span { display: none; }
+  .pg-install-action { margin-left: 0; }
+  .pg-install-close {
+    grid-column: 3;
+    width: 28px;
+    height: 28px;
+  }
+}
+
+@media (max-width: 720px) {
+  .pg-install { margin-inline: -20px; }
 }
 
 /* ---------- Boot strip ---------- */
@@ -1979,14 +2101,20 @@
     min-height: 0;
   }
 
-  /* The status bar and the footer are not drawn: the build and the
+  /* The build details and the footer are not drawn: the build and the
    * runtime's state sit beside the title, and the rest -- the commit, SQLite,
    * what the session keeps, the footer's links -- is in About, which that
    * short form opens. Without the script there is no About to open, so both
    * stay. */
-  html.js .pg-statusbar,
+  html.js .pg-statusbar > :not(.pg-install-link),
   html.js .site-footer {
     display: none;
+  }
+  html.js .pg-statusbar {
+    justify-content: center;
+    padding: 4px 12px;
+    border-top: 1px solid var(--line);
+    background: var(--code);
   }
   html.js .pg-mini {
     display: inline-flex;
@@ -2525,6 +2653,9 @@
 
   .pg-statusbar .meta {
     font-size: 12px;
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
   }
 }
 

@@ -258,6 +258,7 @@ async function run(): Promise<void> {
   const started = Date.now();
   localStorage.removeItem("ptah-play-engine");
   localStorage.removeItem("ptah-play-tour");
+  localStorage.removeItem("ptah-play-install-dismissed-until");
 
   // `need` looks inside the page under test; the frame itself belongs to this
   // document.
@@ -400,6 +401,23 @@ async function run(): Promise<void> {
   await until("the rail to show the catalog it read", () => textOf("#pg-rail").includes("3 rows"));
 
   /* ---- The full-window layout ---- */
+
+  const installPanel = need<HTMLElement>("#pg-install");
+  const installLink = need<HTMLAnchorElement>("#pg-install-link");
+  const installRect = installPanel.getBoundingClientRect();
+  check("the CLI reminder is a compact strip immediately below the toolbar",
+    !installPanel.hidden && installRect.height <= 30
+      && Math.abs(installRect.top - need<HTMLElement>(".pg-toolbar").getBoundingClientRect().bottom) < 1,
+    `panel height ${installRect.height}px`);
+  const closeInstall = need<HTMLButtonElement>("#pg-install-close");
+  closeInstall.focus();
+  closeInstall.click();
+  const installExpiry = Number(localStorage.getItem("ptah-play-install-dismissed-until"));
+  check("closing the CLI reminder saves one week and leaves its status link accessible",
+    installPanel.hidden && Math.abs(installExpiry - Date.now() - 604_800_000) < 1000
+      && doc.activeElement === installLink && installLink.getBoundingClientRect().height > 0
+      && installLink.href === "https://ptah.run/install/",
+    `hidden ${installPanel.hidden}; expires ${installExpiry}; focus ${doc.activeElement?.id}`);
 
   // The frame is 1440 by 1100, so this is the layout above 1100px: the header
   // and the application fill the window and there is no page under them.
@@ -1317,6 +1335,9 @@ async function run(): Promise<void> {
   await until("reload to seed a fresh SQLite database", () => textOf(".pg-status").includes("ready") && textOf("#pg-rail").includes("3 rows"), 90_000);
   check("reload starts a fresh memory-only session without isolation", need<HTMLButtonElement>("#pg-engine").value === "sqlite" && !textOf("#pg-rail").includes("events") && !frame.contentWindow!.crossOriginIsolated, "fresh SQLite seed; no retained PostgreSQL events");
   check("a remembered SQLite choice skips the required picker on reload", !need<HTMLDialogElement>(".pg-engine-overlay").open, "the saved engine is used without asking again");
+  check("the dismissed CLI reminder stays hidden after reload", need<HTMLElement>("#pg-install").hidden,
+    "the saved expiry is still in the future");
+  localStorage.setItem("ptah-play-install-dismissed-until", String(Date.now() - 1));
 
   // Reload immediately, while the newly selected runtime is still loading.
   chooseEngine("postgres");
@@ -1326,6 +1347,8 @@ async function run(): Promise<void> {
   win = frame.contentWindow as unknown as FrameGlobals;
   await until("reload after selecting PostgreSQL to finish", () => textOf(".pg-status").includes("ready") && textOf("#pg-rail").includes("3 rows"), 90_000);
   check("PostgreSQL selection survives reloading during initialization without another prompt", need<HTMLButtonElement>("#pg-engine").value === "postgres" && !need<HTMLDialogElement>(".pg-engine-overlay").open, `selected engine: ${need<HTMLButtonElement>("#pg-engine").value}`);
+  check("the CLI reminder returns after its saved week expires", !need<HTMLElement>("#pg-install").hidden,
+    "the saved expiry is in the past");
 
   for (const engine of ["postgres", "sqlite"] as const) {
     await new Promise<void>(resolve => {

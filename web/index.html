@@ -91,8 +91,8 @@
     </button>
     <nav class="pg-sitemenu" id="pg-sitemenu" aria-label="Site" popover></nav>
     <h1 class="pg-toolbar-title">Playground</h1>
-    <!-- On a phone the status bar is not drawn: this is its short form, the
-         build and the runtime's state, and it opens About for the rest. -->
+    <!-- On a phone the status bar only carries the install link: the build
+         and runtime state live here, with About for the rest. -->
     <button class="pg-mini" type="button" id="pg-mini" aria-haspopup="dialog" title="About this playground">
       <span class="v" id="pg-mini-version">—</span>
       <span class="pg-mini-status" id="pg-mini-status" data-tone="quiet">starting</span>
@@ -157,6 +157,19 @@
       <button class="btn btn-ghost" type="button" id="pg-reset">Reset</button>
     </div>
   </div>
+  <aside class="pg-install" id="pg-install" aria-label="Install Ptah CLI" hidden>
+    <div class="pg-install-clip">
+      <div class="pg-install-content">
+        <div class="pg-install-message">
+          <p><strong>Take Ptah to your own database.</strong><span> Install the CLI and bring this workflow to your project.</span></p>
+          <a class="pg-install-action" href="https://ptah.run/install/" target="_blank" rel="noopener">Install Ptah CLI <span aria-hidden="true">↗</span></a>
+        </div>
+        <button class="pg-install-close" id="pg-install-close" type="button" aria-label="Dismiss installation reminder for one week" title="Hide for one week">
+          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
   <p class="pg-notice" id="pg-notice" role="status" hidden></p>
   <!--
     Real work, in order, with real byte counts. It leaves the flow the moment
@@ -386,6 +399,7 @@
       </span>
       <span class="pg-storage" id="pg-storage">memory-only</span>
     </div>
+    <a class="pg-install-link" id="pg-install-link" href="https://ptah.run/install/" target="_blank" rel="noopener">Install Ptah CLI <span aria-hidden="true">↗</span></a>
     <button class="pg-about-open" type="button" id="pg-about-open" aria-haspopup="dialog">About</button>
   </div>
 </div>
