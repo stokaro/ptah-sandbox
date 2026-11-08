@@ -2,7 +2,7 @@
   "id": "c",
   "title": "Versioned migrations",
   "description": "Write the change into migration files, hash and check them, then apply them in order.",
-  "note": "Direct apply and versioned migrations are different ways of working, not two halves of one. schema apply writes nothing into migrations/, and migrations up never reads schema.sql. A project picks one. This browser scenario requires SQLite: PostgreSQL migrations need separate lock and execution sessions, while PGlite has one session.",
+  "note": "Direct apply and versioned migrations are different ways of working, not two halves of one. schema apply writes nothing into migrations/, and migrations up never reads schema.sql. A project picks one. This browser scenario supports SQLite and DuckDB. PostgreSQL migrations need separate lock and execution sessions, while PGlite has one session. DuckDB migration lint is not available yet.",
   "database": {
     "path": "app.db",
     "url": "sqlite://app.db"
@@ -217,8 +217,16 @@
   },
   "capabilities": {
     "engines": [
-      "sqlite"
+      "sqlite",
+      "duckdb"
     ],
     "defaultEngine": "sqlite"
+  },
+  "duckdb": {
+    "seed": "",
+    "files": {
+      "README.md": "# DuckDB versioned migrations\n\nThis route starts from an empty in-memory DuckDB database. Ptah plans the desired schema, generates migration files, hashes and validates the directory, then applies the migration and records its version.\n\n    ptah migrations plan --schema-file schema.sql --db-url duckdb://:memory:\n    ptah migrations generate --schema-file schema.sql --db-url duckdb://:memory: --migrations-dir migrations --name init\n    ptah migrations hash --dir migrations\n    ptah migrations validate --dir migrations\n    ptah migrations status --migrations-dir migrations --db-url duckdb://:memory:\n    ptah migrations up --migrations-dir migrations --db-url duckdb://:memory:\n\nMigration lint does not currently accept the DuckDB dialect. The database is discarded on Reset; generated workspace files can be exported.\n",
+      "schema.sql": "-- The schema you want the database to have.\n--\n-- Ptah reads this file as the desired state, reads the real catalog out of\n-- the in-memory DuckDB database, and works out the difference. You never write ALTER statements here.\n\nCREATE TABLE users (\n  id    INTEGER PRIMARY KEY,\n  name  TEXT NOT NULL,\n  email TEXT NOT NULL\n);\n\nCREATE TABLE tasks (\n  id      INTEGER PRIMARY KEY,\n  user_id INTEGER NOT NULL,\n  title   TEXT NOT NULL,\n  done    INTEGER NOT NULL\n);\n"
+    }
   }
 }

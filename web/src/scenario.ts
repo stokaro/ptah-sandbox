@@ -3,7 +3,7 @@
  *
  * A scenario is data: files, a seed, and an ordered list of steps. A step is
  * done when its CHECK passes, and every check is answered by asking the real
- * workspace and the real SQLite catalog. Nothing here reads a transcript --
+ * workspace and the selected database's catalog. Nothing here reads a transcript --
  * `RunRecord` deliberately has no stdout field, so an assertion cannot be
  * written against printed text even by accident. What a command printed is the
  * terminal's business; what is true afterwards is this module's.
@@ -19,7 +19,6 @@ import scenarioA from "../scenarios/a.json" with { type: "json" };
 import scenarioB from "../scenarios/b.json" with { type: "json" };
 import scenarioC from "../scenarios/c.json" with { type: "json" };
 import scenarioPostgres from "../scenarios/postgres-only.json" with { type: "json" };
-import scenarioDuckDB from "../scenarios/duckdb-only.json" with { type: "json" };
 import type { DatabaseEngine } from "./protocol.ts";
 import { postgresTableNames, postgresIndexNames, postgresColumnNames } from "./panes/postgres-catalog.ts";
 import { duckdbTableNames, duckdbIndexNames, duckdbColumnNames } from "./panes/duckdb-catalog.ts";
@@ -151,6 +150,7 @@ export interface Scenario {
   note?: string;
   capabilities: { engines: DatabaseEngine[]; defaultEngine: DatabaseEngine };
   postgres?: { seed: string };
+  duckdb?: { seed: string; files?: Record<string, string> };
   database: { path: string; url: string };
   /** Written into the workspace before anything runs. */
   files: Record<string, string>;
@@ -1051,6 +1051,11 @@ export function parseScenario(value: unknown): Scenario {
     const pg = asRecord(raw["postgres"], `${where}.postgres`);
     scenario.postgres = { seed: asString(pg["seed"], `${where}.postgres.seed`) };
   }
+  if (raw["duckdb"] !== undefined) {
+    const duck = asRecord(raw["duckdb"], `${where}.duckdb`);
+    scenario.duckdb = { seed: asString(duck["seed"], `${where}.duckdb.seed`) };
+    if (duck["files"] !== undefined) scenario.duckdb.files = asRecord(duck["files"], `${where}.duckdb.files`) as Record<string, string>;
+  }
   if (raw["note"] !== undefined) scenario.note = asString(raw["note"], `${where}.note`);
   if (raw["baseline"] !== undefined) {
     const baseline = asRecord(raw["baseline"], `${where}.baseline`);
@@ -1063,7 +1068,7 @@ export function parseScenario(value: unknown): Scenario {
 }
 
 /** The scenarios this build ships, parsed at load so a bad one is loud. */
-export const SCENARIOS: readonly Scenario[] = [scenarioA, scenarioB, scenarioC, scenarioPostgres, scenarioDuckDB, scenarioFree].map(parseScenario);
+export const SCENARIOS: readonly Scenario[] = [scenarioA, scenarioB, scenarioC, scenarioPostgres, scenarioFree].map(parseScenario);
 
 export function scenarioById(id: string): Scenario | undefined {
   return SCENARIOS.find((s) => s.id === id);
@@ -1072,16 +1077,48 @@ export function scenarioById(id: string): Scenario | undefined {
 /** Resolve a preset before loading it: commands and workspace name the engine actually used. */
 export function scenarioForEngine(scenario: Scenario, engine = scenario.capabilities.defaultEngine): Scenario {
   if (!scenario.capabilities.engines.includes(engine)) throw new Error(`${scenario.title} requires ${scenario.capabilities.engines.join(" or ")}`);
-  if (engine === "sqlite" || scenario.database.url.startsWith("postgres:") || scenario.database.url.startsWith("duckdb:")) return scenario;
-  if (!scenario.postgres) throw new Error(`${scenario.title} has no PostgreSQL seed`);
+  if (engine === "sqlite" || scenario.database.url.startsWith("postgres:")) return scenario;
+  if (engine === "postgres" && !scenario.postgres) throw new Error(`${scenario.title} has no PostgreSQL seed`);
+  if (engine === "duckdb" && !scenario.duckdb) throw new Error(`${scenario.title} has no DuckDB seed`);
+  const url = engine === "duckdb" ? "duckdb://:memory:" : "postgres://pglite/app";
+  const name = engine === "duckdb" ? "DuckDB" : "PostgreSQL";
   const rewrite = (value: unknown): unknown => {
-    if (typeof value === "string") return value.replaceAll("sqlite://app.db", "postgres://pglite/app").replaceAll("SQLite", "PostgreSQL").replace(/^sqlite$/, "postgres");
+    if (typeof value === "string") {
+      const adapted = value.replaceAll("sqlite://app.db", url).replaceAll("SQLite", name).replace(/^sqlite$/, engine);
+      return engine === "duckdb" ? adapted.replaceAll("app.db", "DuckDB") : adapted;
+    }
     if (Array.isArray(value)) return value.map(rewrite);
     if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([k,v]) => [k, rewrite(v)]));
     return value;
   };
   const adapted = rewrite(scenario) as Scenario;
   adapted.capabilities = scenario.capabilities;
-  adapted.seed = scenario.postgres!.seed;
+  adapted.database.path = scenario.database.path;
+  adapted.seed = engine === "duckdb" ? scenario.duckdb!.seed : scenario.postgres!.seed;
+  if (engine === "duckdb") adapted.files = { ...adapted.files, ...scenario.duckdb!.files };
+  if (engine === "duckdb" && scenario.id === "a") {
+    const editStep = adapted.steps.find(step => step.id === "edit");
+    if (editStep?.action?.kind === "edit") {
+      editStep.action.snippet = "  active INTEGER\n\nCREATE INDEX idx_users_email ON users (email);";
+      editStep.action.hint = "Add a nullable column after email, then put the index below both tables.";
+      editStep.action.patch = [
+        { find: "  email TEXT NOT NULL\n);", replace: "  email TEXT NOT NULL,\n  active INTEGER\n);" },
+        { find: "  done    INTEGER NOT NULL\n);", replace: "  done    INTEGER NOT NULL\n);\n\nCREATE INDEX idx_users_email ON users (email);" },
+      ];
+      editStep.instruction = "Apply the patch, or add a nullable users.active column and an index to schema.sql yourself. DuckDB can add this column without rebuilding the table.";
+    }
+  }
+  if (engine === "duckdb" && scenario.id === "c") {
+    adapted.note = "Direct apply changes the database immediately. Versioned migrations generate files to review and replay in order. DuckDB migration lint is not available yet, so this route validates the migration hash instead.";
+    const checkStep = adapted.steps.find(step => step.id === "check");
+    if (checkStep) {
+      checkStep.caption = "Validate the hash";
+      checkStep.headline = "Check the migration files against their hash.";
+      checkStep.instruction = "Validate the migration directory against ptah.sum. DuckDB is not a supported migration lint dialect yet.";
+      checkStep.also = [];
+      checkStep.check = { kind: "ran", prefix: ["migrations", "validate"], exit: 0 };
+      checkStep.done = "The directory matches its sum file. DuckDB migration lint is not available yet.";
+    }
+  }
   return adapted;
 }
