@@ -10,7 +10,7 @@
 -->
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Playground — Ptah</title>
-<meta name="description" content="Run the real Ptah CLI against real SQLite or PostgreSQL in your browser tab. Edit a schema, read the plan it produces, apply it, and see the rows survive. Nothing is installed and nothing leaves the browser.">
+<meta name="description" content="Run the real Ptah CLI against SQLite, PostgreSQL, or DuckDB in your browser tab. Edit a schema, preview a plan, apply it, and inspect the result. Nothing is installed and nothing leaves the browser.">
 <link rel="canonical" href="https://play.ptah.run/">
 <!--
   The page ships one inline script (the theme, below) and it is allowed by its
@@ -416,12 +416,12 @@
     <h2 class="pg-about-title" id="pg-about-title">About this playground</h2>
     <button class="btn btn-ghost pg-about-close" type="button" id="pg-about-close">Close</button>
   </div>
-  <p class="lede">Edit a schema, run real Ptah commands against SQLite or PostgreSQL in this tab, inspect the result. Nothing is installed and nothing leaves the browser.</p>
+  <p class="lede">Edit a schema, run real Ptah commands against SQLite, PostgreSQL, or DuckDB in this tab, and inspect the result. Nothing is installed and nothing leaves the browser.</p>
   <dl class="flags">
     <dt>Running</dt>
     <dd id="pg-running">Nothing yet. The build, its commit and the selected database version appear here once the module in this tab has answered for itself.</dd>
     <dt>Cannot</dt>
-    <dd>Reach a network database, run Docker, or touch your disk. SQLite and PostgreSQL (PGlite) run in memory. There is no MySQL or MariaDB here. PGlite has one SQL session, so the versioned migrations scenario requires SQLite.</dd>
+    <dd>Reach a network database, run Docker, or touch your disk. SQLite, PostgreSQL (PGlite), and DuckDB run in memory. There is no MySQL or MariaDB here. PGlite has one SQL session, so the versioned migrations scenario requires SQLite. DuckDB exports include workspace files but not the in-memory database.</dd>
     <dt>Keeps</dt>
     <dd>Browser preferences. The workspace and database live only in this tab: reloading discards them. Export takes a copy with you.</dd>
   </dl>

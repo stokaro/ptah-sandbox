@@ -83,6 +83,11 @@ const bridgeVersion = /export const PGLITE_VERSION = "([^"]+)"/.exec(readFileSyn
 if (bridgeVersion !== pgliteVersion) {
   problems.push(`PGlite package ${pgliteVersion} does not match the bridge asset path ${bridgeVersion}; update and verify the PostgreSQL runtime together.`);
 }
+const duckdbVersion = JSON.parse(readFileSync("node_modules/@duckdb/duckdb-wasm/package.json", "utf8")).version;
+const duckdbBridgeVersion = /export const DUCKDB_WASM_VERSION = "([^"]+)"/.exec(readFileSync("src/runtime/engine-versions.ts", "utf8"))?.[1];
+if (duckdbBridgeVersion !== duckdbVersion) {
+  problems.push(`DuckDB-Wasm package ${duckdbVersion} does not match the bridge asset path ${duckdbBridgeVersion}.`);
+}
 
 if (problems.length > 0) {
   for (const problem of problems) console.error(`build: ${problem}`);
@@ -119,3 +124,12 @@ for (const asset of ["pglite.wasm", "initdb.wasm", "pglite.data"]) {
 writeFileSync(`${pgliteDir}/assets.json`, JSON.stringify(pgliteSizes) + "\n");
 
 copyFileSync("node_modules/@electric-sql/pglite/LICENSE", `${pgliteDir}/LICENSE`);
+
+const duckdbDir = `dist/duckdb-${duckdbVersion}`;
+mkdirSync(duckdbDir, { recursive: true });
+for (const asset of ["duckdb-mvp.wasm", "duckdb-eh.wasm", "duckdb-browser-mvp.worker.js", "duckdb-browser-eh.worker.js"]) {
+  copyFileSync(`node_modules/@duckdb/duckdb-wasm/dist/${asset}`, `${duckdbDir}/${asset}`);
+}
+copyFileSync("duckdb-wasm-LICENSE.txt", `${duckdbDir}/LICENSE`);
+copyFileSync("duckdb-plugin-LICENSE.txt", `${duckdbDir}/PLUGIN-LICENSE.txt`);
+copyFileSync("node_modules/apache-arrow/LICENSE.txt", `${duckdbDir}/ARROW-LICENSE.txt`);

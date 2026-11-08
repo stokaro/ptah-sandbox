@@ -150,7 +150,7 @@ export class Rail {
     catalog: Catalog,
     options: { diff?: SchemaDiff | null; addedColumns?: Set<string> } = {},
   ): void {
-    this.dbLabel.textContent = `Database · ${catalog.engine === "postgres" ? "PostgreSQL / public" : catalog.path}`;
+    this.dbLabel.textContent = `Database · ${catalog.engine === "postgres" ? "PostgreSQL / public" : catalog.engine === "duckdb" ? "DuckDB / main" : catalog.path}`;
     clear(this.dbHost);
 
     if (catalog.tables.length === 0) {

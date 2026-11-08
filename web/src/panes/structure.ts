@@ -95,7 +95,7 @@ export class StructurePane {
 
     this.status.classList.remove("is-amber");
     this.title.textContent = table.name;
-    this.status.textContent = `actual schema · read from ${view.catalog.engine === "postgres" ? "PostgreSQL" : "SQLite"}`;
+    this.status.textContent = `actual schema · read from ${view.catalog.engine === "postgres" ? "PostgreSQL" : view.catalog.engine === "duckdb" ? "DuckDB" : "SQLite"}`;
     clear(this.body);
 
     this.body.appendChild(this.columnsTable(table, view.diff));
@@ -224,7 +224,7 @@ export class StructurePane {
     return el(
       "p",
       "pgc-pane-note",
-      `Every column here is also in schema.sql, as ${view.catalog.engine === "postgres" ? "PostgreSQL" : "SQLite"} parsed it at ${new Date(view.catalog.readAt).toLocaleTimeString("en-US")}.`,
+      `Every column here is also in schema.sql, as ${view.catalog.engine === "postgres" ? "PostgreSQL" : view.catalog.engine === "duckdb" ? "DuckDB" : "SQLite"} parsed it at ${new Date(view.catalog.readAt).toLocaleTimeString("en-US")}.`,
     );
   }
 }

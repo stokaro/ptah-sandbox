@@ -32,6 +32,7 @@ Available Commands:
   migrations  Manage migration plans, files, and revision state
   oci         Inspect Ptah artifacts in OCI registries
   project     Read a project file and report what Ptah makes of it
+  providers   Inspect provider configuration, verify trusted executables and install official providers
   schema      Work with desired schema definitions
   seed        Apply environment-scoped SQL seed files
   sql         Work with standalone SQL files
@@ -39,8 +40,9 @@ Available Commands:
   viz         Render desired schema diagrams
 
 Flags:
-  -h, --help      help for ptah
-  -v, --version   version for ptah
+      --allow-config-exec   Allow running programs a project or test file names: an atlas.hcl data "external" or data "external_schema", a ptah.yaml external_schema, pre_up_hook or pre_down_hook, and a .test.hcl external step [env: PTAH_ALLOW_CONFIG_EXEC]
+  -h, --help                help for ptah
+  -v, --version             version for ptah
 
 Use "ptah [command] --help" for more information about a command.
 --- stderr ---

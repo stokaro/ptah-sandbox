@@ -157,7 +157,7 @@ check("ready() reports the pinned build and a usable command list", () => {
   assert.equal(typeof session.ready, "object");
   assert.match(session.ready.version, /^v\d+\./);
   assert.equal(session.ready.commit.length, 40);
-  assert.equal(session.ready.goVersion, "go1.27.1");
+  assert.equal(session.ready.goVersion, "go1.27.3");
   assert.ok(Array.isArray(session.ready.commands));
   for (const want of ["schema apply", "schema drift", "version"]) {
     assert.ok(session.ready.commands.includes(want), `commands is missing ${want}`);
@@ -447,13 +447,13 @@ for (const [name, argv, note] of [
 
 section("known divergences from the native binary");
 
-// These two commands cannot be byte-identical, and both differences are
-// deliberate. Pinning them here means a THIRD difference fails the suite.
+// These two commands have browser-specific differences. Pinning them here
+// means another difference fails the suite.
 
 {
   const v = await session.run(["version"]);
   const want = groundTruthBody("49_version");
-  check("version differs only in the build stamp, the date's offset and the platform", () => {
+  check("version matches the pinned native build except for the platform", () => {
     const got = transcript(v);
     const lines = (t) => t.split("\n");
     const gotL = lines(got);
@@ -461,18 +461,13 @@ section("known divergences from the native binary");
     assert.equal(gotL.length, wantL.length, "the version output grew or shrank a line");
     const differing = [];
     for (let i = 0; i < gotL.length; i++) if (gotL[i] !== wantL[i]) differing.push(gotL[i].split(":")[0]);
-    assert.deepEqual(differing, ["Version", "Commit", "Date", "Platform"]);
-    // Commit and Date differ because the ground truth is a frozen capture from
-    // whatever commit it was taken at, while this build tracks the recorded
-    // pin; the two are not required to agree, and the version block is the one
-    // place that shows it. What must agree is the binary and its manifest --
-    // the point of printing a commit at all is that it names the code actually
-    // running, never a release number stamped over an older artifact.
+    assert.deepEqual(differing, ["Platform"]);
+    // Both builds name the same pinned source. The platform is different
+    // because this runtime executes in the browser rather than on the host.
     assert.match(v.stdout, new RegExp(`^Version: ${session.ready.version}$`, "m"));
     assert.match(v.stdout, new RegExp(`^Commit: ${session.ready.commit}$`, "m"));
     assert.equal(session.ready.commit, recordedPin());
-    // Date is the same shape, rendered in the commit's own offset rather than
-    // UTC, so it parses even though the instant is a different commit's.
+    // The pin's date keeps its recorded offset in both builds.
     assert.equal(Number.isNaN(Date.parse(/^Date: (.+)$/m.exec(v.stdout)[1])), false);
     assert.match(v.stdout, /^Platform: js\/wasm$/m);
   });
@@ -481,18 +476,21 @@ section("known divergences from the native binary");
 {
   const rootHelp = await session.run(["--help"]);
   const want = groundTruthBody("50_root_help_nontty");
-  check("ptah --help differs only by the command groups this build omits", () => {
+  check("ptah --help differs only by browser-specific command and flag selection", () => {
     assert.equal(rootHelp.code, 0);
     const body = (t) => t.slice(t.indexOf("--- stdout ---\n") + 15, t.indexOf("--- stderr ---"));
     const gotLines = body(transcript(rootHelp)).split("\n");
     const wantLines = body(want).split("\n");
     const missing = wantLines.filter((l) => !gotLines.includes(l));
     const extra = gotLines.filter((l) => !wantLines.includes(l));
-    assert.deepEqual(extra, [], "the browser help has lines the native help does not");
+    assert.deepEqual(extra, [
+      "  -h, --help[=true|false]      help for ptah",
+      "  -v, --version[=true|false]   version for ptah",
+    ], "the browser help has only its root-level help and version flags beyond native help");
     assert.deepEqual(
       missing.map((l) => l.trim().split(/\s+/)[0]).sort(),
-      ["assist", "inference", "license", "mcp", "oci", "project", "seed"],
-      "the set of omitted command groups changed",
+      ["--allow-config-exec", "-h,", "-v,", "assist", "inference", "license", "mcp", "oci", "project", "providers", "seed"],
+      "the browser help diverged from the pinned native help",
     );
   });
 }

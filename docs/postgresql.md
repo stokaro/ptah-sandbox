@@ -3,8 +3,8 @@
 Issue [#8](https://github.com/stokaro/ptah-sandbox/issues/8) asked whether a
 real PostgreSQL could fit the browser runtime and GitHub Pages hosting.
 The implementation uses PGlite 0.5.8; `SELECT version()` reports PostgreSQL
-18.3. Ptah is pinned to v0.10.0, commit
-`0688d16e46aa5925a1821a4c457e8b45c5b8e4dc`.
+18.3. Ptah is currently pinned to v0.25.0, commit
+`39b42905b1579ddd40abaecc5ad8666687e2e998`.
 
 ## Promise bridge and hosting
 
@@ -31,8 +31,9 @@ surface as errors; they do not fall back to another engine.
 
 ## Size measurements
 
-Measured with gzip level 9, against the previous main branch's build. These
-are compressed-file measurements, not claims about a server's Content-Encoding.
+The following historical measurements compare the original PostgreSQL addition
+at Ptah v0.10.0 with the preceding v0.8.0 build. They are compressed-file
+measurements, not current v0.25.0 sizes or claims about a server's Content-Encoding.
 
 | Component | Before | With this change |
 | --- | ---: | ---: |
@@ -94,8 +95,8 @@ imports remain SQLite-only; PostgreSQL exports are not presented as `.db` files.
   against ordinary static hosting, including engine presets and reload.
 - `test/integration/postgres.mjs`: exercises A, B, PostgresOnly, and free
   exploration with real Ptah wasm and real PostgreSQL, including error paths.
-- Native captures 53 and 54 in `test/integration/ground-truth/` use Ptah v0.10.0
-  and PostgreSQL 18.6. The PostgresOnly GIN plan matches the browser output
+- Native capture 54 in `test/integration/ground-truth/` was refreshed with Ptah
+  v0.25.0 and PostgreSQL 18.6. Capture 53 remains from v0.10.0. The PostgresOnly GIN plan matches the browser output
   byte for byte. Native apply preserved both event rows and ended with clean
   drift. The temporary remote Docker container and its volume were removed.
 

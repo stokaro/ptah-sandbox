@@ -146,7 +146,7 @@ function terminalIdle(): boolean {
   return need<HTMLElement>("#pg-terminal").dataset["state"] === "idle";
 }
 
-function chooseEngine(engine: "sqlite" | "postgres"): void {
+function chooseEngine(engine: "sqlite" | "postgres" | "duckdb"): void {
   need<HTMLButtonElement>("#pg-engine").click();
   need<HTMLButtonElement>(`.pg-engine-option[data-engine="${engine}"]`).click();
 }
@@ -388,7 +388,7 @@ async function run(): Promise<void> {
   const cancelChoice = new win.Event("cancel", { cancelable: true });
   firstChoice.dispatchEvent(cancelChoice);
   check("first visits must choose an engine after Tour", cancelChoice.defaultPrevented && firstChoice.open && need<HTMLButtonElement>(".pg-engine-overlay .pgc-overlay-close").hidden, "Escape does not dismiss the required choice");
-  check("the engine dialog describes both runtimes and versions before selection", firstChoice.textContent?.includes("SQLite 3.53.4") === true && firstChoice.textContent.includes("PostgreSQL 18.3") && firstChoice.textContent.includes("PGlite 0.5.8"), firstChoice.textContent?.slice(0, 160) ?? "");
+  check("the engine dialog describes all three runtimes before selection", firstChoice.textContent?.includes("SQLite 3.53.4") === true && firstChoice.textContent.includes("PostgreSQL 18.3") && firstChoice.textContent.includes("PGlite 0.5.8") && firstChoice.textContent.includes("DuckDB-Wasm"), firstChoice.textContent?.slice(0, 180) ?? "");
   need<HTMLButtonElement>('.pg-engine-option[data-engine="sqlite"]').click();
 
   const buildLine = textOf("#pg-running");
@@ -943,7 +943,7 @@ async function run(): Promise<void> {
   const pickerCurrent = picker.querySelector<HTMLElement>('.pg-picker-option[aria-current="true"]')?.dataset["scenario"];
   check(
     "the scenario picker lists every scenario with its title and description, the loaded one current",
-    picker.open && pickerRows.length === 5 && pickerRowsComplete && pickerCurrent === "a",
+    picker.open && pickerRows.length === 6 && pickerRowsComplete && pickerCurrent === "a",
     `open ${picker.open}; ${pickerRows.length} rows: ` +
       pickerRows.map((row) => row.querySelector(".pg-picker-name")?.textContent).join(" | ") +
       `; current ${pickerCurrent ?? "none"}`,
@@ -1372,6 +1372,42 @@ async function run(): Promise<void> {
   win = frame.contentWindow as unknown as FrameGlobals;
   await until("the remembered engine to load without a URL override", () => textOf(".pg-status").includes("ready"), 90_000);
   check("removing the URL override restores the saved engine without a prompt", need<HTMLButtonElement>("#pg-engine").value === "postgres" && !need<HTMLDialogElement>(".pg-engine-overlay").open, `selected engine: ${need<HTMLButtonElement>("#pg-engine").value}`);
+
+  /* ---- DuckDB: the official provider runs in the browser ---- */
+  await new Promise<void>(resolve => {
+    frame.addEventListener("load", () => resolve(), { once: true });
+    frame.src = "index.html?engine=duckdb";
+  });
+  doc = frame.contentDocument!;
+  win = frame.contentWindow as unknown as FrameGlobals;
+  await until("DuckDB targeted link to initialize", () => textOf(".pg-status").includes("ready") && need<HTMLButtonElement>("#pg-engine").value === "duckdb", 90_000);
+  const linkedDuckDB = await runCommand("ptah schema apply --schema-file schema.sql --db-url duckdb://:memory: --dry-run");
+  check("DuckDB targeted links open a working provider without the required picker", linkedDuckDB.exit.includes("exit 0") && linkedDuckDB.output.includes("CREATE TABLE") && !need<HTMLDialogElement>(".pg-engine-overlay").open, linkedDuckDB.output.slice(-180));
+  check("DuckDB in the URL does not overwrite the remembered engine", localStorage.getItem("ptah-play-engine") === "postgres", `saved engine: ${localStorage.getItem("ptah-play-engine")}`);
+  await new Promise<void>(resolve => {
+    frame.addEventListener("load", () => resolve(), { once: true });
+    frame.src = "index.html";
+  });
+  doc = frame.contentDocument!;
+  win = frame.contentWindow as unknown as FrameGlobals;
+  await until("remembered PostgreSQL after DuckDB link", () => textOf(".pg-status").includes("ready") && need<HTMLButtonElement>("#pg-engine").value === "postgres", 90_000);
+  chooseEngine("duckdb");
+  await until("DuckDB scenario to load", () => textOf(".pg-status").includes("ready") && need<HTMLButtonElement>("#pg-engine").value === "duckdb" && textOf(".pg-scenario-btn") === "DuckDB through a plugin", 90_000);
+  check("the engine picker opens the DuckDB scenario", stepStates().length === 3 && textOf("#pg-rail").includes("DuckDB / main"), textOf(".pg-scenario-btn"));
+  const duckPreview = await runGuideCommand();
+  check("DuckDB dry run uses Ptah's provider plan", duckPreview.exit.includes("exit 0") && duckPreview.output.includes('CREATE TABLE "main"."events"') && !textOf("#pg-rail").includes("events"), duckPreview.output.slice(-350));
+  typeCommand("ptah schema apply --schema-file schema.sql --db-url duckdb://:memory:");
+  await until("DuckDB apply to ask for confirmation", () => textOf(".pg-status").includes("waiting for confirmation"), 60_000);
+  typeCommand("YES");
+  await until("DuckDB apply to create the table", () => terminalIdle() && textOf("#pg-rail").includes("events"), 60_000);
+  check("DuckDB provider applies the schema to the live database", stepStates()[1] === "done" && textOf("#pg-db").includes("duckdb://:memory:"), stepStates().join(", "));
+  const duckDrift = await runGuideCommand();
+  await until("DuckDB guide to finish", () => stepStates().every(state => state === "done"), 15_000);
+  check("DuckDB drift reads the live catalog", duckDrift.exit.includes("exit 0") && duckDrift.output.includes("No schema drift detected") && stepStates().every(state => state === "done"), duckDrift.output.slice(-240));
+  check("DuckDB does not show SQLite import", need<HTMLElement>("#pg-import").getBoundingClientRect().width === 0, "SQLite import is hidden");
+  chooseEngine("sqlite");
+  await until("SQLite free exploration after DuckDB", () => !need<HTMLButtonElement>("#pg-engine").disabled && need<HTMLButtonElement>("#pg-engine").value === "sqlite" && textOf(".pg-scenario-btn") === "Free exploration", 60_000);
+  check("leaving DuckDB opens a compatible SQLite scenario", textOf("#pg-rail").includes("users") && !textOf("#pg-rail").includes("events"), textOf(".pg-scenario-btn"));
 
   /* ---- Done ---- */
 

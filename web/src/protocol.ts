@@ -6,7 +6,7 @@
  * state the UI renders arrives as its own message.
  */
 
-export type DatabaseEngine = "sqlite" | "postgres";
+export type DatabaseEngine = "sqlite" | "postgres" | "duckdb";
 export interface EngineInfo { engine: DatabaseEngine; version: string; packageVersion?: string }
 
 export interface ReadyInfo {
@@ -67,7 +67,7 @@ export type BootPhase =
   | "initializing SQLite"
   | "starting";
 
-export type EngineLoadPhase = "downloading PostgreSQL" | "compiling PostgreSQL" | "initializing PostgreSQL";
+export type EngineLoadPhase = "downloading PostgreSQL" | "compiling PostgreSQL" | "initializing PostgreSQL" | "initializing DuckDB";
 
 export type HostEvent =
   | { type: "engine"; id: number; info: EngineInfo }

@@ -450,9 +450,9 @@ test("a string literal that looks like DDL is not read as DDL", () => {
 // the shipped scenarios
 // ---------------------------------------------------------------------------
 
-test("four guided scenarios ship with explicit routes, then free exploration", () => {
-  assert.deepEqual(SCENARIOS.map((s) => s.id), ["a", "b", "c", "postgres-only", "free"]);
-  assert.deepEqual(SCENARIOS.map((s) => s.steps.length), [5, 5, 5, 5, 0]);
+test("five guided scenarios ship with explicit routes, then free exploration", () => {
+  assert.deepEqual(SCENARIOS.map((s) => s.id), ["a", "b", "c", "postgres-only", "duckdb-only", "free"]);
+  assert.deepEqual(SCENARIOS.map((s) => s.steps.length), [5, 5, 5, 5, 3, 0]);
 });
 
 test("every step either has a check or says why it has none", () => {

@@ -19,8 +19,10 @@ import scenarioA from "../scenarios/a.json" with { type: "json" };
 import scenarioB from "../scenarios/b.json" with { type: "json" };
 import scenarioC from "../scenarios/c.json" with { type: "json" };
 import scenarioPostgres from "../scenarios/postgres-only.json" with { type: "json" };
+import scenarioDuckDB from "../scenarios/duckdb-only.json" with { type: "json" };
 import type { DatabaseEngine } from "./protocol.ts";
 import { postgresTableNames, postgresIndexNames, postgresColumnNames } from "./panes/postgres-catalog.ts";
+import { duckdbTableNames, duckdbIndexNames, duckdbColumnNames } from "./panes/duckdb-catalog.ts";
 import scenarioFree from "../scenarios/free.json" with { type: "json" };
 
 // ---------------------------------------------------------------------------
@@ -498,7 +500,10 @@ class Pass {
 
   private catalog(type: "table" | "index"): Promise<Set<string>> {
     return this.ask(this.catalogCache, type, async () => {
-      const sql = this.probe.engine?.() === 'postgres' ? (type === 'table' ? postgresTableNames : postgresIndexNames) : `SELECT name FROM sqlite_schema WHERE type = '${type}';`;
+      const engine = this.probe.engine?.();
+      const sql = engine === "postgres" ? (type === "table" ? postgresTableNames : postgresIndexNames)
+        : engine === "duckdb" ? (type === "table" ? duckdbTableNames : duckdbIndexNames)
+        : `SELECT name FROM sqlite_schema WHERE type = '${type}';`;
       const r = await this.probe.query(sql);
       return new Set(r.rows.map((row) => String(row[0]).toLowerCase()));
     });
@@ -514,9 +519,10 @@ class Pass {
 
   columns(table: string): Promise<string[]> {
     return this.ask(this.columnsCache, table.toLowerCase(), async () => {
-      const pg = this.probe.engine?.() === "postgres";
-      const r = await this.probe.query(pg ? postgresColumnNames(table) : `PRAGMA table_info(${quoteIdent(table)});`);
-      return r.rows.map((row) => String(row[pg ? 0 : 1]).toLowerCase());
+      const engine = this.probe.engine?.();
+      const r = await this.probe.query(engine === "postgres" ? postgresColumnNames(table)
+        : engine === "duckdb" ? duckdbColumnNames(table) : `PRAGMA table_info(${quoteIdent(table)});`);
+      return r.rows.map((row) => String(row[engine === "sqlite" || engine === undefined ? 1 : 0]).toLowerCase());
     });
   }
 
@@ -1019,7 +1025,7 @@ export function parseScenario(value: unknown): Scenario {
   const caps = asRecord(raw["capabilities"], `${where}.capabilities`);
   const engines = caps["engines"];
   const defaultEngine = caps["defaultEngine"];
-  if (!Array.isArray(engines) || engines.length === 0 || engines.some(e => e !== "sqlite" && e !== "postgres") || !engines.includes(defaultEngine)) {
+  if (!Array.isArray(engines) || engines.length === 0 || engines.some(e => e !== "sqlite" && e !== "postgres" && e !== "duckdb") || !engines.includes(defaultEngine)) {
     fail(`${where}.capabilities`, "expected supported engines and a supported defaultEngine");
   }
   const finished = asRecord(raw["finished"], `${where}.finished`);
@@ -1057,7 +1063,7 @@ export function parseScenario(value: unknown): Scenario {
 }
 
 /** The scenarios this build ships, parsed at load so a bad one is loud. */
-export const SCENARIOS: readonly Scenario[] = [scenarioA, scenarioB, scenarioC, scenarioPostgres, scenarioFree].map(parseScenario);
+export const SCENARIOS: readonly Scenario[] = [scenarioA, scenarioB, scenarioC, scenarioPostgres, scenarioDuckDB, scenarioFree].map(parseScenario);
 
 export function scenarioById(id: string): Scenario | undefined {
   return SCENARIOS.find((s) => s.id === id);
@@ -1066,7 +1072,7 @@ export function scenarioById(id: string): Scenario | undefined {
 /** Resolve a preset before loading it: commands and workspace name the engine actually used. */
 export function scenarioForEngine(scenario: Scenario, engine = scenario.capabilities.defaultEngine): Scenario {
   if (!scenario.capabilities.engines.includes(engine)) throw new Error(`${scenario.title} requires ${scenario.capabilities.engines.join(" or ")}`);
-  if (engine === "sqlite" || scenario.database.url.startsWith("postgres:")) return scenario;
+  if (engine === "sqlite" || scenario.database.url.startsWith("postgres:") || scenario.database.url.startsWith("duckdb:")) return scenario;
   if (!scenario.postgres) throw new Error(`${scenario.title} has no PostgreSQL seed`);
   const rewrite = (value: unknown): unknown => {
     if (typeof value === "string") return value.replaceAll("sqlite://app.db", "postgres://pglite/app").replaceAll("SQLite", "PostgreSQL").replace(/^sqlite$/, "postgres");

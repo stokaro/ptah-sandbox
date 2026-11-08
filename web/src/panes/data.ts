@@ -14,6 +14,7 @@
  */
 
 import { postgresRows } from "./postgres-catalog.ts";
+import { duckdbRows } from "./duckdb-catalog.ts";
 import type { Catalog } from "./catalog.ts";
 import { columnsAddedBetween, isWithoutRowid, quoteIdent } from "./catalog.ts";
 import { clear, el, marker, renderStatus, td, th } from "./dom.ts";
@@ -145,6 +146,7 @@ export function rowQueryFor(
   limit = ROW_LIMIT,
 ): { sql: string; order: string } {
   if (catalog.engine === "postgres") return postgresRows(catalog, table, limit);
+  if (catalog.engine === "duckdb") return duckdbRows(catalog, table, limit);
   const info = catalog.tables.find((t) => t.name === table);
   return rowQuery(table, { limit, withoutRowid: info ? isWithoutRowid(info) : false });
 }

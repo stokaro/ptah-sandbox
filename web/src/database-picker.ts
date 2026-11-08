@@ -1,12 +1,12 @@
 import type { DatabaseEngine } from "./protocol.ts";
 import { el, fill } from "./panes/dom.ts";
 import { createOverlay } from "./panes/overlay.ts";
-import { PGLITE_VERSION, POSTGRES_VERSION } from "./runtime/engine-versions.ts";
+import { PGLITE_VERSION, POSTGRES_VERSION, DUCKDB_WASM_VERSION } from "./runtime/engine-versions.ts";
 import sqlite from "../vendor/sqlite/sqlite-capabilities.json" with { type: "json" };
 
 export function engineFromURL(url: string): DatabaseEngine | null {
   const engine = new URL(url).searchParams.get("engine");
-  return engine === "postgres" || engine === "sqlite" ? engine : null;
+  return engine === "postgres" || engine === "sqlite" || engine === "duckdb" ? engine : null;
 }
 
 export class DatabasePicker {
@@ -25,10 +25,11 @@ export class DatabasePicker {
     this.button.addEventListener("click", () => this.overlay.open());
     this.overlay.dialog.addEventListener("cancel", event => { if (this.required) event.preventDefault(); });
     fill(this.element, el("span", "pg-engine-label", "Database"), this.button);
-    this.overlay.body.appendChild(el("p", "pg-engine-note", "Switching databases resets this scenario's files and data. Export first to keep your work. Everything runs in this tab and stays in memory."));
+    this.overlay.body.appendChild(el("p", "pg-engine-note", "Switching databases resets the workspace and data. DuckDB opens its own scenario; leaving it opens free exploration. Export first to keep your files. Everything runs in this tab and stays in memory."));
     const options = [
       { engine: "sqlite" as const, title: `SQLite ${sqlite.version}`, tool: "Official SQLite WebAssembly build", note: "Loaded when the playground starts. Supports SQLite file imports and versioned migrations." },
       { engine: "postgres" as const, title: `PostgreSQL ${POSTGRES_VERSION}`, tool: `PGlite ${PGLITE_VERSION}`, note: "Downloads the PostgreSQL runtime when first selected. Supports JSONB, arrays, UUIDs, and GIN indexes. SQLite file imports are unavailable." },
+      { engine: "duckdb" as const, title: "DuckDB", tool: `DuckDB-Wasm ${DUCKDB_WASM_VERSION} · Ptah DuckDB plugin`, note: "Loads DuckDB in the browser and runs Ptah schema and migration commands through the official provider code." },
     ];
     for (const option of options) {
       const choice = el("button", "pg-engine-option");
@@ -57,11 +58,11 @@ export class DatabasePicker {
 
   update(engine: DatabaseEngine, supported: readonly DatabaseEngine[]): void {
     this.button.value = engine;
-    this.button.textContent = engine === "postgres" ? "PostgreSQL" : "SQLite";
+    this.button.textContent = engine === "postgres" ? "PostgreSQL" : engine === "duckdb" ? "DuckDB" : "SQLite";
     for (const [value, choice] of this.choices) {
-      choice.button.disabled = !supported.includes(value);
+      choice.button.disabled = !supported.includes(value) && value !== "duckdb" && engine !== "duckdb";
       choice.button.setAttribute("aria-pressed", String(value === engine));
-      choice.status.textContent = choice.button.disabled ? "Unavailable in this scenario" : value === engine ? "Selected" : "Select database";
+      choice.status.textContent = choice.button.disabled ? "Unavailable in this scenario" : value === engine ? "Selected" : supported.includes(value) ? "Select database" : value === "duckdb" ? "Open DuckDB scenario" : "Open free exploration";
     }
   }
 }

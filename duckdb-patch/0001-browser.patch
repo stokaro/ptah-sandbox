@@ -1,0 +1,154 @@
+diff --git a/internal/catalog/tables.go b/internal/catalog/tables.go
+index 5192ae1..80ea80e 100644
+--- a/internal/catalog/tables.go
++++ b/internal/catalog/tables.go
+@@ -68,6 +68,13 @@ func readClauses(table *Table, statement sql.NullString) error {
+ 		if found.Compression {
+ 			return unsupported("column %q of table %q names a compression, which the provider does not read", table.Columns[i].Name, table.Name)
+ 		}
++		if found.Generated {
++			if table.Columns[i].Default == nil {
++				return unsupported("generated column %q of table %q reports no expression", table.Columns[i].Name, table.Name)
++			}
++			table.Columns[i].Generated = table.Columns[i].Default
++			table.Columns[i].Default = nil
++		}
+ 		table.Columns[i].Collation = found.Collation
+ 	}
+ 	return nil
+@@ -77,7 +84,7 @@ func readClauses(table *Table, statement sql.NullString) error {
+ // lists the columns of views, which are skipped.
+ func readColumns(ctx context.Context, conn Querier, database, schema string, tables []Table) error {
+ 	rows, err := conn.QueryContext(ctx,
+-		"SELECT table_name, column_name, data_type, column_default, is_nullable, is_generated, generation_expression, comment "+
++		"SELECT table_name, column_name, data_type, column_default, is_nullable, false AS is_generated, NULL::VARCHAR AS generation_expression, comment "+
+ 			"FROM duckdb_columns() WHERE database_name = $1 AND schema_name = $2 AND NOT internal ORDER BY table_name, column_index", database, schema)
+ 	if err != nil {
+ 		return err
+diff --git a/internal/duckdbsql/duckdbsql.go b/internal/duckdbsql/duckdbsql.go
+index efd3ab0..cac1c67 100644
+--- a/internal/duckdbsql/duckdbsql.go
++++ b/internal/duckdbsql/duckdbsql.go
+@@ -319,6 +319,8 @@ type ColumnClauses struct {
+ 	Collation string
+ 	// Compression is set by USING COMPRESSION.
+ 	Compression bool
++	// Generated is set by GENERATED ALWAYS AS.
++	Generated bool
+ }
+ 
+ // constraintWords start a table constraint rather than a column.
+@@ -371,6 +373,8 @@ func columnClauses(tokens []token) ColumnClauses {
+ 		case depth != 0 || current.kind != bareWord:
+ 		case strings.EqualFold(current.value, "COLLATE"):
+ 			clauses.Collation = collationName(tokens[i+1:])
++		case strings.EqualFold(current.value, "GENERATED"):
++			clauses.Generated = true
+ 		case strings.EqualFold(current.value, "USING") && i+1 < len(tokens) && strings.EqualFold(tokens[i+1].value, "COMPRESSION"):
+ 			clauses.Compression = true
+ 		}
+diff --git a/internal/duckdbsql/duckdbsql_test.go b/internal/duckdbsql/duckdbsql_test.go
+index 47b2da7..b36774d 100644
+--- a/internal/duckdbsql/duckdbsql_test.go
++++ b/internal/duckdbsql/duckdbsql_test.go
+@@ -108,6 +108,7 @@ func TestParseTableColumns_HappyPath(t *testing.T) {
+ 		{"a collation", `CREATE TABLE s.t(a VARCHAR COLLATE nocase, "B b" VARCHAR COLLATE nocase.noaccent DEFAULT('x'));`,
+ 			map[string]duckdbsql.ColumnClauses{"a": {Collation: "nocase"}, "B b": {Collation: "nocase.noaccent"}}},
+ 		{"a compression", "CREATE TABLE t(a INTEGER USING COMPRESSION rle)", map[string]duckdbsql.ColumnClauses{"a": {Compression: true}}},
++		{"a generated column", "CREATE TABLE t(a INTEGER, b INTEGER GENERATED ALWAYS AS (a + 1))", map[string]duckdbsql.ColumnClauses{"a": {}, "b": {Generated: true}}},
+ 		{"table constraints and a word in a default", "CREATE TABLE t(a VARCHAR DEFAULT('COLLATE'), PRIMARY KEY(a), CHECK((a <> 'x')), " +
+ 			"CONSTRAINT c UNIQUE(a), FOREIGN KEY (a) REFERENCES p(a));", map[string]duckdbsql.ColumnClauses{"a": {}}},
+ 	}
+diff --git a/internal/duckdbversion/duckdbversion.go b/internal/duckdbversion/duckdbversion.go
+index 8bd1927..c81dc14 100644
+--- a/internal/duckdbversion/duckdbversion.go
++++ b/internal/duckdbversion/duckdbversion.go
+@@ -14,4 +14,4 @@ const Driver = "v2.20000.0"
+ 
+ // Library is the version of the DuckDB library Driver links, as DuckDB's
+ // library_version reports it.
+-const Library = "v2.0.0"
++const Library = "v1.5.4"
+diff --git a/internal/instances/instances.go b/internal/instances/instances.go
+index b46cbcf..c42ccdb 100644
+--- a/internal/instances/instances.go
++++ b/internal/instances/instances.go
+@@ -158,7 +158,7 @@ func (r *Registry) OpenMemory(ctx context.Context, name string) (*Handle, error)
+ 	if open := r.memory[name]; open != nil {
+ 		return r.attach(ctx, open)
+ 	}
+-	dsn, err := DSN(memoryPath, ReadWrite)
++	dsn, err := DSN(memoryPathFor(name), ReadWrite)
+ 	if err != nil {
+ 		return nil, err
+ 	}
+diff --git a/internal/ownedtable/ownedtable.go b/internal/ownedtable/ownedtable.go
+index 925877c..84dc058 100644
+--- a/internal/ownedtable/ownedtable.go
++++ b/internal/ownedtable/ownedtable.go
+@@ -23,6 +23,7 @@ import (
+ 
+ 	"github.com/stokaro/ptah-duckdb-plugin/internal/catalog"
+ 	"github.com/stokaro/ptah-duckdb-plugin/internal/ddl"
++	"github.com/stokaro/ptah-duckdb-plugin/internal/duckdbsql"
+ )
+ 
+ // DefaultSchema is the schema a store that names none lives in.
+@@ -122,9 +123,10 @@ func (d Definition) Holds(table catalog.Table) bool {
+ func Locate(ctx context.Context, q Querier, d Definition) (bool, error) {
+ 	var tables, views int
+ 	var comment sql.NullString
+-	err := q.QueryRowContext(ctx, "SELECT count(*), max(comment) FROM duckdb_tables() "+
++	var statement sql.NullString
++	err := q.QueryRowContext(ctx, "SELECT count(*), max(comment), max(sql) FROM duckdb_tables() "+
+ 		"WHERE database_name = current_database() AND lower(schema_name) = lower($1) AND lower(table_name) = lower($2) AND NOT temporary",
+-		d.SchemaName(), d.Name).Scan(&tables, &comment)
++		d.SchemaName(), d.Name).Scan(&tables, &comment, &statement)
+ 	if err != nil {
+ 		return false, err
+ 	}
+@@ -141,7 +143,14 @@ func Locate(ctx context.Context, q Querier, d Definition) (bool, error) {
+ 	case comment.String != d.Mark:
+ 		return true, &LayoutError{Detail: "it does not carry the provider's mark as its comment"}
+ 	}
+-	columns, err := readColumns(ctx, q, d)
++	if !statement.Valid {
++		return true, &LayoutError{Detail: "its statement is unavailable"}
++	}
++	clauses, err := duckdbsql.ParseTableColumns(statement.String)
++	if err != nil {
++		return true, &LayoutError{Detail: "its statement cannot be read"}
++	}
++	columns, err := readColumns(ctx, q, d, clauses)
+ 	if err != nil {
+ 		return true, err
+ 	}
+@@ -172,8 +181,8 @@ func Locate(ctx context.Context, q Querier, d Definition) (bool, error) {
+ 
+ // readColumns reads the table's columns in table order. A generated column
+ // is not one the provider writes, and reads as a type no layout holds.
+-func readColumns(ctx context.Context, q Querier, d Definition) ([]Column, error) {
+-	rows, err := q.QueryContext(ctx, "SELECT column_name, data_type, is_nullable, is_generated FROM duckdb_columns() "+
++func readColumns(ctx context.Context, q Querier, d Definition, clauses map[string]duckdbsql.ColumnClauses) ([]Column, error) {
++	rows, err := q.QueryContext(ctx, "SELECT column_name, data_type, is_nullable FROM duckdb_columns() "+
+ 		"WHERE database_name = current_database() AND lower(schema_name) = lower($1) AND lower(table_name) = lower($2) ORDER BY column_index",
+ 		d.SchemaName(), d.Name)
+ 	if err != nil {
+@@ -183,11 +192,14 @@ func readColumns(ctx context.Context, q Querier, d Definition) ([]Column, error)
+ 	var columns []Column
+ 	for rows.Next() {
+ 		var column Column
+-		var generated bool
+-		if err := rows.Scan(&column.Name, &column.Type, &column.Nullable, &generated); err != nil {
++		if err := rows.Scan(&column.Name, &column.Type, &column.Nullable); err != nil {
+ 			return nil, err
+ 		}
+-		if generated {
++		clause, found := clauses[column.Name]
++		if !found {
++			return nil, &LayoutError{Detail: "its statement does not name every column"}
++		}
++		if clause.Generated {
+ 			column.Type = "generated " + column.Type
+ 		}
+ 		columns = append(columns, column)

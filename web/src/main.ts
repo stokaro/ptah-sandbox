@@ -34,6 +34,7 @@
  */
 
 import { readPostgresCatalog } from "./panes/postgres-catalog.ts";
+import { readDuckDBCatalog } from "./panes/duckdb-catalog.ts";
 import type { DatabaseEngine, EngineInfo } from "./protocol.ts";
 import { Editor } from "./editor.ts";
 import { Guide, type GuideHost, type StatusPill } from "./guide.ts";
@@ -95,7 +96,7 @@ const linkedEngine = engineFromURL(window.location.href);
 let savedEngine: DatabaseEngine | null = null;
 try {
   const saved = localStorage.getItem(ENGINE_KEY);
-  if (saved === "sqlite" || saved === "postgres") savedEngine = saved;
+  if (saved === "sqlite" || saved === "postgres" || saved === "duckdb") savedEngine = saved;
 } catch { /* Storage may be unavailable; the URL still works. */ }
 
 /* ---------- DOM helpers ---------- */
@@ -684,10 +685,11 @@ async function boot(): Promise<void> {
   try { sessionStorage.removeItem(STALE_KEY); } catch { /* storage refused */ }
 
   store.bootProgress("seeding", 0, 0);
-  await guide.load(guide.scenario.id, linkedEngine ?? savedEngine ?? "sqlite");
+  const initialEngine = linkedEngine ?? savedEngine ?? "sqlite";
+  await guide.load(initialEngine === "duckdb" ? "duckdb-only" : guide.scenario.id, initialEngine);
 
   store.bootReady();
-  loader.done(`ptah ${info.version} · sqlite ${sqlite.version}`);
+  loader.done(`ptah ${info.version} · ${activeEngine === "sqlite" ? `sqlite ${sqlite.version}` : activeEngine === "duckdb" ? `DuckDB ${engineInfo?.version ?? "ready"}` : `PostgreSQL ${engineInfo?.version ?? "ready"}`}`);
   terminal.notifyReady();
   await guide.refresh();
   announce("The runtime is ready. Commands can be run.");
@@ -748,11 +750,11 @@ function loadScenario(scenario: Scenario): Promise<void> {
 async function seedScenario(scenario: Scenario): Promise<void> {
   await saving;
   ++refreshPass;
-  const target = scenario.database.url.startsWith("postgres:") ? "postgres" : "sqlite";
+  const target = scenario.database.url.startsWith("postgres:") ? "postgres" : scenario.database.url.startsWith("duckdb:") ? "duckdb" : "sqlite";
   engineInfo = await session.selectEngine(target);
   activeEngine = target;
   DB_URL = scenario.database.url;
-  panes.setSource(activeEngine === "postgres" ? `${DB_URL} · public schema` : DB_URL);
+  panes.setSource(activeEngine === "postgres" ? `${DB_URL} · public schema` : activeEngine === "duckdb" ? `${DB_URL} · main schema` : DB_URL);
   editor.setFooter("sql", `SQL · executes in ${DB_URL}`);
   databasePicker.update(activeEngine, scenario.capabilities.engines);
   store.scenarioSelected(scenario.id);
@@ -856,7 +858,8 @@ async function refresh(whileSeeding = false): Promise<void> {
   store.workspaceChanged({ files, dbBytes });
 
   try {
-    const nextCatalog = await (activeEngine === "postgres" ? readPostgresCatalog : readCatalog)(DB, (path, sql) => session.sql(path, sql));
+    const read = activeEngine === "postgres" ? readPostgresCatalog : activeEngine === "duckdb" ? readDuckDBCatalog : readCatalog;
+    const nextCatalog = await read(DB, (path, sql) => session.sql(path, sql));
     if (pass !== refreshPass) return;
     catalog = nextCatalog;
   } catch (err) {
@@ -876,12 +879,12 @@ async function refresh(whileSeeding = false): Promise<void> {
     const schemaOnDisk = await session.readFile("schema.sql");
     if (pass !== refreshPass) return;
     let nextDesired: Catalog;
-    if (activeEngine === "postgres") {
+    if (activeEngine === "postgres" || activeEngine === "duckdb") {
       await session.dropDB("__desired.db");
       if (pass !== refreshPass) return;
       await session.execSQL("__desired.db", schemaOnDisk);
       if (pass !== refreshPass) return;
-      nextDesired = await readPostgresCatalog("__desired.db", (path, sql) => session.sql(path, sql), false);
+      nextDesired = await (activeEngine === "duckdb" ? readDuckDBCatalog : readPostgresCatalog)("__desired.db", (path, sql) => session.sql(path, sql), false);
     } else nextDesired = await readDesiredCatalog(
       schemaOnDisk,
       (path, sql) => session.execSQL(path, sql),
@@ -985,7 +988,7 @@ async function paintData(): Promise<void> {
         total: table.rowCount,
         order,
         rowsBefore: catalogBefore?.tables.find((t) => t.name === selectedTable)?.rowCount ?? null,
-        status: catalogBefore === null ? `read from ${activeEngine === "postgres" ? "PostgreSQL" : "SQLite"}` : "read after the command finished",
+        status: catalogBefore === null ? `read from ${activeEngine === "postgres" ? "PostgreSQL" : activeEngine === "duckdb" ? "DuckDB" : "SQLite"}` : "read after the command finished",
       },
       catalogBefore,
       catalog,
@@ -1243,6 +1246,12 @@ async function exportWorkspace(): Promise<void> {
     if (file.isDir) continue;
     entries.push({ name: file.name, data: encoder.encode(await session.readFile(file.name)) });
   }
+  if (activeEngine === "duckdb") {
+    entries.push({ name: "NEXT-STEPS.md", data: encoder.encode("# DuckDB workspace\n\nThe in-memory DuckDB database is not included in this export. Use the SQL files with a native DuckDB plugin installation.\n") });
+    download("ptah-playground.zip", zip(entries), "application/zip");
+    terminal.note("[export] SQL workspace exported; the in-memory DuckDB database is not included");
+    return;
+  }
   const dbFile = activeEngine === "postgres" ? "postgres-data.tar.gz" : DB;
   entries.push({ name: dbFile, data: await session.serialize(DB) });
   entries.push({ name: "NEXT-STEPS.md", data: encoder.encode(activeEngine === "sqlite" ? NEXT_STEPS : `# PostgreSQL workspace
@@ -1311,7 +1320,8 @@ const databasePicker = new DatabasePicker(engine => {
   try { localStorage.setItem(ENGINE_KEY, engine); } catch { /* The choice still works for this tab. */ }
   savedEngine = engine;
   if (activeEngine === engine) return;
-  void guide.load(guide.scenario.id, engine).catch((err: unknown) => {
+  const scenario = engine === "duckdb" ? "duckdb-only" : activeEngine === "duckdb" ? "free" : guide.scenario.id;
+  void guide.load(scenario, engine).catch((err: unknown) => {
     store.noticed({ text: String(err), tone: "attention" });
     databasePicker.update(activeEngine, guide.scenario.capabilities.engines);
   });
@@ -1453,7 +1463,7 @@ function renderBuild(state: State): void {
   if (info !== null && sqlite !== null) {
     showVersion(info.version);
     text(buildCommit, info.commit.slice(0, 7));
-    text(buildSqlite, activeEngine === "postgres" ? `PostgreSQL ${engineInfo?.version.match(/PostgreSQL ([\d.]+)/)?.[1] ?? ""} · PGlite ${engineInfo?.packageVersion}` : `SQLite/WASM ${sqlite.version}`);
+    text(buildSqlite, activeEngine === "postgres" ? `PostgreSQL ${engineInfo?.version.match(/PostgreSQL ([\d.]+)/)?.[1] ?? ""} · PGlite ${engineInfo?.packageVersion}` : activeEngine === "duckdb" ? `DuckDB-Wasm ${engineInfo?.version ?? ""}` : `SQLite/WASM ${sqlite.version}`);
     text(
       buildNote,
       buildMismatch
@@ -1465,7 +1475,7 @@ function renderBuild(state: State): void {
       runningLine,
       `Ptah ${info.version} (${info.commit.slice(0, 12)}), built with ${info.goVersion}, ` +
         `${info.commands.length} commands registered. ` +
-        (activeEngine === "postgres" ? `${engineInfo?.version}. ` : `SQLite ${sqlite.version}, VFS ${sqlite.vfs.join(", ")}. `) +
+        (activeEngine === "postgres" ? `${engineInfo?.version}. ` : activeEngine === "duckdb" ? `DuckDB ${engineInfo?.version}. ` : `SQLite ${sqlite.version}, VFS ${sqlite.vfs.join(", ")}. `) +
         `Every value on this line was read from the module running in this tab.`,
     );
     return;
@@ -1505,9 +1515,9 @@ function render(state: State): void {
   panes.plan.setRefreshEnabled(canRun(state) && !switching && !sqlRunning);
   editor.setReadOnly(switching, "Loading the selected scenario and database…");
   importBtn.disabled = !canRun(state) || switching || sqlRunning || activeEngine !== "sqlite";
-  importBtn.hidden = activeEngine === "postgres";
-  need<HTMLButtonElement>("#pg-import-help").hidden = activeEngine === "postgres";
-  if (activeEngine === "postgres") need<HTMLElement>("#pg-import-help-pop").hidePopover();
+  importBtn.hidden = activeEngine !== "sqlite";
+  need<HTMLButtonElement>("#pg-import-help").hidden = activeEngine !== "sqlite";
+  if (activeEngine !== "sqlite") need<HTMLElement>("#pg-import-help-pop").hidePopover();
   exportBtn.disabled = !canRun(state) || switching || sqlRunning;
   resetBtn.disabled = !idle || switching || sqlRunning;
 

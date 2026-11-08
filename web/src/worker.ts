@@ -52,12 +52,14 @@ interface PtahGoHalf {
 let runtime: Runtime | null = null;
 let sqlite: SqliteBridge | null = null;
 let ptah: PtahGoHalf | null = null;
-let engine: "sqlite" | "postgres" = "sqlite";
+let engine: "sqlite" | "postgres" | "duckdb" = "sqlite";
 let postgres: import("./runtime/postgres-bridge.ts").PostgresBridge | null = null;
+let duckdb: import("./runtime/duckdb-bridge.ts").DuckDBBridge | null = null;
 let assetBase = "";
 let activeRunId: number | null = null;
 let operations: Promise<void> = Promise.resolve();
 function pgPath(path: string): string { return path === "app.db" ? "app" : path; }
+function duckPath(path: string): string { return path === "app.db" ? ":memory:app" : `:memory:${path.replace(/[^a-zA-Z0-9_-]/g, "_")}`; }
 
 function post(event: HostEvent, transfer?: Transferable[]): void {
   if (transfer) self.postMessage(event, transfer);
@@ -166,6 +168,7 @@ async function boot(base: string): Promise<ReadyInfo> {
   // merely detectable. The detector stays as the net.
   const wasmSha = String(manifest?.wasm?.sha256 ?? "");
   const execSha = String(manifest?.wasmExec?.sha256 ?? "");
+  (self as unknown as { __ptahWasmSHA: string }).__ptahWasmSHA = wasmSha;
 
   // SQLite is ~1 MB and Ptah is ~124 MB, so initializing the first while the
   // second downloads costs nothing and removes it from the critical path. Both
@@ -255,9 +258,15 @@ async function dispatch(msg: WorkerRequest): Promise<void> {
             post({ type: "engineProgress", phase, loaded, total });
           });
         }
+        if (msg.engine === "duckdb" && !duckdb) {
+          post({ type: "engineProgress", phase: "initializing DuckDB", loaded: 0, total: 0 });
+          const { createDuckDBBridge } = await import("./runtime/duckdb-bridge.ts");
+          duckdb = await createDuckDBBridge(assetBase);
+        }
         engine = msg.engine;
         (self as unknown as { __postgres: unknown }).__postgres = engine === "postgres" ? postgres : undefined;
-        const info = engine === "postgres" ? await postgres!.info() : { engine, version: sqlite!.info().version };
+        (self as unknown as { __duckdb: unknown }).__duckdb = engine === "duckdb" ? duckdb : undefined;
+        const info = engine === "postgres" ? await postgres!.info() : engine === "duckdb" ? await duckdb!.info() : { engine, version: sqlite!.info().version };
         post({ type: "engine", id: msg.id, info });
         return;
       }
@@ -301,13 +310,18 @@ async function dispatch(msg: WorkerRequest): Promise<void> {
         return;
       }
       case "sql": {
-        const rows = engine === "postgres" ? await postgres!.sql(pgPath(msg.path), msg.sql) : querySQL(msg.path, msg.sql);
+        const rows = engine === "postgres" ? await postgres!.sql(pgPath(msg.path), msg.sql) : engine === "duckdb" ? await duckdb!.sql(duckPath(msg.path), msg.sql) : querySQL(msg.path, msg.sql);
         post({ type: "sql", id: msg.id, rows });
         return;
       }
       case "execSQL": {
         if (engine === "postgres") {
           await postgres!.exec(pgPath(msg.path), msg.sql);
+          post({ type: "sqlDone", id: msg.id });
+          return;
+        }
+        if (engine === "duckdb") {
+          await duckdb!.exec(duckPath(msg.path), msg.sql);
           post({ type: "sqlDone", id: msg.id });
           return;
         }
@@ -323,6 +337,7 @@ async function dispatch(msg: WorkerRequest): Promise<void> {
       case "serialize": {
         // sqlite3_js_db_export hands back a detached copy, so the buffer can be
         // transferred rather than cloned; nothing in the wasm heap aliases it.
+        if (engine === "duckdb") throw new Error("DuckDB in-memory database export is not available yet");
         const bytes = engine === "postgres" ? await postgres!.serialize(pgPath(msg.path)) : sqlite!.serialize(msg.path);
         post({ type: "serialized", id: msg.id, bytes }, [bytes.buffer]);
         return;
@@ -335,6 +350,7 @@ async function dispatch(msg: WorkerRequest): Promise<void> {
       }
       case "dropDB": {
         if (engine === "postgres") await postgres!.drop(pgPath(msg.path));
+        else if (engine === "duckdb") await duckdb!.drop(duckPath(msg.path));
         else sqlite!.drop(msg.path);
         post({ type: "dropped", id: msg.id });
         return;

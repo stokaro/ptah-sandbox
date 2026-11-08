@@ -271,7 +271,7 @@ export class Guide {
         option,
         el("span", "pg-picker-name", scenario.title),
         el("span", "pg-picker-meta", count === 0 ? "no steps" : count === 1 ? "1 step" : `${count} steps`),
-        el("span", "pg-picker-desc", `${scenario.description} (${scenario.capabilities.engines.map(e => e === "postgres" ? "PostgreSQL" : "SQLite").join(" / ")})`),
+        el("span", "pg-picker-desc", `${scenario.description} (${scenario.capabilities.engines.map(e => e === "postgres" ? "PostgreSQL" : e === "duckdb" ? "DuckDB" : "SQLite").join(" / ")})`),
       );
       option.addEventListener("click", () => {
         dialog.close();

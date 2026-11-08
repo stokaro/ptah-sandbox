@@ -55,7 +55,7 @@ rather than hanging.
 
 `node test/integration/postgres.mjs` runs every PostgreSQL-capable preset through
 real Ptah wasm and PGlite. It compares the PostgresOnly dry-run output byte for
-byte with `ground-truth/54_postgres_gin_plan.txt`. Captures 53 and 54 were made
-with native Ptah v0.10.0 (0688d16e46aa5925a1821a4c457e8b45c5b8e4dc) against
-PostgreSQL 18.6; PGlite 0.5.8 reports PostgreSQL 18.3. Scenario C explicitly
+byte with `ground-truth/54_postgres_gin_plan.txt`. Capture 54 was refreshed
+with native Ptah v0.25.0 (39b42905b1579ddd40abaecc5ad8666687e2e998) against
+PostgreSQL 18.6; capture 53 remains from v0.10.0. PGlite 0.5.8 reports PostgreSQL 18.3. Scenario C explicitly
 requires SQLite because PostgreSQL migrations need multiple physical sessions.
