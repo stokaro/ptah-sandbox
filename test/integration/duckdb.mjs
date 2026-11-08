@@ -5,6 +5,7 @@ import process from "node:process";
 import { createRequire } from "node:module";
 import { boot } from "./harness.mjs";
 import { duckDBCell, duckDBOID } from "../../web/src/runtime/duckdb-values.ts";
+import { scenarioById, scenarioForEngine, applyPatch } from "../../web/src/scenario.ts";
 
 const require = createRequire(new URL("../../web/package.json", import.meta.url));
 const duckdb = require("@duckdb/duckdb-wasm/dist/duckdb-node-blocking.cjs");
@@ -21,20 +22,33 @@ async function database(name) {
   databases.set(name, db);
   return db;
 }
+async function resetDatabase() {
+  // Node's blocking binding cannot be reset and reopened reliably in this
+  // version. Keep its engine alive and clear the tables between scenario runs.
+  const db = await database(":memory:app");
+  const connection = db.connect();
+  try {
+    for (const table of ["tasks", "users", "computed", "events", "schema_migrations"]) {
+      connection.query(`DROP TABLE IF EXISTS "${table}"`);
+    }
+  } finally { connection.close(); }
+}
 const bridge = {
   async open(name) {
     const connection = (await database(name)).connect();
     const id = ++next;
-    connections.set(id, connection);
+    connections.set(id, { name, connection });
     return id;
   },
   async close(id) {
-    connections.get(id)?.close();
+    connections.get(id)?.connection?.close();
     connections.delete(id);
   },
   async query(id, sql, paramsJSON) {
-    const connection = connections.get(id);
-    if (!connection) throw new Error("DuckDB connection is closed");
+    const held = connections.get(id);
+    if (!held) throw new Error("DuckDB connection is closed");
+    if (!held.connection) held.connection = (await database(held.name)).connect();
+    const connection = held.connection;
     const params = JSON.parse(paramsJSON);
     let table;
     if (params.length) {
@@ -57,6 +71,7 @@ const bridge = {
 globalThis.__duckdb = bridge;
 
 const session = await boot();
+const url = "duckdb://:memory:";
 const run = async (argv, code = 0, answers = []) => {
   const result = await session.run(argv, { timeoutMs: 60000, answers });
   console.log(`$ ptah ${argv.join(" ")}\nexit ${result.code}\n${result.stdout}\n${result.stderr}`);
@@ -65,9 +80,57 @@ const run = async (argv, code = 0, answers = []) => {
   return result;
 };
 try {
+  // Run the actual presets visitors see, including their seeded data and edits.
+  for (const scenarioID of ["a", "b", "c", "free"]) {
+    await resetDatabase();
+    for (const file of session.workspace.list("/workspace")) session.workspace.remove(file.name);
+    const scenario = scenarioForEngine(scenarioById(scenarioID), "duckdb");
+    for (const [file, content] of Object.entries(scenario.files)) session.workspace.writeFile(file, content);
+    if (scenario.seed.trim()) {
+      const connection = await bridge.open(":memory:app");
+      await bridge.query(connection, scenario.seed, "[]");
+      await bridge.close(connection);
+    }
+    console.log(`DuckDB scenario ${scenarioID}`);
+    const flags = ["--schema-file", "schema.sql", "--db-url", url];
+    if (scenarioID === "a") {
+      await run(["schema", "drift", ...flags]);
+      const edit = scenario.steps.find(step => step.action?.kind === "edit").action;
+      const patched = applyPatch(scenario.files["schema.sql"], edit.patch);
+      assert.equal(patched.state, "applies");
+      session.workspace.writeFile("schema.sql", patched.text);
+      await run(["schema", "apply", ...flags, "--dry-run"]);
+      await run(["schema", "apply", ...flags], 0, [[/Type 'YES'/, "YES\n"]]);
+      await run(["schema", "drift", ...flags]);
+      const connection = await bridge.open(":memory:app");
+      const answer = JSON.parse(await bridge.query(connection, "SELECT count(*) AS n FROM users", "[]"));
+      assert.equal(Number(answer.Rows[0][0]), 3);
+      await bridge.close(connection);
+    } else if (scenarioID === "b") {
+      await run(["schema", "drift", ...flags]);
+      const connection = await bridge.open(":memory:app");
+      await bridge.query(connection, "ALTER TABLE users ADD COLUMN nickname TEXT", "[]");
+      await bridge.close(connection);
+      await run(["schema", "drift", ...flags], 1);
+      await run(["schema", "drift", ...flags, "--format", "json"], 1);
+      session.workspace.writeFile("schema.sql", scenario.files["schema.sql"].replace("  email TEXT NOT NULL\n", "  email TEXT NOT NULL,\n  nickname TEXT\n"));
+      await run(["schema", "drift", ...flags]);
+    } else if (scenarioID === "c") {
+      await run(["migrations", "plan", ...flags]);
+      session.memfs.mkdir("/workspace/migrations", 0o755);
+      await run(["migrations", "generate", ...flags, "--migrations-dir", "migrations", "--name", "init"]);
+      await run(["migrations", "hash", "--dir", "migrations"]);
+      await run(["migrations", "validate", "--dir", "migrations"]);
+      await run(["migrations", "up", "--migrations-dir", "migrations", "--db-url", url]);
+      await run(["migrations", "status", "--migrations-dir", "migrations", "--db-url", url]);
+      await run(["schema", "drift", ...flags]);
+    } else {
+      await run(["schema", "drift", ...flags]);
+    }
+  }
+  await resetDatabase();
   const schema = "CREATE TABLE events (id INTEGER PRIMARY KEY, kind VARCHAR NOT NULL);\n";
   session.workspace.writeFile("schema.sql", schema);
-  const url = "duckdb://:memory:";
   await run(["db", "capabilities", "--db-url", url]);
   await run(["schema", "apply", "--schema-file", "schema.sql", "--db-url", url, "--dry-run"]);
   await run(["migrations", "plan", "--schema-file", "schema.sql", "--db-url", url]);
@@ -89,7 +152,7 @@ try {
   assert.match(inspected.stdout, /GENERATED ALWAYS AS/);
 
   // A separate in-memory database exercises the versioned migration route.
-  databases.delete(":memory:app");
+  await resetDatabase();
   session.memfs.mkdir("/workspace/migrations", 0o755);
   await run(["migrations", "generate", "--schema-file", "schema.sql", "--db-url", url,
     "--migrations-dir", "migrations", "--name", "init"]);
@@ -98,6 +161,8 @@ try {
   const status = await run(["migrations", "status", "--migrations-dir", "migrations", "--db-url", url]);
   assert.match(status.stdout, /Applied Migrations: 1/);
   await run(["schema", "drift", "--schema-file", "schema.sql", "--db-url", url]);
+
+
 } catch (error) {
   console.error(error);
   process.exitCode = 1;

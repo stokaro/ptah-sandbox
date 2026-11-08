@@ -205,12 +205,11 @@ Unknown `engine` values are treated as unspecified. Tour highlights the picker.
 
 | Scenario | Engines | Default |
 | --- | --- | --- |
-| A: Change a schema | SQLite, PostgreSQL | SQLite |
-| B: Detect drift | SQLite, PostgreSQL | SQLite |
-| C: Versioned migrations | SQLite | SQLite |
+| A: Change a schema | SQLite, PostgreSQL, DuckDB | SQLite |
+| B: Detect drift | SQLite, PostgreSQL, DuckDB | SQLite |
+| C: Versioned migrations | SQLite, DuckDB | SQLite |
 | JSONB and a GIN index | PostgreSQL | PostgreSQL |
-| DuckDB through a plugin | DuckDB | DuckDB |
-| Free exploration | SQLite, PostgreSQL | SQLite |
+| Free exploration | SQLite, PostgreSQL, DuckDB | SQLite |
 
 PostgreSQL is PGlite 0.5.8, whose `SELECT version()` reports PostgreSQL 18.3.
 The package is pinned in `web/package-lock.json`. Its code and assets load
@@ -221,8 +220,11 @@ start from a fresh seed for the linked or remembered engine, and Reset creates a
 stored in IndexedDB. The database panes show the PostgreSQL `public` schema;
 Ptah's terminal output uses its own catalog reader. DuckDB uses the official
 provider's Go planning code, linked into the Ptah WebAssembly build, and a
-browser `database/sql` driver backed by DuckDB-Wasm. The DuckDB scenario guides
-the visitor through preview, apply, and drift against `duckdb://:memory:`.
+browser `database/sql` driver backed by DuckDB-Wasm. DuckDB uses the same
+schema change, drift, migration, and free exploration scenarios as the other
+engines, with commands directed at `duckdb://:memory:`. The DuckDB migration
+route validates its hash but does not offer migration lint because that dialect
+is not supported by the linter yet.
 The pinned DuckDB-Wasm package is `1.33.1-dev57.0` and reports DuckDB 1.5.4;
 the native plugin release embeds DuckDB 2.0.0. The browser patch adapts catalog
 queries for the earlier engine. See [docs/duckdb.md](docs/duckdb.md).

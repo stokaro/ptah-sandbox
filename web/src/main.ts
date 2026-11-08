@@ -686,7 +686,7 @@ async function boot(): Promise<void> {
 
   store.bootProgress("seeding", 0, 0);
   const initialEngine = linkedEngine ?? savedEngine ?? "sqlite";
-  await guide.load(initialEngine === "duckdb" ? "duckdb-only" : guide.scenario.id, initialEngine);
+  await guide.load(guide.scenario.id, initialEngine);
 
   store.bootReady();
   loader.done(`ptah ${info.version} · ${activeEngine === "sqlite" ? `sqlite ${sqlite.version}` : activeEngine === "duckdb" ? `DuckDB ${engineInfo?.version ?? "ready"}` : `PostgreSQL ${engineInfo?.version ?? "ready"}`}`);
@@ -1320,7 +1320,7 @@ const databasePicker = new DatabasePicker(engine => {
   try { localStorage.setItem(ENGINE_KEY, engine); } catch { /* The choice still works for this tab. */ }
   savedEngine = engine;
   if (activeEngine === engine) return;
-  const scenario = engine === "duckdb" ? "duckdb-only" : activeEngine === "duckdb" ? "free" : guide.scenario.id;
+  const scenario = guide.scenario.capabilities.engines.includes(engine) ? guide.scenario.id : "a";
   void guide.load(scenario, engine).catch((err: unknown) => {
     store.noticed({ text: String(err), tone: "attention" });
     databasePicker.update(activeEngine, guide.scenario.capabilities.engines);

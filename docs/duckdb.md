@@ -39,9 +39,17 @@ extensions, persistent secrets, unsigned extensions, and external access.
 
 ## Try it
 
-Open the DuckDB scenario from the database picker or use the link above. Its
-workspace contains `schema.sql` and `README.md`, and the guide offers these
-commands:
+Choose DuckDB in the database picker or use the link above. The same general
+scenarios work with DuckDB:
+
+| Scenario | Result |
+| --- | --- |
+| Change a schema, keep the data | Edit `schema.sql`, preview and apply a column and index, then verify the rows remain. |
+| Detect drift | Change DuckDB directly, detect the difference, then reconcile it. |
+| Versioned migrations | Plan, generate, hash, validate, and apply a reviewed migration. |
+| Free exploration | Query the seeded data and run Ptah commands without a guide. |
+
+The schema change route offers these commands:
 
 ```sh
 ptah schema apply --schema-file schema.sql --db-url duckdb://:memory: --dry-run
@@ -50,7 +58,9 @@ ptah schema drift --schema-file schema.sql --db-url duckdb://:memory:
 ```
 
 The dry run prints the provider's plan. The second command asks for `YES` and
-creates the table. The drift command reads the live DuckDB catalog again.
+applies the column and index to a populated database. The drift command reads
+the live DuckDB catalog again. The migration route does not offer `migrations
+lint`: the linter does not currently accept DuckDB as a dialect.
 `ptah db capabilities --db-url duckdb://:memory:` reports the engine version
 and the capability selection Ptah uses.
 
@@ -64,7 +74,8 @@ The SQLite file import control is not offered in DuckDB mode.
 connects it to the pinned DuckDB-Wasm package, previews and applies a schema,
 checks drift, adds an index, reads a generated column, and runs the
 `migrations generate` → `migrations hash` → `migrations up` →
-`migrations status` lifecycle on a fresh in-memory database. The ordinary
+`migrations status` lifecycle on a fresh in-memory database. It also exercises
+the four DuckDB-compatible scenario presets against the real provider. The ordinary
 web typecheck, build, integration suite, and browser probe cover the remaining
 site behavior. The database picker and scenario are also exercised in the
 browser probe.

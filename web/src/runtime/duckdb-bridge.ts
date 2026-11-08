@@ -13,8 +13,9 @@ export async function createDuckDBBridge(base: string) {
     eh: { mainModule: asset("duckdb-eh.wasm"), mainWorker: asset("duckdb-browser-eh.worker.js") },
   });
   const databases = new Map<string, Database>();
-  const connections = new Map<number, { database: string; connection: Connection }>();
+  const connections = new Map<number, { database: string; connection: Connection | null }>();
   let nextHandle = 0;
+  let activeQueries = 0;
 
   async function database(name: string): Promise<Database> {
     let current = databases.get(name);
@@ -57,31 +58,40 @@ export async function createDuckDBBridge(base: string) {
     if (!held) return;
     connections.delete(id);
     databases.get(held.database)?.connections.delete(id);
-    await held.connection.close();
+    if (held.connection) await held.connection.close();
   }
-  function held(id: number): Connection {
+  async function held(id: number): Promise<Connection> {
     const conn = connections.get(id);
     if (!conn) throw new Error("DuckDB connection is closed");
+    // database/sql may keep an idle driver connection across scenario resets.
+    // Reattach it to the fresh in-memory database on its next query.
+    if (!conn.connection) {
+      conn.connection = await (await database(conn.database)).engine.connect();
+      databases.get(conn.database)!.connections.add(id);
+    }
     return conn.connection;
   }
 
   async function query(id: number, sql: string, paramsJSON: string) {
-    const conn = held(id);
-    const params = JSON.parse(paramsJSON) as unknown[];
-    let result;
-    if (params.length === 0) result = await conn.query(sql);
-    else {
-      const prepared = await conn.prepare(sql);
-      try { result = await prepared.query(...params); }
-      finally { await prepared.close(); }
-    }
-    const fields = result.schema.fields.map(field => ({ Name: field.name, DataTypeID: duckDBOID(String(field.type)) }));
-    const rows = result.toArray().map(row => {
-      const values = row.toJSON() as Record<string, unknown>;
-      return result.schema.fields.map(field => duckDBCell(values[field.name], String(field.type)));
-    });
-    const affectedRows = fields.length === 1 && /^Count$/i.test(fields[0]!.Name) ? Number(rows[0]?.[0] ?? 0) : 0;
-    return JSON.stringify({ Fields: fields, Rows: rows, AffectedRows: affectedRows });
+    activeQueries += 1;
+    try {
+      const conn = await held(id);
+      const params = JSON.parse(paramsJSON) as unknown[];
+      let result;
+      if (params.length === 0) result = await conn.query(sql);
+      else {
+        const prepared = await conn.prepare(sql);
+        try { result = await prepared.query(...params); }
+        finally { await prepared.close(); }
+      }
+      const fields = result.schema.fields.map(field => ({ Name: field.name, DataTypeID: duckDBOID(String(field.type)) }));
+      const rows = result.toArray().map(row => {
+        const values = row.toJSON() as Record<string, unknown>;
+        return result.schema.fields.map(field => duckDBCell(values[field.name], String(field.type)));
+      });
+      const affectedRows = fields.length === 1 && /^Count$/i.test(fields[0]!.Name) ? Number(rows[0]?.[0] ?? 0) : 0;
+      return JSON.stringify({ Fields: fields, Rows: rows, AffectedRows: affectedRows });
+    } finally { activeQueries -= 1; }
   }
   async function sql(name: string, text: string) {
     const id = await open(name);
@@ -98,7 +108,13 @@ export async function createDuckDBBridge(base: string) {
   async function drop(name: string) {
     const db = databases.get(name);
     if (!db) return;
-    if (db.connections.size !== 0) throw new Error("Cannot reset DuckDB while a command is using it");
+    if (activeQueries !== 0) throw new Error("Cannot reset DuckDB while a command is using it");
+    for (const id of db.connections) {
+      const held = connections.get(id);
+      if (held?.connection) await held.connection.close();
+      if (held) held.connection = null;
+    }
+    db.connections.clear();
     databases.delete(name);
     await db.engine.terminate();
     db.worker.terminate();

@@ -450,9 +450,22 @@ test("a string literal that looks like DDL is not read as DDL", () => {
 // the shipped scenarios
 // ---------------------------------------------------------------------------
 
-test("five guided scenarios ship with explicit routes, then free exploration", () => {
-  assert.deepEqual(SCENARIOS.map((s) => s.id), ["a", "b", "c", "postgres-only", "duckdb-only", "free"]);
-  assert.deepEqual(SCENARIOS.map((s) => s.steps.length), [5, 5, 5, 5, 3, 0]);
+test("the three general routes and free exploration support DuckDB", () => {
+  assert.deepEqual(SCENARIOS.map((s) => s.id), ["a", "b", "c", "postgres-only", "free"]);
+  assert.deepEqual(SCENARIOS.map((s) => s.steps.length), [5, 5, 5, 5, 0]);
+  for (const id of ["a", "b", "c", "free"]) {
+    const scenario = scenarioForEngine(scenarioById(id), "duckdb");
+    assert.equal(scenario.database.url, "duckdb://:memory:");
+    assert.equal(scenario.database.path, "app.db", "browser seed and Ptah URL must address the same database");
+    assert.deepEqual(scenario.capabilities.engines.includes("duckdb"), true);
+    assert.doesNotMatch(scenario.seed, /PRAGMA/);
+    assert.doesNotMatch(scenario.seed, /FOREIGN KEY|DEFAULT 0/);
+    assert.doesNotMatch(scenario.files["schema.sql"], /FOREIGN KEY|DEFAULT 0/);
+    assert.doesNotMatch(JSON.stringify(scenario.steps), /sqlite:\/\//);
+    assert.doesNotMatch(JSON.stringify(scenario.files), /sqlite:\/\//);
+  }
+  assert.equal(scenarioForEngine(C, "duckdb").steps[3].check.kind, "ran");
+  assert.deepEqual(scenarioForEngine(C, "duckdb").steps[3].also, []);
 });
 
 test("every step either has a check or says why it has none", () => {
@@ -684,7 +697,7 @@ test("scenario engine presets refuse unsupported choices and adapt every command
   const pgOnly = SCENARIOS.find(s => s.id === "postgres-only");
   assert.equal(pgOnly.capabilities.defaultEngine,"postgres");
   assert.throws(() => scenarioForEngine(pgOnly,"sqlite"),/requires postgres/);
-  assert.throws(() => scenarioForEngine(C,"postgres"),/requires sqlite/);
+  assert.throws(() => scenarioForEngine(C,"postgres"),/requires sqlite or duckdb/);
   for (const preset of SCENARIOS.filter(s => s.capabilities.engines.includes("postgres"))) {
     const pg = scenarioForEngine(preset,"postgres");
     assert.equal(pg.database.url,"postgres://pglite/app");
