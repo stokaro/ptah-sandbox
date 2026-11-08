@@ -1,8 +1,8 @@
 # ptah-sandbox
 
 The source of [play.ptah.run](https://play.ptah.run) — Ptah running in a
-browser tab. Real Ptah, compiled to WebAssembly, against real SQLite or PostgreSQL,
-compiled to WebAssembly. No server, no account, nothing installed, and no
+browser tab. Real Ptah, compiled to WebAssembly, against SQLite, PostgreSQL,
+or DuckDB running in WebAssembly. No server, no account, nothing installed, and no
 recorded output.
 
 You edit a schema file, run the same commands you would run in a terminal, read
@@ -17,7 +17,7 @@ does not fake anything:
 - The commands are Ptah's own Cobra commands, from a pinned upstream commit.
   The parser, planner, lint rules and migration engine are the ones in the
   release, not a JavaScript imitation of them.
-- Both databases run as WebAssembly, reached through a
+- All three databases run as WebAssembly, reached through a
   `database/sql` driver, so Ptah's readers and writers run unchanged.
 - The exit code you see is the exit code the command returned. The confirmation
   prompt is the real prompt, reading a real stdin.
@@ -30,18 +30,22 @@ query tool, so the pane is the playground's own and is labeled as such.
 
 ## Layout
 
-    third_party/ptah.pin  the upstream commit every build is made from
-    upstream-patch/       the browser PostgreSQL driver selection hook
-    runtime/ptah/         new Go packages copied into Ptah's module at build time
-    web/                  the playground itself, and its vendored runtime
-    fixtures/             the demo workspaces
-    test/integration/     the runtime driven outside a browser, under node
-    docs/                 how it fits together, and what it deliberately is not
+    third_party/ptah.pin    the upstream Ptah commit every build uses
+    third_party/duckdb.pin  the official DuckDB plugin commit
+    upstream-patch/         browser driver and in-process provider hooks
+    duckdb-patch/           DuckDB browser compatibility patch
+    runtime/ptah/           Go packages copied into Ptah and its provider SDK
+    runtime/duckdb-shim/    browser database/sql driver for DuckDB-Wasm
+    runtime/duckdb-plugin/ browser files copied into the official plugin
+    web/                    the playground and its vendored runtime
+    fixtures/               the demo workspaces
+    test/integration/       the runtime driven outside a browser, under Node
+    docs/                   architecture and verification notes
 
-There is no `go.mod` here. The build materializes a copy of pinned Ptah and
-builds inside Ptah's own module, so the browser entry point and the browser
-database drivers are ordinary internal packages and Ptah grows no public API for
-the sake of a website.
+There is no `go.mod` at the repository root. The build materializes pinned
+copies of Ptah and the official DuckDB plugin, then links them through a Go
+workspace. Browser transports live in local overlays; the native releases
+remain separate artifacts.
 
 ## Build
 
@@ -184,7 +188,7 @@ bridge live under `runtime/ptah/` and `web/src/runtime/`.
 
 ## Database engines and scenario capabilities
 
-The database picker selects SQLite or PostgreSQL and resets the current
+The database picker selects SQLite, PostgreSQL, or DuckDB and resets the current
 scenario. Every scenario declares its supported engines and default engine
 in `capabilities`; choosing a scenario loads its default automatically.
 The picker opens a dialog with the database and runtime versions before loading
@@ -195,6 +199,7 @@ Targeted links override that preference and skip the required choice:
 
 - [Open PostgreSQL](https://play.ptah.run/?engine=postgres)
 - [Open SQLite](https://play.ptah.run/?engine=sqlite)
+- [Open DuckDB](https://play.ptah.run/?engine=duckdb)
 
 Unknown `engine` values are treated as unspecified. Tour highlights the picker.
 
@@ -204,16 +209,23 @@ Unknown `engine` values are treated as unspecified. Tour highlights the picker.
 | B: Detect drift | SQLite, PostgreSQL | SQLite |
 | C: Versioned migrations | SQLite | SQLite |
 | JSONB and a GIN index | PostgreSQL | PostgreSQL |
+| DuckDB through a plugin | DuckDB | DuckDB |
 | Free exploration | SQLite, PostgreSQL | SQLite |
 
 PostgreSQL is PGlite 0.5.8, whose `SELECT version()` reports PostgreSQL 18.3.
 The package is pinned in `web/package-lock.json`. Its code and assets load
 only after PostgreSQL is selected. The loading bar counts decoded bytes across
 the PostgreSQL assets against their bundled size manifest, then shows compilation
-and initialization until the scenario is ready. Both engines are memory-only: reloads
+and initialization until the scenario is ready. All three engines are memory-only: reloads
 start from a fresh seed for the linked or remembered engine, and Reset creates a fresh database. Nothing is
 stored in IndexedDB. The database panes show the PostgreSQL `public` schema;
-Ptah's terminal output uses its own catalog reader.
+Ptah's terminal output uses its own catalog reader. DuckDB uses the official
+provider's Go planning code, linked into the Ptah WebAssembly build, and a
+browser `database/sql` driver backed by DuckDB-Wasm. The DuckDB scenario guides
+the visitor through preview, apply, and drift against `duckdb://:memory:`.
+The pinned DuckDB-Wasm package is `1.33.1-dev57.0` and reports DuckDB 1.5.4;
+the native plugin release embeds DuckDB 2.0.0. The browser patch adapts catalog
+queries for the earlier engine. See [docs/duckdb.md](docs/duckdb.md).
 
 Go awaits PGlite Promises from command goroutines. Waiting yields to the
 worker's event loop; the JavaScript callback that starts a command has already
@@ -232,6 +244,8 @@ SQLite exports contain `app.db`. PostgreSQL exports contain
 instructions in `NEXT-STEPS.md`. This is a PGlite data directory, not a SQLite
 file or a `pg_dump` script. SQLite file import is available only on SQLite.
 Its button and help hint are hidden while PostgreSQL is selected.
+DuckDB exports contain the workspace SQL files and an explicit note that the
+in-memory database is not included. SQLite file import is hidden for DuckDB too.
 
 Every guided scenario has five steps. The JSONB scenario checks a successful
 SQL-pane query, then groups Apply and Verify as two parts of its final step.
@@ -244,12 +258,14 @@ the selected tab or query result.
 
 Validation includes real PostgreSQL driver tests, all supported scenario
 variants against Ptah wasm, a byte-for-byte GIN plan comparison with native
-Ptah v0.10.0 on PostgreSQL 18.6, and browser engine-switch checks. PR CI rebuilds
+Ptah v0.25.0 on PostgreSQL 18.6, and browser engine-switch checks. PR CI rebuilds
 the runtime before these checks. Details and measurements are in
 [docs/postgresql.md](docs/postgresql.md).
 
 ## License
 
 MIT. PGlite is distributed under Apache-2.0 and PostgreSQL license terms.
+DuckDB-Wasm's license is in `web/duckdb-wasm-LICENSE.txt`; the official
+provider's license is in `web/duckdb-plugin-LICENSE.txt`.
 The vendored SQLite build and the web fonts carry their own terms; see
 `web/vendor/sqlite/PROVENANCE.md` and `web/assets/fonts/LICENSES.md`.

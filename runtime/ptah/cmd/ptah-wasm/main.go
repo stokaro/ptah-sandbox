@@ -55,6 +55,10 @@ func main() {
 	}
 
 	installSQLite()
+	if err := installDuckDB(); err != nil {
+		host.reportPanic(fmt.Sprintf("ptah-wasm: %v", err))
+		return
+	}
 
 	runner := newRunner(host)
 

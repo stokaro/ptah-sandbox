@@ -1,7 +1,7 @@
 #!/bin/sh
 # Run the sandbox's own Go tests for js/wasm inside the materialized tree.
 #
-# Both packages under runtime/ptah/ are js-only, so they can only be tested
+# The browser packages under runtime/ptah/ are js-only, so they can only be tested
 # with GOOS=js GOARCH=wasm through a JavaScript host. cmd/ptah-wasm runs under
 # the stock Go shim; internal/browsersqlite needs Contract A installed before
 # Go starts, which is what its own -exec wrapper does.
@@ -19,7 +19,7 @@ cd "$repo"
 srcdir=build/ptah-src
 [ -d "$srcdir" ] || scripts/build-wasm.sh --tree-only
 
-GOWORK=off
+GOWORK="$repo/go.work"
 GOOS=js
 GOARCH=wasm
 export GOWORK GOOS GOARCH
@@ -28,6 +28,8 @@ export GOWORK GOOS GOARCH
 goroot=$(GOOS= GOARCH= go env GOROOT)
 
 (cd "$srcdir" && go test -exec="$goroot/lib/wasm/go_js_wasm_exec" ./cmd/ptah-wasm/)
+
+(cd build/duckdb-src && go test -exec="$goroot/lib/wasm/go_js_wasm_exec" ./internal/duckdbsql/)
 
 (
 	cd "$srcdir/internal/browsersqlite"

@@ -132,6 +132,11 @@ for patch in upstream-patch/*.patch; do
 	echo "build-wasm: applied $patch"
 done
 
+# The official DuckDB plugin is pinned independently from Ptah. Its browser
+# overlay replaces the cgo driver while keeping the provider's planning code.
+. "$repo/scripts/duckdb-git.sh"
+duckdb_materialize
+
 # ---------------------------------------------------------------------------
 # 3. Overlay the sandbox's own Go sources at their target paths inside ptah.
 # ---------------------------------------------------------------------------
@@ -152,6 +157,18 @@ else
 	echo "build-wasm: copied $runtime into $srcdir"
 fi
 
+cat >go.work <<-EOF
+	go $(sed -n 's/^go \([0-9.]*\)$/\1/p' "$srcdir/go.mod" | head -1)
+
+	use (
+		./$srcdir
+		./$srcdir/provider-sdk
+		./build/duckdb-src
+	)
+
+	replace github.com/duckdb/duckdb-go/v2 => ./runtime/duckdb-shim
+EOF
+
 # The command list has to come from the command tree, so the helper is built
 # inside the module and removed again; it is not part of what ships.
 tooldir="$srcdir/cmd/internal/buildtools/commandlist"
@@ -160,11 +177,6 @@ cp scripts/commandlist/main.go "$tooldir/main.go"
 
 if [ "$tree_only" = 1 ]; then
 	rm -rf "$srcdir/cmd/internal/buildtools"
-	cat >go.work <<-EOF
-		go $(sed -n 's/^go \([0-9.]*\)$/\1/p' "$srcdir/go.mod" | head -1)
-
-		use ./$srcdir
-	EOF
 	echo "build-wasm: wrote go.work for $srcdir"
 	echo "build-wasm: tree only, stopping before the build"
 	exit 0
@@ -193,14 +205,14 @@ wasm_exec="$goroot/lib/wasm/wasm_exec.js"
 [ -f "$wasm_exec" ] || die "wasm_exec.js not found under $goroot"
 
 echo "build-wasm: commands from the ptah command tree"
-commands=$(cd "$srcdir" && go run ./cmd/internal/buildtools/commandlist)
+commands=$(cd "$srcdir" && GOWORK="$repo/go.work" go run ./cmd/internal/buildtools/commandlist)
 rm -rf "$srcdir/cmd/internal/buildtools"
 
 mkdir -p "$outdir"
 echo "build-wasm: building ./cmd/ptah-wasm for js/wasm with $go_version"
 (
 	cd "$srcdir"
-	GOOS=js GOARCH=wasm go build \
+	GOWORK="$repo/go.work" GOOS=js GOARCH=wasm go build \
 		-trimpath \
 		-ldflags "-s -w \
 -X ptah.run/internal/buildinfo.Version=$ptah_version \
@@ -237,6 +249,8 @@ fi
 	printf '  "ptahVersion": "%s",\n' "$(json_string "$ptah_version")"
 	printf '  "ptahCommit": "%s",\n' "$pinned"
 	printf '  "ptahCommitDate": "%s",\n' "$(json_string "$ptah_date")"
+	printf '  "duckdbPluginTag": "%s",\n' "$(json_string "$duckdb_tag")"
+	printf '  "duckdbPluginCommit": "%s",\n' "$duckdb_commit"
 	printf '  "goVersion": "%s",\n' "$(json_string "$go_version")"
 	printf '  "builtAt": "%s",\n' "$built_at"
 	echo '  "wasmExec": {'

@@ -28,7 +28,12 @@ WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
 PTAH="$WORK/ptah"
-(cd "$SRC" && GOWORK=off go build -o "$PTAH" ./cmd/ptah)
+ptah_version=$(awk '$1 == "version" { print $2 }' "$ROOT/third_party/ptah.pin")
+ptah_commit=$(awk '$1 == "commit" { print $2 }' "$ROOT/third_party/ptah.pin")
+ptah_date=$(awk '$1 == "date" { print $2 }' "$ROOT/third_party/ptah.pin")
+(cd "$SRC" && GOWORK="$ROOT/go.work" go build -buildvcs=false \
+  -ldflags "-X ptah.run/internal/buildinfo.Version=$ptah_version -X ptah.run/internal/buildinfo.Commit=$ptah_commit -X ptah.run/internal/buildinfo.Date=$ptah_date" \
+  -o "$PTAH" ./cmd/ptah)
 
 mkdir -p "$OUT"
 cd "$WORK"

@@ -25,6 +25,7 @@ const SQLITE_MJS = new URL("web/vendor/sqlite/sqlite3.mjs", REPO);
 const SQLITE_WASM = new URL("web/vendor/sqlite/sqlite3.wasm", REPO);
 const PTAH_WASM = new URL("web/vendor/ptah/ptah.wasm", REPO);
 const WASM_EXEC = new URL("web/vendor/ptah/wasm_exec.js", REPO);
+const MANIFEST = new URL("web/vendor/ptah/manifest.json", REPO);
 
 /** Contract A methods, in the order the contract lists them. */
 const SQLITE_METHODS = [
@@ -226,6 +227,8 @@ export async function boot(options = {}) {
   console.warn = warn;
   const bridge = recordingBridge(real);
   installSqliteBridge(bridge);
+
+  globalThis.__ptahWasmSHA = JSON.parse(readFileSync(MANIFEST, "utf8")).wasm.sha256;
 
   loadWasmExec();
 

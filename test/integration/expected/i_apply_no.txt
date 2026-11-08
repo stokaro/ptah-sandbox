@@ -1,20 +1,22 @@
 --- exit: 0
 --- stdout ---
 Planned schema changes:
--- Disable foreign-key enforcement for the table rebuild below
 PRAGMA foreign_keys = off;
--- SQLite table rebuild for changes ALTER TABLE cannot express on users
-CREATE TABLE "__ptah_rebuild_users" (
+CREATE TABLE "new_users" (
   "id" INTEGER PRIMARY KEY,
   "name" TEXT NOT NULL,
   "email" TEXT NOT NULL,
   "active" INTEGER NOT NULL DEFAULT 1
 );
-INSERT INTO "__ptah_rebuild_users" ("id", "name", "email", "active") SELECT "id", "name", "email", IFNULL("active", 1) AS "active" FROM "users";
+INSERT INTO "new_users" ("id", "name", "email", "active") SELECT "id", "name", "email", IFNULL("active", 1) AS "active" FROM "users";
 DROP TABLE "users";
-ALTER TABLE "__ptah_rebuild_users" RENAME TO "users";
-CREATE INDEX IF NOT EXISTS "idx_users_email" ON "users" ("email");
--- Restore foreign-key enforcement after the table rebuild
+ALTER TABLE "new_users" RENAME TO "users";
+CREATE INDEX "idx_users_email" ON "users" ("email");
 PRAGMA foreign_keys = on;
+Plan rating: destructive
+Statement 4 of 7, destructive: DROP TABLE removes the table and all rows
+  DROP TABLE "users"
+Statement 5 of 7, warning: rename can break deployed readers and writers
+  ALTER TABLE "new_users" RENAME TO "users"
 Apply these schema changes? Type 'YES' to confirm: Schema apply canceled.
 --- stderr ---

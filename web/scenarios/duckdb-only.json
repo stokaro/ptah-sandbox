@@ -1,0 +1,53 @@
+{
+  "id": "duckdb-only",
+  "title": "DuckDB through a plugin",
+  "description": "Plan and apply a DuckDB schema with Ptah's official provider, entirely in this tab.",
+  "note": "Uses DuckDB-Wasm in the browser and the official DuckDB provider's Go planning code. The browser engine is DuckDB v1.5.4; the native plugin release uses v2.0.0.",
+  "capabilities": { "engines": ["duckdb"], "defaultEngine": "duckdb" },
+  "database": { "path": "app.db", "url": "duckdb://:memory:" },
+  "files": {
+    "schema.sql": "CREATE TABLE events (\n  id INTEGER PRIMARY KEY,\n  kind VARCHAR NOT NULL,\n  occurred_at TIMESTAMP NOT NULL\n);\n",
+    "README.md": "# DuckDB through a Ptah plugin\n\nThis workspace starts with an empty in-memory DuckDB database. The official\nprovider's Go code runs inside the Ptah WebAssembly module and connects to\nDuckDB-Wasm in a nested worker. Everything stays in this tab.\n\nPreview and apply the desired schema:\n\n    ptah schema apply --schema-file schema.sql --db-url duckdb://:memory: --dry-run\n    ptah schema apply --schema-file schema.sql --db-url duckdb://:memory:\n    ptah schema drift --schema-file schema.sql --db-url duckdb://:memory:\n\nThe browser engine is DuckDB v1.5.4; the native plugin release embeds v2.0.0.\nReloading or resetting discards the database.\n"
+  },
+  "seed": "",
+  "baseline": {
+    "check": { "kind": "file", "path": "schema.sql", "present": true },
+    "message": "This route needs schema.sql. Reset restores the workspace."
+  },
+  "steps": [
+    {
+      "id": "preview",
+      "title": "Preview",
+      "caption": "Read the DuckDB plan",
+      "headline": "Ask Ptah for the SQL it would run.",
+      "instruction": "The database is empty. Preview how the official DuckDB provider would create the events table.",
+      "action": { "kind": "run", "argv": ["schema", "apply", "--schema-file", "schema.sql", "--db-url", "duckdb://:memory:", "--dry-run"] },
+      "check": { "kind": "ran", "prefix": ["schema", "apply"], "has": ["--dry-run"], "exit": 0 },
+      "done": "The plan came from Ptah and the DuckDB provider. No table was created by the dry run."
+    },
+    {
+      "id": "apply",
+      "title": "Apply",
+      "caption": "Create the events table",
+      "headline": "Apply the planned schema to DuckDB.",
+      "instruction": "Ptah asks for confirmation, then runs the provider's SQL against DuckDB-Wasm.",
+      "action": { "kind": "run", "argv": ["schema", "apply", "--schema-file", "schema.sql", "--db-url", "duckdb://:memory:"] },
+      "check": { "kind": "table", "name": "events", "present": true },
+      "done": "The events table now exists in the live DuckDB catalog."
+    },
+    {
+      "id": "verify",
+      "title": "Verify",
+      "caption": "Check for drift",
+      "headline": "Check that the file and DuckDB agree.",
+      "instruction": "Ptah reads the live catalog again and compares it with schema.sql.",
+      "action": { "kind": "run", "argv": ["schema", "drift", "--schema-file", "schema.sql", "--db-url", "duckdb://:memory:"] },
+      "check": { "kind": "ran", "prefix": ["schema", "drift"], "exit": 0 },
+      "done": "Exit 0 means Ptah found no schema drift."
+    }
+  ],
+  "finished": {
+    "headline": "Explore DuckDB with Ptah schema and migration commands.",
+    "caption": "Edit schema.sql and preview another change, or use the SQL pane to query the table."
+  }
+}

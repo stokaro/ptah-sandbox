@@ -82,12 +82,12 @@ jobs:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: runtime-go-${{ runner.os }}-${{ hashFiles('.go-version', 'third_party/ptah.pin', 'runtime/**') }}
+          key: runtime-go-${{ runner.os }}-${{ hashFiles('.go-version', 'third_party/ptah.pin', 'third_party/duckdb.pin', 'runtime/**', 'duckdb-patch/**') }}
           restore-keys: |
             runtime-go-${{ runner.os }}-
       - run: npm ci
         working-directory: web
-      - name: Build and test both database engines
+      - name: Build and test all database engines
         run: make test
       - name: Bundle
         run: npm run build
@@ -144,8 +144,8 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Ptah $version ($sha)"
 
-      # The wasm itself, keyed on everything that decides its bytes: the pin,
-      # the Go sources overlaid onto it, any upstream patch, the build script,
+      # The wasm itself, keyed on everything that decides its bytes: both pins,
+      # the Go sources overlaid onto them, each upstream patch, the build script,
       # and the toolchain that links it -- `.go-version` decides the binary's
       # bytes and the shim beside it, so a key that ignored it would hand the
       # next Go bump a binary the shim no longer matches. No restore-keys -- a
@@ -156,7 +156,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: web/vendor/ptah
-          key: wasm-${{ runner.os }}-${{ steps.pin.outputs.sha }}-${{ hashFiles('.go-version', 'runtime/**', 'upstream-patch/**', 'scripts/build-wasm.sh', 'scripts/ptah-git.sh', 'scripts/commandlist/**') }}
+          key: wasm-${{ runner.os }}-${{ steps.pin.outputs.sha }}-${{ hashFiles('.go-version', 'third_party/duckdb.pin', 'runtime/**', 'upstream-patch/**', 'duckdb-patch/**', 'scripts/build-wasm.sh', 'scripts/ptah-git.sh', 'scripts/duckdb-git.sh', 'scripts/commandlist/**') }}
 
       - uses: actions/setup-go@v7
         if: steps.wasm-cache.outputs.cache-hit != 'true'
@@ -174,7 +174,7 @@ jobs:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: go-${{ runner.os }}-${{ steps.pin.outputs.sha }}-${{ hashFiles('runtime/**') }}
+          key: go-${{ runner.os }}-${{ steps.pin.outputs.sha }}-${{ hashFiles('third_party/duckdb.pin', 'runtime/**', 'duckdb-patch/**') }}
           restore-keys: |
             go-${{ runner.os }}-${{ steps.pin.outputs.sha }}-
             go-${{ runner.os }}-

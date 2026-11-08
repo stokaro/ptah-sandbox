@@ -65,7 +65,7 @@ export interface TableInfo {
 }
 
 export interface Catalog {
-  engine?: "sqlite" | "postgres";
+  engine?: "sqlite" | "postgres" | "duckdb";
   /** The path the bridge keys on, e.g. "app.db" -- not the sqlite:// URL. */
   path: string;
   /** In definition order, which is how the rail and the panes list them. */

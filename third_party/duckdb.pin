@@ -1,0 +1,4 @@
+# Official DuckDB plugin source used by the browser build. The browser overlay
+# adapts only its runtime and database driver; planning code comes from this tag.
+tag v0.2.0
+commit 85eee01de26609083416a4c53c3c09b5327db8bb

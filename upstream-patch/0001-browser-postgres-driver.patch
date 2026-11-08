@@ -1,30 +1,32 @@
---- a/dbschema/connection.go
-+++ b/dbschema/connection.go
-@@ -9,6 +9,7 @@
- 	"io"
+--- a/internal/connector/pgconnect/pgconnect.go
++++ b/internal/connector/pgconnect/pgconnect.go
+@@ -11,6 +11,7 @@
+ 	"fmt"
  	"log/slog"
  	"net/url"
--	"strconv"
 +	"runtime"
-+	"strconv"
+ 	"strconv"
  	"strings"
  
-@@ -163,7 +164,7 @@
- 	var newReader schemaReaderFactory
- 	var newWriter schemaWriterFactory
- 	switch dialectProtocol {
--	case "pgx":
-+	case "pgx", "browser-postgres":
- 		newReader = func(runner sqlrunner.Runner) catalog.SchemaReader {
- 			return postgres.NewPostgreSQLWireReaderWithCapabilities(
- 				runner,
-@@ -491,6 +492,9 @@
- func databaseDriverConfig(dialect, dbURL string) (driverName, dataSourceName string) {
- 	switch dialect {
- 	case platform.Postgres, platform.CockroachDB, platform.YugabyteDB, platform.Spanner:
-+		if runtime.GOOS == "js" {
-+			return "browser-postgres", convertPostgresWireURL(dbURL)
-+		}
- 		return "pgx", convertPostgresWireURL(dbURL)
- 	case platform.MySQL, platform.MariaDB:
- 		return "mysql", convertMySQLURL(dbURL)
+@@ -55,7 +56,11 @@
+ // refuses the URL's `search_path` startup parameter is asked again without it;
+ // see reconnectCarryingSearchPath.
+ func (Service) Open(ctx context.Context, request connector.Request) (*connector.Pool, error) {
+-	db, err := connector.OpenDB(request.Dialect.Driver, convertPostgresWireURL(request.URL))
++	driverName := request.Dialect.Driver
++	if runtime.GOOS == "js" {
++		driverName = "browser-postgres"
++	}
++	db, err := connector.OpenDB(driverName, convertPostgresWireURL(request.URL))
+ 	if err != nil {
+ 		return nil, err
+ 	}
+@@ -64,7 +69,7 @@
+ 		return &connector.Pool{DB: db, Native: pool{}}, nil
+ 	}
+ 	_ = db.Close()
+-	retried, err := reconnectCarryingSearchPath(ctx, request.URL, request.Dialect.Driver, request.Dialect.Name, pingErr)
++	retried, err := reconnectCarryingSearchPath(ctx, request.URL, driverName, request.Dialect.Name, pingErr)
+ 	if err != nil {
+ 		return nil, err
+ 	}

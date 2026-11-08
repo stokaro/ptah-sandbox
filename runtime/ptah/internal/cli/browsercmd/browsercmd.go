@@ -22,6 +22,7 @@ import (
 	"ptah.run/internal/cli/banner"
 	"ptah.run/internal/cli/internal/cmdflags"
 	"ptah.run/internal/cli/internal/cmdutil"
+	"ptah.run/internal/cli/internal/providercommand"
 	"ptah.run/internal/cli/introspect"
 	"ptah.run/internal/cli/migrations"
 	"ptah.run/internal/cli/schema"
@@ -78,6 +79,7 @@ func NewRootCommand() *cobra.Command {
 	cmd.AddCommand(sqlcmd.NewSQLCommand())
 	cmd.AddCommand(viz.NewCommand())
 	cmd.AddCommand(version.NewVersionCommand())
+	providercommand.Install(cmd)
 
 	cmdflags.InstallEnvBinding(envPrefix, cmd)
 
